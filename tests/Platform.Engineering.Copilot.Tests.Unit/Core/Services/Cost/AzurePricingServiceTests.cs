@@ -36,7 +36,7 @@ public class AzurePricingServiceTests
     #region GetPricingAsync Tests
 
     [Fact]
-    public async Task GetPricingAsync_WithValidParameters_ReturnsPriceItems()
+    public async Task GetPricingAsync_WithValidParameters_ReturnsPriceItemsAsync()
     {
         // Arrange
         var responseJson = @"{
@@ -100,7 +100,7 @@ public class AzurePricingServiceTests
     }
 
     [Fact]
-    public async Task GetPricingAsync_WithMeterName_FiltersCorrectly()
+    public async Task GetPricingAsync_WithMeterName_FiltersCorrectlyAsync()
     {
         // Arrange
         var responseJson = @"{
@@ -146,7 +146,7 @@ public class AzurePricingServiceTests
     }
 
     [Fact]
-    public async Task GetPricingAsync_WithNoResults_ReturnsEmptyList()
+    public async Task GetPricingAsync_WithNoResults_ReturnsEmptyListAsync()
     {
         // Arrange
         var responseJson = @"{
@@ -174,7 +174,7 @@ public class AzurePricingServiceTests
     }
 
     [Fact]
-    public async Task GetPricingAsync_WhenApiThrows_ThrowsException()
+    public async Task GetPricingAsync_WhenApiThrows_ThrowsExceptionAsync()
     {
         // Arrange
         _mockHttpHandler.Protected()
@@ -196,7 +196,7 @@ public class AzurePricingServiceTests
     #region CalculateMonthlyCostAsync Tests
 
     [Fact]
-    public async Task CalculateMonthlyCostAsync_WithValidPricing_ReturnsCorrectCost()
+    public async Task CalculateMonthlyCostAsync_WithValidPricing_ReturnsCorrectCostAsync()
     {
         // Arrange
         var responseJson = @"{
@@ -247,7 +247,7 @@ public class AzurePricingServiceTests
     }
 
     [Fact]
-    public async Task CalculateMonthlyCostAsync_WithMatchingSkuName_UsesCorrectPrice()
+    public async Task CalculateMonthlyCostAsync_WithMatchingSkuName_UsesCorrectPriceAsync()
     {
         // Arrange
         var responseJson = @"{
@@ -314,7 +314,7 @@ public class AzurePricingServiceTests
     }
 
     [Fact]
-    public async Task CalculateMonthlyCostAsync_WhenNoPricingFound_UsesFallbackEstimate()
+    public async Task CalculateMonthlyCostAsync_WhenNoPricingFound_UsesFallbackEstimateAsync()
     {
         // Arrange
         var responseJson = @"{
@@ -349,7 +349,7 @@ public class AzurePricingServiceTests
     }
 
     [Fact]
-    public async Task CalculateMonthlyCostAsync_WhenApiThrows_ReturnsFallbackEstimate()
+    public async Task CalculateMonthlyCostAsync_WhenApiThrows_ReturnsFallbackEstimateAsync()
     {
         // Arrange
         _mockHttpHandler.Protected()
@@ -389,7 +389,7 @@ public class AzurePricingServiceTests
     [InlineData("Application Gateway", 1, 125.00)]
     [InlineData("Load Balancer", 2, 50.00)]
     [InlineData("Unknown Service", 1, 50.00)] // Default fallback
-    public async Task CalculateMonthlyCostAsync_FallbackEstimates_CalculatesCorrectly(
+    public async Task CalculateMonthlyCostAsync_FallbackEstimates_CalculatesCorrectlyAsync(
         string serviceFamily, int quantity, decimal expectedCost)
     {
         // Arrange
@@ -428,7 +428,7 @@ public class AzurePricingServiceTests
     #region GetRegionalPricingComparisonAsync Tests
 
     [Fact]
-    public async Task GetRegionalPricingComparisonAsync_WithMultipleRegions_ReturnsComparison()
+    public async Task GetRegionalPricingComparisonAsync_WithMultipleRegions_ReturnsComparisonAsync()
     {
         // Arrange
         var regions = new List<string> { "eastus", "westus", "northeurope" };
@@ -493,7 +493,7 @@ public class AzurePricingServiceTests
     }
 
     [Fact]
-    public async Task GetRegionalPricingComparisonAsync_WithNoResults_ReturnsZero()
+    public async Task GetRegionalPricingComparisonAsync_WithNoResults_ReturnsZeroAsync()
     {
         // Arrange
         var regions = new List<string> { "eastus" };
@@ -519,7 +519,7 @@ public class AzurePricingServiceTests
     }
 
     [Fact]
-    public async Task GetRegionalPricingComparisonAsync_WhenOneFails_ContinuesWithOthers()
+    public async Task GetRegionalPricingComparisonAsync_WhenOneFails_ContinuesWithOthersAsync()
     {
         // Arrange
         var regions = new List<string> { "eastus", "westus" };
@@ -558,7 +558,7 @@ public class AzurePricingServiceTests
     }
 
     [Fact]
-    public async Task GetRegionalPricingComparisonAsync_WithMultiplePrices_ReturnsLowest()
+    public async Task GetRegionalPricingComparisonAsync_WithMultiplePrices_ReturnsLowestAsync()
     {
         // Arrange
         var regions = new List<string> { "eastus" };

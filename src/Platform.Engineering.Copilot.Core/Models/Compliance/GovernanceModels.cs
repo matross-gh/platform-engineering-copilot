@@ -23,6 +23,15 @@ public class PreFlightGovernanceResult : GovernanceResult
 
 public class PostFlightGovernanceResult : GovernanceResult
 {
+    public bool IsCompliant { get; set; }
+    public List<string> ComplianceIssues { get; set; } = new();
+    public List<string> SecurityFindings { get; set; } = new();
+    public bool TaggingCompliant { get; set; }
+    public bool SecurityCompliant { get; set; }
+    public bool AuditLogged { get; set; }
+    public string? RemediationRequired { get; set; }
+    
+    // Legacy properties for backward compatibility
     public bool ComplianceViolated { get; set; }
     public List<ComplianceViolation> ComplianceViolations { get; set; } = new();
     public bool RequiresRemediation { get; set; }
@@ -41,12 +50,17 @@ public class PolicyViolation
 
 public class ComplianceViolation
 {
+    public DateTimeOffset OccurredAt { get; set; }
     public string ComplianceFramework { get; set; } = string.Empty; // e.g., "ATO", "SOC2", "GDPR"
     public string ControlId { get; set; } = string.Empty;
+    public string PolicyName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public ComplianceViolationSeverity Severity { get; set; }
+    public string ActorId { get; set; } = string.Empty;
+    public string ResourceId { get; set; } = string.Empty;
     public string Evidence { get; set; } = string.Empty;
     public List<string> RemediationSteps { get; set; } = new();
+    public Dictionary<string, object> Context { get; set; } = new();
 }
 
 public class ApprovalWorkflow

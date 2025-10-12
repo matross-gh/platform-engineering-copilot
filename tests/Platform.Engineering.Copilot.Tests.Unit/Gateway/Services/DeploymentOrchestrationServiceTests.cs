@@ -63,7 +63,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Bicep Validation Tests
 
         [Fact]
-        public async Task ValidateDeploymentAsync_WithEmptyTemplate_ReturnsInvalid()
+    public async Task ValidateDeploymentAsync_WithEmptyTemplate_ReturnsInvalidAsync()
         {
             // Arrange
             var options = new DeploymentOptions
@@ -82,7 +82,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task ValidateDeploymentAsync_WithMissingResourceGroup_ReturnsInvalid()
+    public async Task ValidateDeploymentAsync_WithMissingResourceGroup_ReturnsInvalidAsync()
         {
             // Arrange
             var templateContent = "param location string = 'eastus'";
@@ -102,7 +102,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task ValidateDeploymentAsync_WithMissingLocation_AddsWarning()
+    public async Task ValidateDeploymentAsync_WithMissingLocation_AddsWarningAsync()
         {
             // Arrange
             var templateContent = "param name string";
@@ -121,7 +121,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task ValidateDeploymentAsync_WithValidBicepTemplate_ReturnsValid()
+    public async Task ValidateDeploymentAsync_WithValidBicepTemplate_ReturnsValidAsync()
         {
             // Arrange
             var templateContent = @"
@@ -156,7 +156,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Bicep Deployment Tests
 
         [Fact]
-        public async Task DeployBicepTemplateAsync_WithValidTemplate_ReturnsDeploymentResult()
+    public async Task DeployBicepTemplateAsync_WithValidTemplate_ReturnsDeploymentResultAsync()
         {
             // Arrange
             var templateContent = "param location string = 'eastus'";
@@ -190,7 +190,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task DeployBicepTemplateAsync_WithParameters_IncludesParameters()
+    public async Task DeployBicepTemplateAsync_WithParameters_IncludesParametersAsync()
         {
             // Arrange
             var templateContent = "param serviceName string\nparam environment string = 'dev'";
@@ -241,7 +241,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task DeployBicepTemplateAsync_WithAdditionalFiles_HandlesModules()
+    public async Task DeployBicepTemplateAsync_WithAdditionalFiles_HandlesModulesAsync()
         {
             // Arrange
             var mainTemplate = "module storage './modules/storage.bicep' = { name: 'storage' }";
@@ -279,7 +279,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Terraform Validation Tests
 
         [Fact]
-        public async Task ValidateDeploymentAsync_WithValidTerraform_ReturnsValid()
+    public async Task ValidateDeploymentAsync_WithValidTerraform_ReturnsValidAsync()
         {
             // Arrange
             var terraformContent = @"
@@ -313,7 +313,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Terraform Deployment Tests
 
         [Fact]
-        public async Task DeployTerraformAsync_WithValidTemplate_ReturnsDeploymentResult()
+    public async Task DeployTerraformAsync_WithValidTemplate_ReturnsDeploymentResultAsync()
         {
             // Arrange
             var terraformContent = "terraform { required_version = \">= 1.0\" }";
@@ -341,7 +341,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Kubernetes Deployment Tests
 
         [Fact]
-        public async Task DeployKubernetesAsync_WithValidManifest_ReturnsDeploymentResult()
+    public async Task DeployKubernetesAsync_WithValidManifest_ReturnsDeploymentResultAsync()
         {
             // Arrange
             var k8sManifest = @"
@@ -374,7 +374,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Deployment Status Tests
 
         [Fact]
-        public async Task GetDeploymentStatusAsync_WithExistingDeployment_ReturnsStatus()
+    public async Task GetDeploymentStatusAsync_WithExistingDeployment_ReturnsStatusAsync()
         {
             // Arrange - Create a deployment first
             var templateContent = "param location string = 'eastus'";
@@ -407,7 +407,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task GetDeploymentStatusAsync_WithNonExistentDeployment_ReturnsNotStartedState()
+    public async Task GetDeploymentStatusAsync_WithNonExistentDeployment_ReturnsNotStartedStateAsync()
         {
             // Arrange
             var fakeDeploymentId = Guid.NewGuid().ToString();
@@ -427,7 +427,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Deployment Logs Tests
 
         [Fact]
-        public async Task GetDeploymentLogsAsync_WithExistingDeployment_ReturnsLogs()
+    public async Task GetDeploymentLogsAsync_WithExistingDeployment_ReturnsLogsAsync()
         {
             // Arrange
             var templateContent = "param location string = 'eastus'";
@@ -461,7 +461,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task GetDeploymentLogsAsync_WithNonExistentDeployment_ReturnsWarningLog()
+    public async Task GetDeploymentLogsAsync_WithNonExistentDeployment_ReturnsWarningLogAsync()
         {
             // Arrange
             var fakeDeploymentId = Guid.NewGuid().ToString();
@@ -482,7 +482,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Concurrent Deployment Tests
 
         [Fact]
-        public async Task DeployBicepTemplateAsync_MultipleConcurrentDeployments_HandlesIndependently()
+    public async Task DeployBicepTemplateAsync_MultipleConcurrentDeployments_HandlesIndependentlyAsync()
         {
             // Arrange
             var template1 = "param location string = 'eastus'";
@@ -532,7 +532,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Error Handling Tests
 
         [Fact]
-        public async Task DeployBicepTemplateAsync_WhenResourceGroupCreationFails_HandlesGracefully()
+    public async Task DeployBicepTemplateAsync_WhenResourceGroupCreationFails_HandlesGracefullyAsync()
         {
             // Arrange
             var templateContent = "param location string = 'eastus'";
@@ -566,7 +566,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Tag Handling Tests
 
         [Fact]
-        public async Task DeployBicepTemplateAsync_WithTags_PassesTagsToAzureService()
+    public async Task DeployBicepTemplateAsync_WithTags_PassesTagsToAzureServiceAsync()
         {
             // Arrange
             var templateContent = "param location string = 'eastus'";
@@ -621,7 +621,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Deployment Name Tests
 
         [Fact]
-        public async Task DeployBicepTemplateAsync_WithCustomDeploymentName_UsesProvidedName()
+    public async Task DeployBicepTemplateAsync_WithCustomDeploymentName_UsesProvidedNameAsync()
         {
             // Arrange
             var templateContent = "param location string = 'eastus'";

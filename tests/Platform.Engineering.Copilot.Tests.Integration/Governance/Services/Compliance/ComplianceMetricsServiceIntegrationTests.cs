@@ -2,8 +2,7 @@ using Xunit;
 using Moq;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
-using Platform.Engineering.Copilot.Governance.Services;
-using Platform.Engineering.Copilot.Governance.Models;
+using Platform.Engineering.Copilot.Core.Services.Compliance;
 using Platform.Engineering.Copilot.Core.Models;
 
 namespace Platform.Engineering.Copilot.Tests.Integration.Governance.Services.Compliance;

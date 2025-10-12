@@ -8,7 +8,7 @@ using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Models.EnvironmentManagement;
 
-namespace Platform.Engineering.Copilot.Core.Services
+namespace Platform.Engineering.Copilot.Core.Services.Infrastructure
 {
     /// <summary>
     /// Production-ready environment management engine.
@@ -279,13 +279,24 @@ namespace Platform.Engineering.Copilot.Core.Services
                     {
                         var resourceDict = resource as IDictionary<string, object>;
                         var resourceName = ExtractString(resourceDict, "name") ?? "unknown";
-                        result.DeletedResources.Add(resourceName);
+                        var resourceType = ExtractString(resourceDict, "type") ?? "unknown";
+                        result.DeletedResources.Add(new DeletedResource
+                        {
+                            Name = resourceName,
+                            Type = resourceType,
+                            DeletedAt = DateTime.UtcNow
+                        });
                     }
                 }
                 catch (Azure.RequestFailedException ex) when (ex.Status == 404)
                 {
                     _logger.LogWarning("Resource group {ResourceGroup} not found - considering environment deleted", resourceGroup);
-                    result.DeletedResources.Add($"Resource group '{resourceGroup}' (already deleted or never existed)");
+                    result.DeletedResources.Add(new DeletedResource
+                    {
+                        Name = $"Resource group '{resourceGroup}' (already deleted or never existed)",
+                        Type = "Microsoft.Resources/resourceGroups",
+                        DeletedAt = DateTime.UtcNow
+                    });
                 }
 
                 result.Success = true;

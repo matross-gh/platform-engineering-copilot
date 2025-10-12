@@ -131,12 +131,6 @@ namespace Platform.Engineering.Copilot.Core.Interfaces
         Task<object> CreateWebAppAsync(string appName, string resourceGroupName, string location, Dictionary<string, object>? appSettings = null, string? subscriptionId = null, CancellationToken cancellationToken = default);
         Task<object> CreateStorageAccountAsync(string storageAccountName, string resourceGroupName, string location, Dictionary<string, object>? storageSettings = null, string? subscriptionId = null, CancellationToken cancellationToken = default);
 
-        // Cost Management
-        Task<object> GetSubscriptionCostsAsync(string? subscriptionId = null, string timeframe = "MonthToDate", string granularity = "Daily", CancellationToken cancellationToken = default);
-        Task<object> GetResourceGroupCostsAsync(string resourceGroupName, string? subscriptionId = null, string timeframe = "MonthToDate", string granularity = "Daily", CancellationToken cancellationToken = default);
-        Task<IEnumerable<object>> GetBudgetsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default);
-        Task<IEnumerable<object>> GetCostRecommendationsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default);
-
         // Resource Health
         Task<IEnumerable<object>> GetResourceHealthEventsAsync(string subscriptionId, CancellationToken cancellationToken = default);
         Task<object?> GetResourceHealthAsync(string resourceId, CancellationToken cancellationToken = default);

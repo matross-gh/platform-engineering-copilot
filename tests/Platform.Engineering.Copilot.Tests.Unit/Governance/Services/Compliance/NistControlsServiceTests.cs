@@ -7,8 +7,8 @@ using Moq;
 using Moq.Protected;
 using Polly;
 using Platform.Engineering.Copilot.Core.Models;
-using Platform.Engineering.Copilot.Governance.Configuration;
-using Platform.Engineering.Copilot.Governance.Services;
+using Platform.Engineering.Copilot.Core.Configuration;
+using Platform.Engineering.Copilot.Core.Services.Compliance;
 using System.Net;
 using System.Text.Json;
 using Xunit;
@@ -119,7 +119,7 @@ public class NistControlsServiceTests
     #region GetCatalogAsync Tests
 
     [Fact]
-    public async Task GetCatalogAsync_WithCachedCatalog_ReturnsCachedValue()
+    public async Task GetCatalogAsync_WithCachedCatalog_ReturnsCachedValueAsync()
     {
         // Arrange
         var service = CreateService();
@@ -136,7 +136,7 @@ public class NistControlsServiceTests
     }
 
     [Fact]
-    public async Task GetCatalogAsync_WithoutCache_FetchesFromRemote()
+    public async Task GetCatalogAsync_WithoutCache_FetchesFromRemoteAsync()
     {
         // Arrange
         var catalog = CreateTestCatalog();
@@ -159,7 +159,7 @@ public class NistControlsServiceTests
         result.Should().NotBeNull();
         result!.Groups.Should().HaveCount(1);
     }    [Fact]
-    public async Task GetCatalogAsync_OnRemoteFailure_WithFallbackDisabled_ReturnsNull()
+    public async Task GetCatalogAsync_OnRemoteFailure_WithFallbackDisabled_ReturnsNullAsync()
     {
         // Arrange
         _options.EnableOfflineFallback = false;
@@ -175,7 +175,7 @@ public class NistControlsServiceTests
     }
 
     [Fact]
-    public async Task GetCatalogAsync_OnSuccess_CachesCatalog()
+    public async Task GetCatalogAsync_OnSuccess_CachesCatalogAsync()
     {
         // Arrange
         var service = CreateService();
@@ -198,7 +198,7 @@ public class NistControlsServiceTests
         _memoryCache.TryGetValue(cacheKey, out NistCatalog? cachedCatalog).Should().BeTrue();
         cachedCatalog.Should().NotBeNull();
     }    [Fact]
-    public async Task GetCatalogAsync_OnHttpException_ReturnsNull()
+    public async Task GetCatalogAsync_OnHttpException_ReturnsNullAsync()
     {
         // Arrange
         var service = CreateService();
@@ -222,7 +222,7 @@ public class NistControlsServiceTests
     #region GetControlAsync Tests
 
     [Fact]
-    public async Task GetControlAsync_WithValidControlId_ReturnsControl()
+    public async Task GetControlAsync_WithValidControlId_ReturnsControlAsync()
     {
         // Arrange
         var service = CreateService();
@@ -240,7 +240,7 @@ public class NistControlsServiceTests
     }
 
     [Fact]
-    public async Task GetControlAsync_WithInvalidControlId_ReturnsNull()
+    public async Task GetControlAsync_WithInvalidControlId_ReturnsNullAsync()
     {
         // Arrange
         var service = CreateService();
@@ -256,7 +256,7 @@ public class NistControlsServiceTests
     }
 
     [Fact]
-    public async Task GetControlAsync_WithNoCatalog_ReturnsNull()
+    public async Task GetControlAsync_WithNoCatalog_ReturnsNullAsync()
     {
         // Arrange
         var service = CreateService();
@@ -274,7 +274,7 @@ public class NistControlsServiceTests
     #region GetControlsByFamilyAsync Tests
 
     [Fact]
-    public async Task GetControlsByFamilyAsync_WithValidFamily_ReturnsControls()
+    public async Task GetControlsByFamilyAsync_WithValidFamily_ReturnsControlsAsync()
     {
         // Arrange
         var service = CreateService();
@@ -288,11 +288,15 @@ public class NistControlsServiceTests
         // Assert
         result.Should().NotBeNull();
         result.Should().HaveCount(2);
-        result.All(c => c.Id.StartsWith("AC-")).Should().BeTrue();
+        result.Should().AllSatisfy(control =>
+        {
+            control.Should().NotBeNull();
+            control!.Id.Should().StartWith("AC-");
+        });
     }
 
     [Fact]
-    public async Task GetControlsByFamilyAsync_WithInvalidFamily_ReturnsEmpty()
+    public async Task GetControlsByFamilyAsync_WithInvalidFamily_ReturnsEmptyAsync()
     {
         // Arrange
         var service = CreateService();
@@ -309,7 +313,7 @@ public class NistControlsServiceTests
     }
 
     [Fact]
-    public async Task GetControlsByFamilyAsync_WithNoCatalog_ReturnsEmpty()
+    public async Task GetControlsByFamilyAsync_WithNoCatalog_ReturnsEmptyAsync()
     {
         // Arrange
         var service = CreateService();
@@ -328,7 +332,7 @@ public class NistControlsServiceTests
     #region SearchControlsAsync Tests
 
     [Fact]
-    public async Task SearchControlsAsync_WithMatchingTerm_ReturnsControls()
+    public async Task SearchControlsAsync_WithMatchingTerm_ReturnsControlsAsync()
     {
         // Arrange
         var service = CreateService();
@@ -340,14 +344,20 @@ public class NistControlsServiceTests
         var result = await service.SearchControlsAsync("access");
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().NotBeEmpty();
-        result.All(c => c.Title.Contains("Access", StringComparison.OrdinalIgnoreCase) ||
-                       c.Id.Contains("Access", StringComparison.OrdinalIgnoreCase)).Should().BeTrue();
+    result.Should().NotBeNull();
+    result.Should().NotBeEmpty();
+    result.Should().AllSatisfy(control =>
+    {
+        control.Should().NotBeNull();
+        var controlValue = control!;
+        (controlValue.Title?.Contains("Access", StringComparison.OrdinalIgnoreCase) == true ||
+         controlValue.Id?.Contains("Access", StringComparison.OrdinalIgnoreCase) == true)
+        .Should().BeTrue();
+    });
     }
 
     [Fact]
-    public async Task SearchControlsAsync_WithNoMatches_ReturnsEmpty()
+    public async Task SearchControlsAsync_WithNoMatches_ReturnsEmptyAsync()
     {
         // Arrange
         var service = CreateService();
@@ -364,7 +374,7 @@ public class NistControlsServiceTests
     }
 
     [Fact]
-    public async Task SearchControlsAsync_IsCaseInsensitive()
+    public async Task SearchControlsAsync_IsCaseInsensitiveAsync()
     {
         // Arrange
         var service = CreateService();
@@ -381,7 +391,7 @@ public class NistControlsServiceTests
     }
 
     [Fact]
-    public async Task SearchControlsAsync_WithNoCatalog_ReturnsEmpty()
+    public async Task SearchControlsAsync_WithNoCatalog_ReturnsEmptyAsync()
     {
         // Arrange
         var service = CreateService();
@@ -400,7 +410,7 @@ public class NistControlsServiceTests
     #region GetVersionAsync Tests
 
     [Fact]
-    public async Task GetVersionAsync_ReturnsTargetVersion()
+    public async Task GetVersionAsync_ReturnsTargetVersionAsync()
     {
         // Arrange
         var service = CreateService();
@@ -416,7 +426,7 @@ public class NistControlsServiceTests
     }
 
     [Fact]
-    public async Task GetVersionAsync_WithNullTargetVersion_ReturnsLatest()
+    public async Task GetVersionAsync_WithNullTargetVersion_ReturnsLatestAsync()
     {
         // Arrange
         var service = CreateService();
@@ -436,7 +446,7 @@ public class NistControlsServiceTests
     #region ValidateControlIdAsync Tests
 
     [Fact]
-    public async Task ValidateControlIdAsync_WithValidId_ReturnsTrue()
+    public async Task ValidateControlIdAsync_WithValidId_ReturnsTrueAsync()
     {
         // Arrange
         var service = CreateService();
@@ -452,7 +462,7 @@ public class NistControlsServiceTests
     }
 
     [Fact]
-    public async Task ValidateControlIdAsync_WithInvalidId_ReturnsFalse()
+    public async Task ValidateControlIdAsync_WithInvalidId_ReturnsFalseAsync()
     {
         // Arrange
         var service = CreateService();
@@ -468,7 +478,7 @@ public class NistControlsServiceTests
     }
 
     [Fact]
-    public async Task ValidateControlIdAsync_WithNoCatalog_ReturnsFalse()
+    public async Task ValidateControlIdAsync_WithNoCatalog_ReturnsFalseAsync()
     {
         // Arrange
         var service = CreateService();

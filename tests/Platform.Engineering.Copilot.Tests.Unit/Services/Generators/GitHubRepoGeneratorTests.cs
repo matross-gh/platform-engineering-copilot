@@ -234,11 +234,11 @@ public class GitHubRepoGeneratorTests
         Assert.Contains(".github/ISSUE_TEMPLATE/bug_report.md", files.Keys);
         Assert.Contains(".github/ISSUE_TEMPLATE/feature_request.md", files.Keys);
         
-        var bugTemplate = files[".github/ISSUE_TEMPLATE/bug_report.md"];
+        var bugTemplate = GetGeneratedFile(files, ".github/ISSUE_TEMPLATE/bug_report.md");
         Assert.Contains("Bug", bugTemplate);
         Assert.Contains("Expected behavior", bugTemplate);
         
-        var featureTemplate = files[".github/ISSUE_TEMPLATE/feature_request.md"];
+        var featureTemplate = GetGeneratedFile(files, ".github/ISSUE_TEMPLATE/feature_request.md");
         Assert.Contains("Feature", featureTemplate);
         Assert.Contains("Describe the solution", featureTemplate);
     }
@@ -258,7 +258,7 @@ public class GitHubRepoGeneratorTests
 
         // Act
         var files = generator.GenerateRepositoryFiles(request);
-        var readme = files["README.md"];
+        var readme = GetGeneratedFile(files, "README.md");
 
         // Assert
         Assert.Contains("postgres", readme, StringComparison.OrdinalIgnoreCase);
@@ -271,7 +271,8 @@ public class GitHubRepoGeneratorTests
         // Arrange
         var generator = new GitHubRepoGenerator();
         var request = CreateSampleRequest(ProgrammingLanguage.NodeJS);
-        request.Application.EnvironmentVariables = new Dictionary<string, string>
+        var application = request.Application ?? throw new System.InvalidOperationException("Sample request missing application details.");
+        application.EnvironmentVariables = new Dictionary<string, string>
         {
             { "NODE_ENV", "production" },
             { "PORT", "3000" }
@@ -279,7 +280,7 @@ public class GitHubRepoGeneratorTests
 
         // Act
         var files = generator.GenerateRepositoryFiles(request);
-        var readme = files["README.md"];
+        var readme = GetGeneratedFile(files, "README.md");
 
         // Assert
         Assert.Contains("NODE_ENV", readme);
@@ -317,5 +318,11 @@ public class GitHubRepoGeneratorTests
             },
             Databases = new List<DatabaseSpec>()
         };
+    }
+
+    private static string GetGeneratedFile(System.Collections.Generic.IDictionary<string, string> files, string key)
+    {
+        Assert.True(files.TryGetValue(key, out var value), $"Expected generated file '{key}'.");
+        return value ?? throw new System.InvalidOperationException($"Generator returned null for '{key}'.");
     }
 }

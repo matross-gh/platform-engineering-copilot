@@ -391,14 +391,34 @@ public class ComplianceTrend
 /// </summary>
 public class RemediationProgress
 {
+    public string SubscriptionId { get; set; } = string.Empty;
+    public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
+    public int TotalActivities { get; set; }
+    public int InProgressCount { get; set; }
+    public int CompletedCount { get; set; }
+    public int FailedCount { get; set; }
+    public double SuccessRate { get; set; }
     public int TotalRemediableFindings { get; set; }
     public int RemediationInProgress { get; set; }
     public int RemediationCompleted { get; set; }
     public int RemediationFailed { get; set; }
     public List<RemediationItem> ActiveRemediations { get; set; } = new();
     public List<RemediationItem> RecentlyCompleted { get; set; } = new();
+    public List<RemediationActivity> RecentActivities { get; set; } = new();
     public TimeSpan AverageRemediationTime { get; set; }
     public int AutoRemediationsExecuted { get; set; }
+}
+
+/// <summary>
+/// Remediation activity for progress tracking
+/// </summary>
+public class RemediationActivity
+{
+    public string ExecutionId { get; set; } = string.Empty;
+    public string FindingId { get; set; } = string.Empty;
+    public RemediationExecutionStatus Status { get; set; }
+    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
 }
 
 /// <summary>
@@ -434,9 +454,12 @@ public class RiskAssessment
     public string? AssessmentId { get; set; }
     public string? SubscriptionId { get; set; }
     public DateTimeOffset AssessmentDate { get; set; } = DateTimeOffset.UtcNow;
+    public double RiskScore { get; set; }
     public double OverallRiskScore { get; set; }
+    public RiskLevel OverallRiskLevel { get; set; }
     public RiskLevel RiskLevel { get; set; }
     public string? RiskLevelString { get; set; }
+    public string RiskRating { get; set; } = string.Empty;
     public Dictionary<string, CategoryRisk> RiskCategories { get; set; } = new();
     public List<string> TopRiskFactors { get; set; } = new();
     public List<string> TopRisks { get; set; } = new();
@@ -652,6 +675,17 @@ public class ImplementationTimeline
     public DateTimeOffset EndDate { get; set; }
     public TimeSpan TotalDuration { get; set; }
     public List<TimelinePhase> Phases { get; set; } = new();
+    public List<TimelineMilestone> Milestones { get; set; } = new();
+}
+
+/// <summary>
+/// Milestone in implementation timeline
+/// </summary>
+public class TimelineMilestone
+{
+    public DateTimeOffset Date { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public List<string> Deliverables { get; set; } = new();
 }
 
 /// <summary>
@@ -674,10 +708,26 @@ public class ComplianceTimeline
     public required string SubscriptionId { get; set; }
     public DateTimeOffset StartDate { get; set; }
     public DateTimeOffset EndDate { get; set; }
+    public double CurrentScore { get; set; }
+    public double PreviousScore { get; set; }
+    public double ScoreChange { get; set; }
+    public string TrendDirection { get; set; } = "Stable";
     public List<ComplianceDataPoint> DataPoints { get; set; } = new();
+    public List<ComplianceEvent> MajorEvents { get; set; } = new();
     public ComplianceTrends? Trends { get; set; }
     public List<string> SignificantEvents { get; set; } = new();
     public List<string> Insights { get; set; } = new();
+}
+
+/// <summary>
+/// Compliance event for timeline
+/// </summary>
+public class ComplianceEvent
+{
+    public DateTimeOffset Date { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Impact { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -685,8 +735,11 @@ public class ComplianceTimeline
 /// </summary>
 public class ComplianceDataPoint
 {
+    public DateTimeOffset Date { get; set; }
     public DateTimeOffset Timestamp { get; set; }
+    public double Score { get; set; }
     public double ComplianceScore { get; set; }
+    public int FindingsCount { get; set; }
     public int ControlsFailed { get; set; }
     public int ControlsPassed { get; set; }
     public int ActiveFindings { get; set; }
@@ -711,7 +764,10 @@ public class CategoryRisk
 {
     public required string Category { get; set; }
     public double RiskScore { get; set; }
+    public double Score { get; set; }
     public required string RiskLevel { get; set; }
+    public int FindingCount { get; set; }
+    public List<string> TopRisks { get; set; } = new();
     public List<string> Vulnerabilities { get; set; } = new();
     public List<string> Mitigations { get; set; } = new();
 }
@@ -745,10 +801,19 @@ public class ComplianceCertificate
     public required string CertificateId { get; set; }
     public required string SubscriptionId { get; set; }
     public DateTimeOffset IssuedDate { get; set; }
+    public DateTimeOffset ExpirationDate { get; set; }
     public DateTimeOffset ValidUntil { get; set; }
+    public string ComplianceStatus { get; set; } = string.Empty;
+    public string CertificationLevel { get; set; } = string.Empty;
     public double ComplianceScore { get; set; }
+    public int TotalControls { get; set; }
+    public int CertifiedControls { get; set; }
+    public List<string> CertifiedFrameworks { get; set; } = new();
     public List<string> ControlFamiliesCovered { get; set; } = new();
     public List<ComplianceAttestation> Attestations { get; set; } = new();
+    public string? AttestationStatement { get; set; }
+    public string? SignatoryInformation { get; set; }
+    public TimeSpan ValidityPeriod { get; set; }
     public string? VerificationHash { get; set; }
 }
 
@@ -839,7 +904,11 @@ public class RemediationExecution
     public DateTimeOffset? CompletedAt { get; set; }
     public TimeSpan Duration { get; set; }
     public bool Success { get; set; }
+    public string? Message { get; set; }
     public string? ErrorMessage { get; set; }
+    public string? Error { get; set; }
+    public List<string> ChangesApplied { get; set; } = new();
+    public string? BackupId { get; set; }
     public List<RemediationStep> StepsExecuted { get; set; } = new();
     public RemediationSnapshot? BeforeSnapshot { get; set; }
     public RemediationSnapshot? AfterSnapshot { get; set; }

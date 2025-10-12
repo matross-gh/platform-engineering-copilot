@@ -104,8 +104,30 @@ public class FlankspeedOnboardingService : IOnboardingService
                     
                 if (requestProp != null && requestProp.CanWrite)
                 {
-                    requestProp.SetValue(request, kvp.Value);
-                    _logger.LogDebug("Set property {PropertyName} to value {Value}", kvp.Key, kvp.Value);
+                    try
+                    {
+                        var value = kvp.Value;
+                        
+                        // Convert string to List<string> if needed
+                        if (requestProp.PropertyType == typeof(List<string>) && value is string stringValue)
+                        {
+                            // Split by common delimiters: comma, semicolon, pipe, newline
+                            value = stringValue
+                                .Split(new[] { ',', ';', '|', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                                .Select(s => s.Trim())
+                                .Where(s => !string.IsNullOrEmpty(s))
+                                .ToList();
+                            _logger.LogDebug("Converted string to List<string> for property {PropertyName}: {Count} items", 
+                                kvp.Key, ((List<string>)value).Count);
+                        }
+                        
+                        requestProp.SetValue(request, value);
+                        _logger.LogDebug("Set property {PropertyName} to value {Value}", kvp.Key, value);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to set property {PropertyName} to value {Value}", kvp.Key, kvp.Value);
+                    }
                 }
                 else
                 {
@@ -122,8 +144,29 @@ public class FlankspeedOnboardingService : IOnboardingService
                 var requestProp = typeof(OnboardingRequest).GetProperty(prop.Name);
                 if (requestProp != null && requestProp.CanWrite)
                 {
-                    var value = prop.GetValue(updates);
-                    requestProp.SetValue(request, value);
+                    try
+                    {
+                        var value = prop.GetValue(updates);
+                        
+                        // Convert string to List<string> if needed
+                        if (requestProp.PropertyType == typeof(List<string>) && value is string stringValue)
+                        {
+                            value = stringValue
+                                .Split(new[] { ',', ';', '|', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                                .Select(s => s.Trim())
+                                .Where(s => !string.IsNullOrEmpty(s))
+                                .ToList();
+                            _logger.LogDebug("Converted string to List<string> for property {PropertyName}: {Count} items", 
+                                prop.Name, ((List<string>)value).Count);
+                        }
+                        
+                        requestProp.SetValue(request, value);
+                        _logger.LogDebug("Set property {PropertyName} to value {Value}", prop.Name, value);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to set property {PropertyName}", prop.Name);
+                    }
                 }
             }
         }
@@ -135,7 +178,7 @@ public class FlankspeedOnboardingService : IOnboardingService
         return true;
     }
 
-    public async Task<bool> SubmitRequestAsync(string requestId, CancellationToken cancellationToken = default)
+    public async Task<bool> SubmitRequestAsync(string requestId, string? submittedBy = null, CancellationToken cancellationToken = default)
     {
         var request = await _context.OnboardingRequests
             .FindAsync(new[] { requestId }, cancellationToken);
@@ -162,12 +205,39 @@ public class FlankspeedOnboardingService : IOnboardingService
         }
 
         request.Status = OnboardingStatus.PendingReview;
+        request.SubmittedForApprovalAt = DateTime.UtcNow;
+        request.SubmittedBy = submittedBy ?? request.MissionOwnerEmail;
         request.LastUpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Submitted onboarding request {RequestId} for review", requestId);
+        _logger.LogInformation("Submitted onboarding request {RequestId} for review by {SubmittedBy}", 
+            requestId, request.SubmittedBy);
         
-        // TODO: Send notification to NNWC team
+        // Send notification to NNWC platform team
+        try
+        {
+            var details = $@"Mission Owner: {request.MissionOwner} ({request.MissionOwnerEmail})
+Organization: {request.Command}
+Environment Type: {string.Join(", ", request.RequiredServices ?? new List<string>())}
+Classification: {request.ClassificationLevel}
+Estimated Monthly Cost: ${request.EstimatedMonthlyCost:N2}
+Submitted By: {request.SubmittedBy}
+Submitted At: {request.SubmittedForApprovalAt:yyyy-MM-dd HH:mm:ss UTC}
+
+Review this request in the Admin Console at: /admin/onboarding/{requestId}";
+
+            await _emailService.SendNNWCTeamNotificationAsync(
+                request.MissionName,
+                requestId,
+                "Pending Review",
+                details,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send NNWC team notification for request {RequestId}", requestId);
+            // Don't fail the submission if email fails
+        }
         
         return true;
     }
@@ -268,6 +338,7 @@ public class FlankspeedOnboardingService : IOnboardingService
         // Update approval information
         request.Status = OnboardingStatus.Approved;
         request.ApprovedBy = approvedBy;
+        request.ApprovedAt = DateTime.UtcNow;
         request.ApprovalComments = comments;
         request.ReviewedAt = DateTime.UtcNow;
         request.LastUpdatedAt = DateTime.UtcNow;
@@ -315,6 +386,7 @@ public class FlankspeedOnboardingService : IOnboardingService
 
         request.Status = OnboardingStatus.Rejected;
         request.RejectedBy = rejectedBy;
+        request.RejectedAt = DateTime.UtcNow;
         request.RejectionReason = reason;
         request.ReviewedAt = DateTime.UtcNow;
         request.LastUpdatedAt = DateTime.UtcNow;
@@ -416,51 +488,107 @@ public class FlankspeedOnboardingService : IOnboardingService
                 cancellationToken);
 
             // ============================================================
-            // STEP 2: SAVE GENERATED TEMPLATE TO STORAGE
+            // STEP 2: AUDIT LOG GENERATED TEMPLATE (NO STORAGE FOR ONBOARDING)
             // ============================================================
-            _logger.LogInformation("💾 Step 2/4: Saving generated template to storage");
+            _logger.LogInformation("� Step 2/5: Logging template audit trail");
 
             var templateId = Guid.NewGuid();
             var templateName = $"{request.MissionName.ToLower().Replace(" ", "-")}-infrastructure";
-            var templateDescription = $"Auto-generated Navy Flankspeed infrastructure for {request.MissionName}";
-
-            // Create template metadata
-            var template = new Platform.Engineering.Copilot.Data.Entities.EnvironmentTemplate
+            
+            // Audit log: Template generated for onboarding (not saved to storage)
+            var auditLog = new
             {
-                Id = templateId,
-                Name = templateName,
-                Description = templateDescription,
-                TemplateType = DetermineTemplateType(templateRequest.Infrastructure.ComputePlatform),
-                Version = "1.0.0",
-                Format = "Bicep", // Navy Flankspeed uses Bicep
-                CreatedBy = "Auto-Generation System",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                IsActive = true,
-                FilesCount = generationResult.Files.Count,
-                MainFileType = "bicep",
+                RequestId = request.Id,
+                MissionName = request.MissionName,
+                Classification = request.ClassificationLevel,
+                TemplateId = templateId,
+                TemplateName = templateName,
+                GeneratedAt = DateTime.UtcNow,
+                FileCount = generationResult.Files.Count,
+                Components = generationResult.GeneratedComponents,
                 Summary = generationResult.Summary,
-                Tags = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string>
-                {
-                    { "Mission", request.MissionName },
-                    { "Classification", request.ClassificationLevel },
-                    { "GeneratedFrom", "OnboardingRequest" },
-                    { "OnboardingRequestId", request.Id }
-                }),
-                // TODO: Map ServiceTemplateFile to TemplateFile entities
-                Files = new List<Platform.Engineering.Copilot.Data.Entities.TemplateFile>()
+                Purpose = "Onboarding - Direct deployment without template storage"
             };
-
-            // Save template to database
-            await _templateStorage.StoreTemplateAsync(templateName, template, cancellationToken);
-
-            _logger.LogInformation("✅ Template '{TemplateName}' saved with {FileCount} files", 
-                templateName, template.FilesCount);
+            
+            _logger.LogInformation("📝 AUDIT: Onboarding template generated {@AuditLog}", auditLog);
+            
+            // Log template audit (Teams notification handled by existing methods)
+            _logger.LogInformation("✅ Template audit logged - ready for direct deployment");
 
             // ============================================================
-            // STEP 3: DEPLOY INFRASTRUCTURE TO AZURE
+            // STEP 3: PRE-DEPLOYMENT VALIDATION
             // ============================================================
-            _logger.LogInformation("🔧 Step 3/4: Deploying infrastructure to Azure");
+            _logger.LogInformation("🔍 Step 3/5: Validating deployment readiness");
+            
+            // Log validation start
+            _logger.LogInformation("🔍 Validating {Mission} deployment prerequisites", request.MissionName);
+            
+            var validationErrors = new List<string>();
+            
+            // Validate Bicep template syntax
+            var mainBicepFile = generationResult.Files.FirstOrDefault(f => f.Key.EndsWith(".bicep") || f.Key.Contains("main"));
+            if (string.IsNullOrEmpty(mainBicepFile.Key) || string.IsNullOrWhiteSpace(mainBicepFile.Value))
+            {
+                validationErrors.Add("No valid Bicep entry point found");
+            }
+            
+            // Validate required parameters
+            if (string.IsNullOrWhiteSpace(request.Region))
+            {
+                validationErrors.Add("Azure region not specified");
+            }
+            
+            if (string.IsNullOrWhiteSpace(request.RequestedVNetCidr))
+            {
+                validationErrors.Add("VNet CIDR range not specified");
+            }
+            
+            // Validate subscription/resource group
+            var tempResourceGroupName = $"{request.MissionName.ToLower().Replace(" ", "-")}-rg";
+            if (tempResourceGroupName.Length > 90)
+            {
+                validationErrors.Add($"Resource group name too long (max 90 chars): {tempResourceGroupName}");
+            }
+            
+            // Validate classification-specific requirements
+            if (request.ClassificationLevel.Contains("SECRET", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!request.ComplianceFrameworks.Contains("DoD IL5") && 
+                    !request.ComplianceFrameworks.Contains("IL5"))
+                {
+                    validationErrors.Add("SECRET classification requires DoD IL5 compliance");
+                }
+                
+                if (!request.Region.Contains("gov", StringComparison.OrdinalIgnoreCase))
+                {
+                    validationErrors.Add("SECRET classification requires Azure Government region");
+                }
+            }
+            
+            // Check for validation failures
+            if (validationErrors.Any())
+            {
+                var errorMessage = string.Join("; ", validationErrors);
+                _logger.LogError("❌ Pre-deployment validation failed: {Errors}", errorMessage);
+                
+                await _teamsNotificationService.SendDeploymentFailedNotificationAsync(
+                    request.MissionName,
+                    request.Id,
+                    "Pre-Deployment Validation",
+                    errorMessage,
+                    cancellationToken);
+                
+                throw new InvalidOperationException($"Deployment validation failed: {errorMessage}");
+            }
+            
+            _logger.LogInformation("✅ Pre-deployment validation passed");
+            _logger.LogInformation("   Files: {Count}, Region: {Region}, Classification: {Classification}",
+                generationResult.Files.Count, request.Region, request.ClassificationLevel);
+
+            // ============================================================
+            // STEP 4: DEPLOY INFRASTRUCTURE TO AZURE
+            // ============================================================
+            _logger.LogInformation("🔧 Step 4/5: Deploying infrastructure to Azure");
 
             var environmentName = $"{request.MissionName.ToLower().Replace(" ", "-")}-env";
             var resourceGroupName = $"{request.MissionName.ToLower().Replace(" ", "-")}-rg";
@@ -471,15 +599,36 @@ public class FlankspeedOnboardingService : IOnboardingService
                 request.Id,
                 "Production",
                 cancellationToken);
+            
+            // Enhanced log with deployment details
+            _logger.LogInformation("🚀 Deploying {Mission} infrastructure to {Region}",
+                request.MissionName, region);
+            _logger.LogInformation("   Environment: {Env}, RG: {RG}", environmentName, resourceGroupName);
+            _logger.LogInformation("   Files: {Count}, Components: {Components}",
+                generationResult.Files.Count, string.Join(", ", generationResult.GeneratedComponents));
+            _logger.LogInformation("   Services: {Services}",
+                string.Join(", ", request.RequiredServices));
 
+            // Build environment request from generated template (NO STORAGE LOOKUP)
             var environmentRequest = new EnvironmentCreationRequest
             {
                 Name = environmentName,
                 Type = EnvironmentType.Unknown,
                 ResourceGroup = resourceGroupName,
                 Location = region,
-                TemplateId = templateId.ToString(),
                 SubscriptionId = request.ProvisionedSubscriptionId ?? request.RequestedSubscriptionName,
+                
+                // DIRECT DEPLOYMENT: Pass generated files directly (no template ID lookup)
+                // Convert Dictionary<string, string> to main content + additional files
+                TemplateContent = generationResult.Files.Values.FirstOrDefault(), // Main template
+                TemplateFiles = generationResult.Files.Select(f => new ServiceTemplateFile
+                {
+                    FileName = f.Key,
+                    Content = f.Value,
+                    FileType = Path.GetExtension(f.Key).TrimStart('.'),
+                    IsEntryPoint = f.Key.Contains("main", StringComparison.OrdinalIgnoreCase)
+                }).ToList(),
+                
                 TemplateParameters = new Dictionary<string, string>
                 {
                     { "vnetName", $"{request.MissionName.ToLower().Replace(" ", "-")}-vnet" },
@@ -496,9 +645,16 @@ public class FlankspeedOnboardingService : IOnboardingService
                     { "Command", request.Command },
                     { "Classification", request.ClassificationLevel },
                     { "RequestId", request.Id },
-                    { "JobId", jobId }
+                    { "JobId", jobId },
+                    { "DeploymentType", "Onboarding-Direct" } // Mark as direct deployment
                 }
             };
+
+            _logger.LogInformation("🔧 Deploying infrastructure directly from generated template (no storage lookup)");
+            _logger.LogInformation("   Main template size: {Size} bytes", 
+                environmentRequest.TemplateContent?.Length ?? 0);
+            _logger.LogInformation("   Additional files: {Count}", 
+                environmentRequest.TemplateFiles?.Count ?? 0);
 
             var deploymentResult = await _environmentEngine.CreateEnvironmentAsync(
                 environmentRequest, 
@@ -523,6 +679,20 @@ public class FlankspeedOnboardingService : IOnboardingService
             _logger.LogInformation("   Resource Group: {ResourceGroup}", deploymentResult.ResourceGroup);
             _logger.LogInformation("   Resources Created: {Count}", deploymentResult.CreatedResources?.Count ?? 0);
 
+            // Enhanced log with resource details
+            if (deploymentResult.CreatedResources?.Any() == true)
+            {
+                _logger.LogInformation("📦 Created Resources:");
+                foreach (var resource in deploymentResult.CreatedResources.Take(10)) // Log first 10
+                {
+                    _logger.LogInformation("   • {Resource}", resource);
+                }
+                if (deploymentResult.CreatedResources.Count > 10)
+                {
+                    _logger.LogInformation("   ... and {More} more", deploymentResult.CreatedResources.Count - 10);
+                }
+            }
+
             await _teamsNotificationService.SendDeploymentCompletedNotificationAsync(
                 request.MissionName,
                 request.Id,
@@ -534,16 +704,17 @@ public class FlankspeedOnboardingService : IOnboardingService
                 cancellationToken: cancellationToken);
 
             // ============================================================
-            // STEP 4: UPDATE REQUEST WITH RESULTS
+            // STEP 5: UPDATE REQUEST WITH RESULTS & AUDIT
             // ============================================================
-            _logger.LogInformation("📊 Step 4/4: Updating onboarding request with provisioning results");
+            _logger.LogInformation("📊 Step 5/5: Recording deployment results and audit trail");
 
             request.ProvisionedResourceGroupId = deploymentResult.ResourceGroup;
             request.ProvisionedResources["EnvironmentName"] = environmentName;
             request.ProvisionedResources["EnvironmentId"] = deploymentResult.EnvironmentId;
             request.ProvisionedResources["DeploymentId"] = deploymentResult.DeploymentId ?? "N/A";
-            request.ProvisionedResources["TemplateId"] = templateId.ToString();
-            request.ProvisionedResources["TemplateName"] = templateName;
+            request.ProvisionedResources["TemplateAuditId"] = templateId.ToString(); // Audit reference only
+            request.ProvisionedResources["TemplateNotStored"] = "true"; // Mark that template wasn't saved
+            request.ProvisionedResources["DeploymentMethod"] = "Direct-From-Generation";
             request.ProvisionedResources["GeneratedFileCount"] = generationResult.Files.Count.ToString();
 
             // Store all created resources
@@ -563,13 +734,48 @@ public class FlankspeedOnboardingService : IOnboardingService
 
             await _context.SaveChangesAsync(cancellationToken);
 
-            _logger.LogInformation("🎉 Successfully provisioned environment for request {RequestId}", request.Id);
-            _logger.LogInformation("   � Generated Files: {FileCount}", generationResult.Files.Count);
-            _logger.LogInformation("   🔧 Deployed Resources: {ResourceCount}", deploymentResult.CreatedResources?.Count ?? 0);
-            _logger.LogInformation("   📋 Template ID: {TemplateId}", templateId);
+            // Final audit log with complete deployment details
+            var completionAudit = new
+            {
+                RequestId = request.Id,
+                MissionName = request.MissionName,
+                Status = "Completed",
+                CompletedAt = DateTime.UtcNow,
+                EnvironmentName = environmentName,
+                EnvironmentId = deploymentResult.EnvironmentId,
+                ResourceGroup = deploymentResult.ResourceGroup,
+                ResourceCount = deploymentResult.CreatedResources?.Count ?? 0,
+                Resources = deploymentResult.CreatedResources,
+                TemplateAuditId = templateId,
+                TemplateFileCount = generationResult.Files.Count,
+                DeploymentMethod = "Direct-Onboarding-NoStorage",
+                Region = region,
+                Classification = request.ClassificationLevel,
+                Duration = (DateTime.UtcNow - request.CreatedAt).TotalMinutes
+            };
+            
+            _logger.LogInformation("📝 AUDIT: Onboarding deployment completed {@CompletionAudit}", completionAudit);
 
-            // Send provisioning complete notifications
+            _logger.LogInformation("🎉 Successfully provisioned environment for request {RequestId}", request.Id);
+            _logger.LogInformation("   📝 Generated Files: {FileCount}", generationResult.Files.Count);
+            _logger.LogInformation("   🔧 Deployed Resources: {ResourceCount}", deploymentResult.CreatedResources?.Count ?? 0);
+            _logger.LogInformation("   ⏱️ Total Duration: {Duration:F1} minutes", completionAudit.Duration);
+            _logger.LogInformation("   💾 Template Storage: Skipped (direct deployment for onboarding)");
+
+            // Send enhanced provisioning complete notifications
             await SendProvisioningCompleteNotificationsAsync(request, cancellationToken);
+            
+            // Log final summary with detailed metrics
+            _logger.LogInformation("📊 Deployment Metrics:");
+            _logger.LogInformation("   📧 Mission Owner: {Owner} ({Email})",
+                request.MissionOwner, request.MissionOwnerEmail);
+            _logger.LogInformation("   🏢 Command: {Command}", request.Command);
+            _logger.LogInformation("   🔒 Classification: {Classification}", request.ClassificationLevel);
+            _logger.LogInformation("   🌍 Environment: {Env} in {RG}",
+                environmentName, deploymentResult.ResourceGroup);
+            _logger.LogInformation("   📦 Resources: {Count} deployed", deploymentResult.CreatedResources?.Count ?? 0);
+            _logger.LogInformation("   ⏱️ Duration: {Duration:F1} minutes", completionAudit.Duration);
+            _logger.LogInformation("   � Storage: Direct deployment (no template saved)");
         }
         catch (Exception ex)
         {

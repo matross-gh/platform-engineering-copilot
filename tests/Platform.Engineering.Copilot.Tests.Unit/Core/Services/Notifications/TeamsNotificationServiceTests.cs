@@ -87,7 +87,7 @@ public class TeamsNotificationServiceTests
     #region SendOnboardingApprovedNotificationAsync Tests
 
     [Fact]
-    public async Task SendOnboardingApprovedNotificationAsync_WithValidInput_SendsWebhookRequest()
+    public async Task SendOnboardingApprovedNotificationAsync_WithValidInput_SendsWebhookRequestAsync()
     {
         // Arrange
         var service = CreateService();
@@ -118,7 +118,7 @@ public class TeamsNotificationServiceTests
     }
 
     [Fact]
-    public async Task SendOnboardingApprovedNotificationAsync_WithDisabledWebhook_DoesNotSendRequest()
+    public async Task SendOnboardingApprovedNotificationAsync_WithDisabledWebhook_DoesNotSendRequestAsync()
     {
         // Arrange
         var service = CreateService(webhookUrl: null);
@@ -144,7 +144,7 @@ public class TeamsNotificationServiceTests
     #region SendTemplateGenerationCompletedNotificationAsync Tests
 
     [Fact]
-    public async Task SendTemplateGenerationCompletedNotificationAsync_WithValidInput_IncludesFileCount()
+    public async Task SendTemplateGenerationCompletedNotificationAsync_WithValidInput_IncludesFileCountAsync()
     {
         // Arrange
         var service = CreateService();
@@ -179,7 +179,7 @@ public class TeamsNotificationServiceTests
     [Theory]
     [InlineData(true, null)]
     [InlineData(false, "Deployment failed: Resource group creation failed")]
-    public async Task SendDeploymentCompletedNotificationAsync_WithSuccessOrFailure_SendsCorrectMessage(
+    public async Task SendDeploymentCompletedNotificationAsync_WithSuccessOrFailure_SendsCorrectMessageAsync(
         bool success,
         string? errorMessage)
     {
@@ -216,7 +216,7 @@ public class TeamsNotificationServiceTests
         else
         {
             Assert.Contains("Failed", content);
-            Assert.Contains(errorMessage, content);
+            Assert.Contains(errorMessage ?? string.Empty, content);
         }
     }
 
@@ -225,7 +225,7 @@ public class TeamsNotificationServiceTests
     #region SendDeploymentFailedNotificationAsync Tests
 
     [Fact]
-    public async Task SendDeploymentFailedNotificationAsync_WithError_IncludesErrorDetails()
+    public async Task SendDeploymentFailedNotificationAsync_WithError_IncludesErrorDetailsAsync()
     {
         // Arrange
         var service = CreateService();
@@ -258,7 +258,7 @@ public class TeamsNotificationServiceTests
     #region Error Handling Tests
 
     [Fact]
-    public async Task SendNotification_WithHttpError_LogsWarning()
+    public async Task SendNotification_WithHttpError_LogsWarningAsync()
     {
         // Arrange
         var service = CreateService();
@@ -293,7 +293,7 @@ public class TeamsNotificationServiceTests
     }
 
     [Fact]
-    public async Task SendNotification_WithException_LogsError()
+    public async Task SendNotification_WithException_LogsErrorAsync()
     {
         // Arrange
         var service = CreateService();
@@ -328,7 +328,7 @@ public class TeamsNotificationServiceTests
     #region Adaptive Card Format Tests
 
     [Fact]
-    public async Task SendCustomNotificationAsync_WithFacts_IncludesFactSetInAdaptiveCard()
+    public async Task SendCustomNotificationAsync_WithFacts_IncludesFactSetInAdaptiveCardAsync()
     {
         // Arrange
         var service = CreateService();
@@ -366,7 +366,7 @@ public class TeamsNotificationServiceTests
     }
 
     [Fact]
-    public async Task SendNotification_Always_IncludesTimestamp()
+    public async Task SendNotification_Always_IncludesTimestampAsync()
     {
         // Arrange
         var service = CreateService();

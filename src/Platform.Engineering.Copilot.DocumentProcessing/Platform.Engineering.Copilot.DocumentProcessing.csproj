@@ -17,14 +17,14 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.9" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.9" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
-
+    <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.2.2" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.26.0" />
     <PackageReference Include="System.Text.Json" Version="9.0.0" />
     <PackageReference Include="Aspose.Words" Version="24.9.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Platform.Engineering.Copilot.Core\Platform.Engineering.Copilot.Core.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Governance\Platform.Engineering.Copilot.Governance.csproj" />
   </ItemGroup>
 
 </Project>

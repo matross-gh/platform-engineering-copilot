@@ -11,7 +11,7 @@ using Platform.Engineering.Copilot.Data.Entities;
 using CoreModels = Platform.Engineering.Copilot.Core.Models;
 using DataDeploymentStatus = Platform.Engineering.Copilot.Data.Entities.DeploymentStatus;
 
-namespace Platform.Engineering.Copilot.Core.Services
+namespace Platform.Engineering.Copilot.Core.Services.Infrastructure
 {
     /// <summary>
     /// Storage service for environment deployment records.

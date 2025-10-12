@@ -3,9 +3,6 @@ using Platform.Engineering.Copilot.Core.Extensions;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Data.Context;
 using Platform.Engineering.Copilot.Core.Services;
-using Platform.Engineering.Copilot.API.Services;
-using Platform.Engineering.Copilot.Core.Extensions;
-using Platform.Engineering.Copilot.Governance.Extensions;
 using Platform.Engineering.Copilot.DocumentProcessing.Extensions;
 
 namespace Platform.Engineering.Copilot.API;
@@ -91,9 +88,8 @@ public class Program
         builder.Services.AddSingleton<AzurePolicyService>();
 
         // NOTE: Dynamic PluginSystem removed - using Semantic Kernel plugins instead
-        // NOTE: All legacy tool registrations removed - using SK plugins in IntelligentChatService_v2
-
-        // Register template storage service
+        
+        // NOTE: All legacy tool registrations removed - using SK plugins in IntelligentChatService        // Register template storage service
         builder.Services.AddScoped<ITemplateStorageService, Platform.Engineering.Copilot.Core.Data.Services.TemplateStorageService>();
 
         // Register infrastructure provisioning service (required by InfrastructureProvisioningTool)
@@ -126,9 +122,7 @@ public class Program
             Platform.Engineering.Copilot.Core.Services.Onboarding.FlankspeedGenericOnboardingAdapter>();
         
         // NOTE: FlankspeedOnboardingTool removed - functionality provided by OnboardingPlugin
-
-        // Register API services
-        builder.Services.AddScoped<PlatformToolService>();
+        // NOTE: PlatformToolService removed - obsolete, replaced by Semantic Kernel plugins
 
         var app = builder.Build();
 

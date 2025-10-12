@@ -30,9 +30,10 @@ public interface IOnboardingService
     /// Submits a draft request for NNWC review
     /// </summary>
     /// <param name="requestId">The request ID</param>
+    /// <param name="submittedBy">Email of the user submitting the request</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if successful</returns>
-    Task<bool> SubmitRequestAsync(string requestId, CancellationToken cancellationToken = default);
+    Task<bool> SubmitRequestAsync(string requestId, string? submittedBy = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Gets a specific onboarding request by ID

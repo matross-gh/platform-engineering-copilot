@@ -20,13 +20,12 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
     <PackageReference Include="Docker.DotNet" Version="3.125.15" />
-    <PackageReference Include="KubernetesClient" Version="15.0.1" />
-    <PackageReference Include="YamlDotNet" Version="16.2.0" />
+  <PackageReference Include="KubernetesClient" Version="17.0.14" />
+  <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Platform.Engineering.Copilot.Core\Platform.Engineering.Copilot.Core.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Governance\Platform.Engineering.Copilot.Governance.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.Data\Platform.Engineering.Copilot.Data.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.DocumentProcessing\Platform.Engineering.Copilot.DocumentProcessing.csproj" />
   </ItemGroup>

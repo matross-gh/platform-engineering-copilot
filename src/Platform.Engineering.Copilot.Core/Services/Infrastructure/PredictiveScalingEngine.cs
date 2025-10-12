@@ -8,7 +8,7 @@ using Platform.Engineering.Copilot.Core.Models.CostOptimization;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using AzureResource = Platform.Engineering.Copilot.Core.Models.AzureResource;
 
-namespace Platform.Engineering.Copilot.Core.Services
+namespace Platform.Engineering.Copilot.Core.Services.Infrastructure
 {
     public interface IPredictiveScalingEngine
     {
@@ -328,7 +328,7 @@ namespace Platform.Engineering.Copilot.Core.Services
             }
         }
 
-        private async Task<MetricPrediction> PredictTimeSeriesAsync(
+        private Task<MetricPrediction> PredictTimeSeriesAsync(
             string metricName, 
             List<MetricDataPoint> historicalData, 
             int horizonHours)
@@ -359,7 +359,7 @@ namespace Platform.Engineering.Copilot.Core.Services
                     });
                 }
                 
-                return prediction;
+                return Task.FromResult(prediction);
             }
 
             // Calculate moving average and standard deviation
@@ -395,7 +395,7 @@ namespace Platform.Engineering.Copilot.Core.Services
             prediction.MeanAbsoluteError = stdDev;
             prediction.RootMeanSquaredError = stdDev * 1.1;
 
-            return prediction;
+            return Task.FromResult(prediction);
         }
 
         private async Task<int> GetCurrentInstanceCountAsync(AzureResource resource)
@@ -413,10 +413,10 @@ namespace Platform.Engineering.Copilot.Core.Services
             };
         }
 
-        private async Task<List<string>> GetRelevantMetricsAsync(AzureResource resource)
+        private Task<List<string>> GetRelevantMetricsAsync(AzureResource resource)
         {
             // Return relevant metrics based on resource type
-            return resource.Type.ToLower() switch
+            var metrics = resource.Type.ToLower() switch
             {
                 "microsoft.compute/virtualmachinescalesets" => 
                     new List<string> { "Percentage CPU", "Network In", "Network Out", "Disk Read Bytes", "Disk Write Bytes" },
@@ -426,6 +426,8 @@ namespace Platform.Engineering.Copilot.Core.Services
                     new List<string> { "node_cpu_usage_percentage", "node_memory_usage_percentage", "node_network_in_bytes", "node_network_out_bytes" },
                 _ => new List<string> { "Percentage CPU" }
             };
+
+            return Task.FromResult(metrics);
         }
 
         private ScalingAnalysis AnalyzePredictions(List<MetricPrediction> predictions, int currentInstances)
@@ -525,22 +527,22 @@ namespace Platform.Engineering.Copilot.Core.Services
             return true;
         }
 
-        private async Task<int> GetVmssInstanceCountAsync(AzureResource resource)
+        private Task<int> GetVmssInstanceCountAsync(AzureResource resource)
         {
             // TODO: Get actual instance count from Azure
-            return 2;
+            return Task.FromResult(2);
         }
 
-        private async Task<int> GetAppServicePlanInstanceCountAsync(AzureResource resource)
+        private Task<int> GetAppServicePlanInstanceCountAsync(AzureResource resource)
         {
             // TODO: Get actual instance count from Azure
-            return 1;
+            return Task.FromResult(1);
         }
 
-        private async Task<int> GetAksNodeCountAsync(AzureResource resource)
+        private Task<int> GetAksNodeCountAsync(AzureResource resource)
         {
             // TODO: Get actual node count from Azure
-            return 3;
+            return Task.FromResult(3);
         }
 
         private async Task LogScalingEventAsync(ScalingEvent scalingEvent)
@@ -550,46 +552,46 @@ namespace Platform.Engineering.Copilot.Core.Services
             await Task.CompletedTask;
         }
 
-        private async Task<List<ScalingEvent>> GetScalingEventsAsync(
+        private Task<List<ScalingEvent>> GetScalingEventsAsync(
             string resourceId, 
             DateTime startDate, 
             DateTime endDate)
         {
             // TODO: Retrieve actual scaling events from storage
-            return new List<ScalingEvent>();
+            return Task.FromResult(new List<ScalingEvent>());
         }
 
-        private async Task<ResourceUtilization> AnalyzeResourceUtilizationAsync(
+        private Task<ResourceUtilization> AnalyzeResourceUtilizationAsync(
             string resourceId, 
             DateTime startDate, 
             DateTime endDate)
         {
             // TODO: Implement actual utilization analysis
-            return new ResourceUtilization
+            return Task.FromResult(new ResourceUtilization
             {
                 OverProvisionedTime = 15.5,
                 UnderProvisionedTime = 5.2
-            };
+            });
         }
 
-        private async Task<Dictionary<string, double>> CalculatePredictionAccuracyAsync(
+        private Task<Dictionary<string, double>> CalculatePredictionAccuracyAsync(
             string resourceId, 
             DateTime startDate, 
             DateTime endDate)
         {
             // TODO: Implement actual accuracy calculation
-            return new Dictionary<string, double>
+            return Task.FromResult(new Dictionary<string, double>
             {
                 ["CPU"] = 0.92,
                 ["Memory"] = 0.88,
                 ["Network"] = 0.85
-            };
+            });
         }
 
-        private async Task<UsagePatternAnalysis> AnalyzeHistoricalPatternsAsync(string resourceId)
+        private Task<UsagePatternAnalysis> AnalyzeHistoricalPatternsAsync(string resourceId)
         {
             // TODO: Implement actual pattern analysis
-            return new UsagePatternAnalysis
+            return Task.FromResult(new UsagePatternAnalysis
             {
                 HasSeasonality = true,
                 SeasonalityPeriod = 7,
@@ -597,7 +599,7 @@ namespace Platform.Engineering.Copilot.Core.Services
                 LowUsageHours = new List<int> { 0, 1, 2, 3, 4, 5 },
                 WeekendPattern = UsagePattern.Low,
                 GrowthTrend = 0.05
-            };
+            });
         }
 
         private ScalingStrategy DetermineOptimalStrategy(UsagePatternAnalysis patterns)
@@ -654,7 +656,7 @@ namespace Platform.Engineering.Copilot.Core.Services
             };
         }
 
-        private async Task<ScalingConstraints> DetermineOptimalConstraintsAsync(
+        private Task<ScalingConstraints> DetermineOptimalConstraintsAsync(
             AzureResource resource, 
             UsagePatternAnalysis patterns)
         {
@@ -675,7 +677,7 @@ namespace Platform.Engineering.Copilot.Core.Services
                 "Wednesday 02:00-04:00"
             };
 
-            return constraints;
+            return Task.FromResult(constraints);
         }
 
         private PredictionModel SelectBestPredictionModel(UsagePatternAnalysis patterns)

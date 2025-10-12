@@ -70,7 +70,7 @@ public class ValidationError
     /// Link to documentation about this error
     /// </summary>
     public string? DocumentationUrl { get; set; }
-    public string Severity { get; internal set; }
+    public string Severity { get; internal set; } = string.Empty;
 }
 
 /// <summary>

@@ -238,10 +238,26 @@ public class OnboardingRequest
     #region Approval Workflow
     
     /// <summary>
+    /// When the user submitted the request for platform team approval
+    /// </summary>
+    public DateTime? SubmittedForApprovalAt { get; set; }
+    
+    /// <summary>
+    /// Email of the user who submitted the request for approval
+    /// </summary>
+    [MaxLength(200)]
+    public string? SubmittedBy { get; set; }
+    
+    /// <summary>
     /// Name/ID of the NNWC team member who approved the request
     /// </summary>
     [MaxLength(200)]
     public string? ApprovedBy { get; set; }
+    
+    /// <summary>
+    /// When the request was approved by platform team
+    /// </summary>
+    public DateTime? ApprovedAt { get; set; }
     
     /// <summary>
     /// Comments from approver
@@ -254,6 +270,11 @@ public class OnboardingRequest
     /// </summary>
     [MaxLength(200)]
     public string? RejectedBy { get; set; }
+    
+    /// <summary>
+    /// When the request was rejected by platform team
+    /// </summary>
+    public DateTime? RejectedAt { get; set; }
     
     /// <summary>
     /// Reason for rejection

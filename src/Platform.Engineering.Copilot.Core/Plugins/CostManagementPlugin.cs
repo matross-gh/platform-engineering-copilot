@@ -1,8 +1,15 @@
-using Microsoft.SemanticKernel;
 using System.ComponentModel;
-using Platform.Engineering.Copilot.Core.Contracts;
-using Platform.Engineering.Copilot.Core.Models;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
+using Platform.Engineering.Copilot.Core.Interfaces;
+using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization;
+using Platform.Engineering.Copilot.Core.Services;
+using DetailedCostOptimizationRecommendation = Platform.Engineering.Copilot.Core.Models.CostOptimization.CostOptimizationRecommendation;
 
 namespace Platform.Engineering.Copilot.Core.Plugins;
 
@@ -11,202 +18,297 @@ namespace Platform.Engineering.Copilot.Core.Plugins;
 /// </summary>
 public class CostManagementPlugin : BaseSupervisorPlugin
 {
-    private readonly IMcpToolHandler _costToolHandler;
+    private readonly ICostOptimizationEngine _costOptimizationEngine;
+    private readonly IAzureCostManagementService _costService;
 
     public CostManagementPlugin(
-        IMcpToolHandler costToolHandler,
         ILogger<CostManagementPlugin> logger,
-        Kernel kernel) : base(logger, kernel)
+        Kernel kernel,
+        ICostOptimizationEngine costOptimizationEngine,
+        IAzureCostManagementService costService) : base(logger, kernel)
     {
-        _costToolHandler = costToolHandler ?? throw new ArgumentNullException(nameof(costToolHandler));
+        _costOptimizationEngine = costOptimizationEngine ?? throw new ArgumentNullException(nameof(costOptimizationEngine));
+        _costService = costService ?? throw new ArgumentNullException(nameof(costService));
     }
 
-    [KernelFunction("analyze_azure_costs")]
-    [Description("Analyze Azure spending and cost trends. Provides detailed breakdown by resource, service, location, and time period. Shows cost trends, anomalies, and forecasts. Use when user asks to: analyze costs, check spending, review bills, show cost breakdown, or understand Azure charges.")]
-    public async Task<string> AnalyzeAzureCostsAsync(
-        [Description("Azure subscription ID to analyze costs for")] string subscriptionId,
-        [Description("Time period for analysis (e.g., 'last month', 'last 90 days', 'this year'). Optional - defaults to last 30 days.")] string? timePeriod = null,
-        [Description("Grouping dimension (e.g., 'resource', 'service', 'location', 'resource_group'). Optional - defaults to service.")] string? groupBy = null,
+    [KernelFunction("process_cost_management_query")]
+    [Description("Process any Azure cost management query using natural language. Handles cost analysis, optimization recommendations, budget monitoring, forecasting, and reporting. Use this for ANY cost-related request such as 'Analyze costs for subscription abc-123', 'Recommend cost savings', 'Show budget status', 'Forecast next month's spend', or 'Export a resource cost summary'.")]
+    public async Task<string> ProcessCostManagementQueryAsync(
+        [Description("Natural language cost management query (e.g., 'Analyze last month's spend for subscription 1234', 'Find savings opportunities').")] string query,
+        [Description("Azure subscription ID to analyze. Optional if included in the query text.")] string? subscriptionId = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var query = $"Analyze costs for subscription {subscriptionId}";
-            if (!string.IsNullOrEmpty(timePeriod))
-                query += $" for {timePeriod}";
-            if (!string.IsNullOrEmpty(groupBy))
-                query += $" grouped by {groupBy}";
+            _logger.LogInformation("Processing cost management query: {Query}", query);
 
-            var toolCall = new McpToolCall
+            var normalizedQuery = query.ToLowerInvariant();
+            subscriptionId ??= ExtractSubscriptionId(query);
+
+            if (string.IsNullOrWhiteSpace(subscriptionId))
             {
-                Name = "analyze_azure_costs",
-                Arguments = new Dictionary<string, object?>
-                {
-                    ["subscriptionId"] = subscriptionId,
-                    ["time_period"] = timePeriod,
-                    ["group_by"] = groupBy
-                },
-                RequestId = Guid.NewGuid().ToString()
-            };
+                return "Unable to identify the subscription to analyze. Please specify the Azure subscription ID in the query or as a parameter.";
+            }
 
-            var result = await _costToolHandler.ExecuteToolAsync(toolCall, cancellationToken);
-            return FormatToolResult(result);
+            var intent = DetermineIntent(normalizedQuery);
+            return intent switch
+            {
+                CostIntent.Optimization => await HandleOptimizationAsync(subscriptionId, cancellationToken),
+                CostIntent.Budget => await HandleBudgetsAsync(subscriptionId, cancellationToken),
+                CostIntent.Forecast => await HandleForecastAsync(subscriptionId, normalizedQuery, cancellationToken),
+                CostIntent.Export => await HandleExportAsync(subscriptionId, cancellationToken),
+                _ => await HandleDashboardAsync(subscriptionId, normalizedQuery, cancellationToken)
+            };
         }
         catch (Exception ex)
         {
-            return CreateErrorResponse("analyze Azure costs", ex);
+            return CreateErrorResponse("process cost management query", ex);
         }
     }
 
-    [KernelFunction("optimize_costs")]
-    [Description("Get cost optimization recommendations and savings opportunities. Identifies underutilized resources, right-sizing opportunities, reserved instances, and potential savings. Use when user wants to: reduce costs, optimize spending, save money, find cost savings, or get cost recommendations.")]
-    public async Task<string> OptimizeCostsAsync(
-        [Description("Azure subscription ID to optimize")] string subscriptionId,
-        [Description("Resource group to focus optimization on. Optional - analyzes entire subscription if not specified.")] string? resourceGroup = null,
-        [Description("Minimum potential savings threshold (e.g., '$100', '10%'). Optional - shows all recommendations if not specified.")] string? minSavings = null,
-        CancellationToken cancellationToken = default)
+    private async Task<string> HandleDashboardAsync(string subscriptionId, string query, CancellationToken cancellationToken)
     {
-        try
-        {
-            var query = $"Provide cost optimization recommendations for subscription {subscriptionId}";
-            if (!string.IsNullOrEmpty(resourceGroup))
-                query += $" in resource group {resourceGroup}";
-            if (!string.IsNullOrEmpty(minSavings))
-                query += $" with minimum savings of {minSavings}";
+        var endDate = DateTimeOffset.UtcNow;
+        var startDate = endDate.AddDays(-DetermineLookbackWindow(query));
 
-            var toolCall = new McpToolCall
+        var dashboard = await _costService.GetCostDashboardAsync(subscriptionId, startDate, endDate, cancellationToken);
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Cost Optimization for subscription {subscriptionId}");
+        sb.AppendLine($"Period: {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}");
+        sb.AppendLine($"Current spend: {FormatCurrency(dashboard.Summary.CurrentMonthSpend)} ({dashboard.Summary.TrendDirection})");
+        sb.AppendLine($"Potential savings: {FormatCurrency(dashboard.Summary.PotentialSavings)} across {dashboard.Summary.OptimizationOpportunities} opportunities");
+        sb.AppendLine($"Average daily cost: {FormatCurrency(dashboard.Summary.AverageDailyCost)}");
+
+        var topServices = dashboard.ServiceBreakdown
+            .OrderByDescending(s => s.MonthlyCost)
+            .Take(3)
+            .Select(s => $"{s.ServiceName}: {FormatCurrency(s.MonthlyCost)} ({s.PercentageOfTotal:N1}% of total)");
+
+        if (topServices.Any())
+        {
+            sb.AppendLine("Top services: ");
+            foreach (var service in topServices)
             {
-                Name = "optimize_costs",
-                Arguments = new Dictionary<string, object?>
-                {
-                    ["subscriptionId"] = subscriptionId,
-                    ["resource_group"] = resourceGroup,
-                    ["min_savings"] = minSavings
-                },
-                RequestId = Guid.NewGuid().ToString()
-            };
+                sb.AppendLine($"  - {service}");
+            }
+        }
 
-            var result = await _costToolHandler.ExecuteToolAsync(toolCall, cancellationToken);
-            return FormatToolResult(result);
-        }
-        catch (Exception ex)
+        var alerts = dashboard.BudgetAlerts.Take(3).ToList();
+        if (alerts.Any())
         {
-            return CreateErrorResponse("optimize costs", ex);
+            sb.AppendLine("Active budget alerts:");
+            foreach (var alert in alerts)
+            {
+                sb.AppendLine($"  - {alert.BudgetName} at {alert.CurrentPercentage:N0}% of {FormatCurrency(alert.BudgetAmount)} ({alert.Severity})");
+            }
         }
+
+        var anomalies = dashboard.Anomalies.Take(3).ToList();
+        if (anomalies.Any())
+        {
+            sb.AppendLine("Recent anomalies:");
+            foreach (var anomaly in anomalies)
+            {
+                sb.AppendLine($"  - {anomaly.Description} (deviation {FormatCurrency(anomaly.CostDifference)} on {anomaly.DetectedAt:yyyy-MM-dd})");
+            }
+        }
+
+        sb.AppendLine("Key recommendations:");
+        foreach (var recommendation in dashboard.Recommendations.Take(5))
+        {
+            sb.AppendLine($"  - {recommendation.Description} | Savings: {FormatCurrency(recommendation.PotentialMonthlySavings)} | Priority: {recommendation.Priority}");
+        }
+
+        return sb.ToString();
     }
 
-    [KernelFunction("configure_budget_alerts")]
-    [Description("Set up budget alerts and spending notifications. Creates budgets with customizable thresholds and alert conditions. Sends notifications when spending exceeds limits. Use when user wants to: set budget, create spending alert, monitor costs, or prevent overspending.")]
-    public async Task<string> ConfigureBudgetAlertsAsync(
-        [Description("Azure subscription ID to configure budget for")] string subscriptionId,
-        [Description("Budget amount (e.g., '1000', '$5000'). Required to set up budget.")] string budgetAmount,
-        [Description("Alert thresholds as percentages (e.g., '80,90,100' means alert at 80%, 90%, and 100% of budget). Optional - defaults to 80,90,100.")] string? alertThresholds = null,
-        [Description("Email address or webhook URL for notifications. Optional - uses default notification settings if not specified.")] string? notificationTarget = null,
-        CancellationToken cancellationToken = default)
+    private async Task<string> HandleOptimizationAsync(string subscriptionId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var query = $"Configure budget of {budgetAmount} for subscription {subscriptionId}";
-            if (!string.IsNullOrEmpty(alertThresholds))
-                query += $" with alerts at {alertThresholds}";
-            if (!string.IsNullOrEmpty(notificationTarget))
-                query += $" sending notifications to {notificationTarget}";
+    var analysis = await _costOptimizationEngine.AnalyzeSubscriptionAsync(subscriptionId);
+    var recommendations = analysis.Recommendations ?? new List<DetailedCostOptimizationRecommendation>();
 
-            var toolCall = new McpToolCall
+        var sb = new StringBuilder();
+        sb.AppendLine($"Cost optimization analysis for subscription {subscriptionId}");
+        sb.AppendLine($"Total monthly cost: {FormatCurrency(analysis.TotalMonthlyCost)}");
+        sb.AppendLine($"Potential monthly savings: {FormatCurrency(analysis.PotentialMonthlySavings)} across {analysis.TotalRecommendations} recommendations");
+
+        var topServices = (analysis.CostByService ?? new Dictionary<string, decimal>())
+            .OrderByDescending(kvp => kvp.Value)
+            .Take(3)
+            .Select(kvp => $"{kvp.Key}: {FormatCurrency(kvp.Value)}");
+
+        if (topServices.Any())
+        {
+            sb.AppendLine("Top cost drivers by service:");
+            foreach (var service in topServices)
             {
-                Name = "configure_budget_alerts",
-                Arguments = new Dictionary<string, object?>
-                {
-                    ["subscriptionId"] = subscriptionId,
-                    ["budget_amount"] = budgetAmount,
-                    ["alert_thresholds"] = alertThresholds,
-                    ["notification_target"] = notificationTarget
-                },
-                RequestId = Guid.NewGuid().ToString()
-            };
+                sb.AppendLine($"  - {service}");
+            }
+        }
 
-            var result = await _costToolHandler.ExecuteToolAsync(toolCall, cancellationToken);
-            return FormatToolResult(result);
-        }
-        catch (Exception ex)
+        foreach (var recommendation in recommendations.OrderByDescending(r => r.EstimatedMonthlySavings).Take(5))
         {
-            return CreateErrorResponse("configure budget alerts", ex);
+            sb.AppendLine($"Recommendation: {recommendation.Description}");
+            sb.AppendLine($"  Resource: {recommendation.ResourceName} ({recommendation.ResourceType}) in {recommendation.ResourceGroup}");
+            sb.AppendLine($"  Estimated savings: {FormatCurrency(recommendation.EstimatedMonthlySavings)} | Priority: {recommendation.Priority}");
+            var actionCount = recommendation.Actions?.Count ?? 0;
+            sb.AppendLine($"  Complexity: {recommendation.Complexity} | Suggested actions: {actionCount}");
         }
+
+        return sb.ToString();
     }
 
-    [KernelFunction("forecast_costs")]
-    [Description("Forecast future Azure spending based on historical trends and planned changes. Projects costs for upcoming periods and helps with budget planning. Use when user wants to: forecast costs, predict spending, estimate future costs, or plan budget.")]
-    public async Task<string> ForecastCostsAsync(
-        [Description("Azure subscription ID to forecast costs for")] string subscriptionId,
-        [Description("Forecast period (e.g., 'next month', 'next quarter', 'next 6 months'). Optional - defaults to next month.")] string? forecastPeriod = null,
-        [Description("Planned changes to consider (e.g., 'adding 3 VMs', 'increasing storage by 50%'). Optional - forecasts based on current trend if not specified.")] string? plannedChanges = null,
-        CancellationToken cancellationToken = default)
+    private async Task<string> HandleBudgetsAsync(string subscriptionId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var query = $"Forecast costs for subscription {subscriptionId}";
-            if (!string.IsNullOrEmpty(forecastPeriod))
-                query += $" for {forecastPeriod}";
-            if (!string.IsNullOrEmpty(plannedChanges))
-                query += $" considering {plannedChanges}";
+        var budgets = await _costService.GetBudgetsAsync(subscriptionId, cancellationToken);
 
-            var toolCall = new McpToolCall
+        if (budgets.Count == 0)
+        {
+            return $"No budgets are configured for subscription {subscriptionId}. Consider creating budgets to monitor spend.";
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Budget overview for subscription {subscriptionId}");
+
+        foreach (var budget in budgets.Take(5))
+        {
+            sb.AppendLine($"Budget: {budget.Name} ({FormatCurrency(budget.Amount)})");
+            sb.AppendLine($"  Utilization: {budget.UtilizationPercentage:N1}% | Current spend: {FormatCurrency(budget.CurrentSpend)}");
+            sb.AppendLine($"  Remaining: {FormatCurrency(budget.RemainingBudget)} | Status: {budget.HealthStatus}");
+            if (budget.Thresholds.Any())
             {
-                Name = "analyze_azure_costs",
-                Arguments = new Dictionary<string, object?>
-                {
-                    ["subscriptionId"] = subscriptionId,
-                    ["forecast_period"] = forecastPeriod,
-                    ["planned_changes"] = plannedChanges,
-                    ["operation"] = "forecast"
-                },
-                RequestId = Guid.NewGuid().ToString()
-            };
+                var thresholds = string.Join(", ", budget.Thresholds.Select(t => $"{t.Percentage}% ({t.Severity})"));
+                sb.AppendLine($"  Alerts: {thresholds}");
+            }
+        }
 
-            var result = await _costToolHandler.ExecuteToolAsync(toolCall, cancellationToken);
-            return FormatToolResult(result);
-        }
-        catch (Exception ex)
-        {
-            return CreateErrorResponse("forecast costs", ex);
-        }
+        return sb.ToString();
     }
 
-    [KernelFunction("export_cost_data")]
-    [Description("Export detailed cost and usage data for analysis and reporting. Generates exports in various formats for external analysis, chargeback, or integration with financial systems. Use when user needs to: export costs, download usage data, generate cost report, or extract billing data.")]
-    public async Task<string> ExportCostDataAsync(
-        [Description("Azure subscription ID to export data from")] string subscriptionId,
-        [Description("Export format (e.g., 'CSV', 'Excel', 'JSON', 'Parquet'). Optional - defaults to CSV.")] string? format = null,
-        [Description("Time range for export (e.g., 'last month', 'last quarter', 'this year'). Optional - defaults to last 30 days.")] string? timeRange = null,
-        CancellationToken cancellationToken = default)
+    private async Task<string> HandleForecastAsync(string subscriptionId, string query, CancellationToken cancellationToken)
     {
-        try
-        {
-            var query = $"Export cost data for subscription {subscriptionId}";
-            if (!string.IsNullOrEmpty(format))
-                query += $" in {format} format";
-            if (!string.IsNullOrEmpty(timeRange))
-                query += $" for {timeRange}";
+        var forecastDays = DetermineForecastWindow(query);
+        var forecast = await _costService.GetCostForecastAsync(subscriptionId, forecastDays, cancellationToken);
 
-            var toolCall = new McpToolCall
+        var sb = new StringBuilder();
+        sb.AppendLine($"Cost forecast for subscription {subscriptionId}");
+        sb.AppendLine($"Forecast window: {forecastDays} days | Confidence: {forecast.ConfidenceLevel:P0}");
+        sb.AppendLine($"Projected month-end cost: {FormatCurrency(forecast.ProjectedMonthEndCost)}");
+        sb.AppendLine($"Projected quarter-end cost: {FormatCurrency(forecast.ProjectedQuarterEndCost)}");
+        sb.AppendLine($"Projected year-end cost: {FormatCurrency(forecast.ProjectedYearEndCost)}");
+
+        foreach (var point in forecast.Projections.Take(5))
+        {
+            sb.AppendLine($"  {point.Date:yyyy-MM-dd}: {FormatCurrency(point.ForecastedCost)} (range {FormatCurrency(point.LowerBound)} - {FormatCurrency(point.UpperBound)})");
+        }
+
+        if (forecast.Assumptions.Any())
+        {
+            sb.AppendLine("Assumptions considered:");
+            foreach (var assumption in forecast.Assumptions.Take(3))
             {
-                Name = "analyze_azure_costs",
-                Arguments = new Dictionary<string, object?>
-                {
-                    ["subscriptionId"] = subscriptionId,
-                    ["format"] = format,
-                    ["time_range"] = timeRange,
-                    ["operation"] = "export"
-                },
-                RequestId = Guid.NewGuid().ToString()
-            };
+                sb.AppendLine($"  - {assumption.Description} (impact {assumption.Impact:N1})");
+            }
+        }
 
-            var result = await _costToolHandler.ExecuteToolAsync(toolCall, cancellationToken);
-            return FormatToolResult(result);
-        }
-        catch (Exception ex)
+        if (forecast.Risks.Any())
         {
-            return CreateErrorResponse("export cost data", ex);
+            sb.AppendLine("Risks to monitor:");
+            foreach (var risk in forecast.Risks.Take(3))
+            {
+                sb.AppendLine($"  - {risk.Risk} (impact {risk.PotentialImpact:N1}, probability {risk.Probability:P0})");
+            }
         }
+
+        return sb.ToString();
+    }
+
+    private async Task<string> HandleExportAsync(string subscriptionId, CancellationToken cancellationToken)
+    {
+        var breakdown = await _costService.GetResourceCostBreakdownAsync(
+            subscriptionId,
+            DateTimeOffset.UtcNow.AddDays(-30),
+            DateTimeOffset.UtcNow,
+            cancellationToken);
+
+        if (breakdown.Count == 0)
+        {
+            return $"No cost data available to export for subscription {subscriptionId} in the selected window.";
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Export-ready resource cost summary for subscription {subscriptionId}");
+        sb.AppendLine("Top resources by monthly spend:");
+
+        foreach (var resource in breakdown.OrderByDescending(r => r.MonthlyCost).Take(10))
+        {
+            sb.AppendLine($"  - {resource.ResourceName} ({resource.ResourceType}) | {FormatCurrency(resource.MonthlyCost)} this month | Trend {resource.CostTrend:N1}%");
+        }
+
+        sb.AppendLine("Use Azure Cost Management exports or APIs to pull full CSV/Parquet detail based on these identifiers.");
+        return sb.ToString();
+    }
+
+    private static CostIntent DetermineIntent(string normalizedQuery)
+    {
+        if (normalizedQuery.Contains("optimize") || normalizedQuery.Contains("saving") || normalizedQuery.Contains("recommend"))
+        {
+            return CostIntent.Optimization;
+        }
+
+        if (normalizedQuery.Contains("budget") || normalizedQuery.Contains("alert"))
+        {
+            return CostIntent.Budget;
+        }
+
+        if (normalizedQuery.Contains("forecast") || normalizedQuery.Contains("predict") || normalizedQuery.Contains("projection"))
+        {
+            return CostIntent.Forecast;
+        }
+
+        if (normalizedQuery.Contains("export") || normalizedQuery.Contains("download") || normalizedQuery.Contains("report"))
+        {
+            return CostIntent.Export;
+        }
+
+        return CostIntent.Dashboard;
+    }
+
+    private static string? ExtractSubscriptionId(string query)
+    {
+        var match = Regex.Match(query, "(?i)subscription[\\s:]+([0-9a-f-]{8}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{12})");
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    private static int DetermineLookbackWindow(string query)
+    {
+        if (query.Contains("quarter")) return 90;
+        if (query.Contains("year")) return 365;
+        if (query.Contains("week")) return 7;
+        return 30;
+    }
+
+    private static int DetermineForecastWindow(string query)
+    {
+        if (query.Contains("quarter")) return 90;
+        if (query.Contains("year")) return 365;
+        if (query.Contains("week")) return 7;
+        if (query.Contains("6 month")) return 180;
+        return 30;
+    }
+
+    private static string FormatCurrency(decimal amount)
+    {
+        return string.Format(CultureInfo.InvariantCulture, "${0:N2}", amount);
+    }
+
+    private enum CostIntent
+    {
+        Dashboard,
+        Optimization,
+        Budget,
+        Forecast,
+        Export
     }
 }

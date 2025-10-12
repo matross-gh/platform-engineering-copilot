@@ -10,6 +10,7 @@ using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Models.EnvironmentManagement;
 using Platform.Engineering.Copilot.Core.Services;
+using Platform.Engineering.Copilot.Core.Services.Infrastructure;
 using Xunit;
 using EnvironmentTemplate = Platform.Engineering.Copilot.Core.Models.EnvironmentTemplate;
 
@@ -87,7 +88,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region CreateEnvironmentAsync Tests
 
         [Fact]
-        public async Task CreateEnvironmentAsync_WithValidRequest_ReturnsSuccessResult()
+    public async Task CreateEnvironmentAsync_WithValidRequest_ReturnsSuccessResultAsync()
         {
             // Arrange
             var request = new EnvironmentCreationRequest
@@ -114,7 +115,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         }
 
         [Fact]
-        public async Task CreateEnvironmentAsync_WithEmptyName_ReturnsFailureResult()
+    public async Task CreateEnvironmentAsync_WithEmptyName_ReturnsFailureResultAsync()
         {
             // Arrange
             var request = new EnvironmentCreationRequest
@@ -135,7 +136,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         }
 
         [Fact]
-        public async Task CreateEnvironmentAsync_WithEmptyResourceGroup_ReturnsFailureResult()
+    public async Task CreateEnvironmentAsync_WithEmptyResourceGroup_ReturnsFailureResultAsync()
         {
             // Arrange
             var request = new EnvironmentCreationRequest
@@ -156,7 +157,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         }
 
         [Fact]
-        public async Task CreateEnvironmentAsync_WithTemplateId_LookupsTemplateFromStorage()
+    public async Task CreateEnvironmentAsync_WithTemplateId_LookupsTemplateFromStorageAsync()
         {
             // Arrange
             var request = new EnvironmentCreationRequest
@@ -193,7 +194,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         }
 
         [Fact]
-        public async Task CreateEnvironmentAsync_WithInvalidTemplateId_ReturnsFailureResult()
+    public async Task CreateEnvironmentAsync_WithInvalidTemplateId_ReturnsFailureResultAsync()
         {
             // Arrange
             var request = new EnvironmentCreationRequest
@@ -219,7 +220,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         }
 
         [Fact]
-        public async Task CreateEnvironmentAsync_CreatesResourceGroupIfNotExists()
+    public async Task CreateEnvironmentAsync_CreatesResourceGroupIfNotExistsAsync()
         {
             // Arrange
             var request = new EnvironmentCreationRequest
@@ -262,7 +263,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region CloneEnvironmentAsync Tests
 
         [Fact]
-        public async Task CloneEnvironmentAsync_WithValidRequest_ClonesEnvironments()
+    public async Task CloneEnvironmentAsync_WithValidRequest_ClonesEnvironmentsAsync()
         {
             // Arrange
             var request = new EnvironmentCloneRequest
@@ -310,7 +311,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         }
 
         [Fact]
-        public async Task CloneEnvironmentAsync_WithMultipleTargets_ClonesAllTargets()
+    public async Task CloneEnvironmentAsync_WithMultipleTargets_ClonesAllTargetsAsync()
         {
             // Arrange
             var request = new EnvironmentCloneRequest
@@ -342,7 +343,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region DeleteEnvironmentAsync Tests
 
         [Fact]
-        public async Task DeleteEnvironmentAsync_WithValidRequest_ReturnsSuccessResult()
+    public async Task DeleteEnvironmentAsync_WithValidRequest_ReturnsSuccessResultAsync()
         {
             // Arrange
             var environmentName = "test-env";
@@ -370,7 +371,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         }
 
         [Fact]
-        public async Task DeleteEnvironmentAsync_WithEmptyName_ReturnsFailureResult()
+    public async Task DeleteEnvironmentAsync_WithEmptyName_ReturnsFailureResultAsync()
         {
             // Arrange & Act
             var result = await _engine.DeleteEnvironmentAsync("", "test-rg");
@@ -381,7 +382,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         }
 
         [Fact]
-        public async Task DeleteEnvironmentAsync_WithBackupEnabled_CreatesBackup()
+    public async Task DeleteEnvironmentAsync_WithBackupEnabled_CreatesBackupAsync()
         {
             // Arrange
             var environmentName = "test-env";
@@ -401,7 +402,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         }
 
         [Fact]
-        public async Task DeleteEnvironmentAsync_ListsDeletedResources()
+    public async Task DeleteEnvironmentAsync_ListsDeletedResourcesAsync()
         {
             // Arrange
             var environmentName = "test-env";
@@ -421,9 +422,9 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
 
             // Assert
             result.DeletedResources.Should().HaveCount(3);
-            result.DeletedResources.Should().Contain("test-env-web");
-            result.DeletedResources.Should().Contain("test-env-db");
-            result.DeletedResources.Should().Contain("test-env-storage");
+            result.DeletedResources.Should().Contain(r => r.Name == "test-env-web");
+            result.DeletedResources.Should().Contain(r => r.Name == "test-env-db");
+            result.DeletedResources.Should().Contain(r => r.Name == "test-env-storage");
         }
 
         #endregion
@@ -431,7 +432,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region GetEnvironmentStatusAsync Tests
 
         [Fact]
-        public async Task GetEnvironmentStatusAsync_WithValidEnvironment_ReturnsStatus()
+    public async Task GetEnvironmentStatusAsync_WithValidEnvironment_ReturnsStatusAsync()
         {
             // Arrange
             var environmentName = "test-env";
@@ -462,7 +463,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region GetEnvironmentHealthAsync Tests
 
         [Fact]
-        public async Task GetEnvironmentHealthAsync_WithValidEnvironment_ReturnsHealthReport()
+    public async Task GetEnvironmentHealthAsync_WithValidEnvironment_ReturnsHealthReportAsync()
         {
             // Arrange
             var environmentName = "test-env";
@@ -490,7 +491,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         }
 
         [Fact]
-        public async Task GetEnvironmentHealthAsync_IncludesResourceHealthChecks()
+    public async Task GetEnvironmentHealthAsync_IncludesResourceHealthChecksAsync()
         {
             // Arrange
             var environmentName = "test-env";
@@ -527,7 +528,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region ScaleEnvironmentAsync Tests
 
         [Fact]
-        public async Task ScaleEnvironmentAsync_WithValidSettings_ReturnsScalingResult()
+    public async Task ScaleEnvironmentAsync_WithValidSettings_ReturnsScalingResultAsync()
         {
             // Arrange
             var environmentName = "test-env";
@@ -563,7 +564,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region BulkDeleteEnvironmentsAsync Tests
 
         [Fact]
-        public async Task BulkDeleteEnvironmentsAsync_WithValidFilter_DeletesMatchingEnvironments()
+    public async Task BulkDeleteEnvironmentsAsync_WithValidFilter_DeletesMatchingEnvironmentsAsync()
         {
             // Arrange
             var filter = new EnvironmentFilter
@@ -600,7 +601,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region MigrateEnvironmentAsync Tests
 
         [Fact]
-        public async Task MigrateEnvironmentAsync_WithValidRequest_ReturnsMigrationResult()
+    public async Task MigrateEnvironmentAsync_WithValidRequest_ReturnsMigrationResultAsync()
         {
             // Arrange
             var request = new MigrationRequest
@@ -630,7 +631,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region CleanupOldEnvironmentsAsync Tests
 
         [Fact]
-        public async Task CleanupOldEnvironmentsAsync_RemovesOldEnvironments()
+    public async Task CleanupOldEnvironmentsAsync_RemovesOldEnvironmentsAsync()
         {
             // Arrange
             var policy = new CleanupPolicy
@@ -664,7 +665,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region ListEnvironmentsAsync Tests
 
         [Fact]
-        public async Task ListEnvironmentsAsync_ReturnsEnvironmentSummaries()
+    public async Task ListEnvironmentsAsync_ReturnsEnvironmentSummariesAsync()
         {
             // Arrange
             var filter = new EnvironmentFilter
@@ -703,7 +704,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Infrastructure
         #region DiscoverEnvironmentsAsync Tests
 
         [Fact]
-        public async Task DiscoverEnvironmentsAsync_FindsEnvironmentsInResourceGroups()
+    public async Task DiscoverEnvironmentsAsync_FindsEnvironmentsInResourceGroupsAsync()
         {
             // Arrange
             var subscriptionId = "sub-123";

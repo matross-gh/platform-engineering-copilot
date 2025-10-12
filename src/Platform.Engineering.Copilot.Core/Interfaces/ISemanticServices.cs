@@ -35,7 +35,9 @@ public interface ISemanticQueryProcessor
 
 /// <summary>
 /// Registry for managing tool schemas and their metadata
+/// OBSOLETE: Not actively used, removed
 /// </summary>
+[Obsolete("Tool schema registry is no longer used. Semantic Kernel manages plugin schemas directly.")]
 public interface IToolSchemaRegistry
 {
     /// <summary>
@@ -75,12 +77,10 @@ public interface IToolSchemaRegistry
 }
 
 /// <summary>
-/// Service for intent classification and entity extraction
-/// NOTE: This interface is obsolete. Semantic Kernel now handles intent
-/// classification automatically via ToolCallBehavior.AutoInvokeKernelFunctions.
-/// New code should use SK plugins instead. See IntelligentChatService_v2.
+/// Intent classification service for intelligent routing
+/// OBSOLETE: Replaced by Semantic Kernel automatic function calling
 /// </summary>
-[Obsolete("Use Semantic Kernel plugins with automatic function calling instead. See IntelligentChatService_v2 and docs/SEMANTIC-KERNEL-V2-MIGRATION.md")]
+[Obsolete("Use Semantic Kernel plugins with automatic function calling instead. See IntelligentChatService and docs/SEMANTIC-KERNEL-V2-MIGRATION.md")]
 public interface IIntentClassifier
 {
     /// <summary>
@@ -105,7 +105,10 @@ public interface IIntentClassifier
 /// extraction automatically when invoking functions using KernelFunction
 /// parameter descriptions. New code should use SK plugins instead.
 /// </summary>
-[Obsolete("Use Semantic Kernel plugins with [Description] attributes on parameters instead. See IntelligentChatService_v2 and docs/SEMANTIC-KERNEL-V2-MIGRATION.md")]
+/// Parameter extraction is now handled automatically by Semantic Kernel using [Description] attributes
+/// on plugin function parameters.
+/// </summary>
+[Obsolete("Use Semantic Kernel plugins with [Description] attributes on parameters instead. See IntelligentChatService and docs/SEMANTIC-KERNEL-V2-MIGRATION.md")]
 public interface IParameterExtractor
 {
     /// <summary>

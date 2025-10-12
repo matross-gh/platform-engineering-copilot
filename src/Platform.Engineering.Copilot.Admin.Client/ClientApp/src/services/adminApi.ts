@@ -1247,9 +1247,13 @@ export interface OnboardingRequest {
   completedAt?: string;
   lastUpdatedAt: string;
   // Approval Workflow
+  submittedForApprovalAt?: string;
+  submittedBy?: string;
   approvedBy?: string;
+  approvedAt?: string;
   approvalComments?: string;
   rejectedBy?: string;
+  rejectedAt?: string;
   rejectionReason?: string;
   priority: number;
   // Provisioned Resources

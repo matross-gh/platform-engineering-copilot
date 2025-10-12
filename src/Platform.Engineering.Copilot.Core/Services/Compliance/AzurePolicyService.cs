@@ -164,11 +164,11 @@ public class AzurePolicyService : IAzurePolicyService
         }
     }
 
-    public async Task<List<AzurePolicyEvaluation>> GetPolicyEvaluationsForResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+    public Task<List<AzurePolicyEvaluation>> GetPolicyEvaluationsForResourceAsync(string resourceId, CancellationToken cancellationToken = default)
     {
         if (_policyEvaluationCache.TryGetValue(resourceId, out var cachedEvaluations))
         {
-            return cachedEvaluations;
+            return Task.FromResult(cachedEvaluations);
         }
 
         try
@@ -190,12 +190,12 @@ public class AzurePolicyService : IAzurePolicyService
             evaluations.Add(mockEvaluation);
             
             _policyEvaluationCache[resourceId] = evaluations;
-            return evaluations;
+            return Task.FromResult(evaluations);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving policy evaluations for resource: {ResourceId}", resourceId);
-            return new List<AzurePolicyEvaluation>();
+            return Task.FromResult(new List<AzurePolicyEvaluation>());
         }
     }
 
@@ -221,57 +221,57 @@ public class AzurePolicyService : IAzurePolicyService
         return workflow;
     }
 
-    public async Task<ApprovalWorkflow?> GetApprovalWorkflowAsync(string workflowId, CancellationToken cancellationToken = default)
+    public Task<ApprovalWorkflow?> GetApprovalWorkflowAsync(string workflowId, CancellationToken cancellationToken = default)
     {
-        return _approvalWorkflows.TryGetValue(workflowId, out var workflow) ? workflow : null;
+        return Task.FromResult(_approvalWorkflows.TryGetValue(workflowId, out var workflow) ? workflow : null);
     }
 
-    public async Task<ApprovalWorkflow> UpdateApprovalWorkflowAsync(ApprovalWorkflow workflow, CancellationToken cancellationToken = default)
+    public Task<ApprovalWorkflow> UpdateApprovalWorkflowAsync(ApprovalWorkflow workflow, CancellationToken cancellationToken = default)
     {
         _approvalWorkflows[workflow.Id] = workflow;
         
         _logger.LogInformation("Updated approval workflow {WorkflowId} with status {Status}", 
             workflow.Id, workflow.Status);
 
-        return workflow;
+        return Task.FromResult(workflow);
     }
 
-    private async Task<ResourceContext?> ExtractResourceContextAsync(McpToolCall toolCall)
+    private Task<ResourceContext?> ExtractResourceContextAsync(McpToolCall toolCall)
     {
         // Extract Azure resource information from tool call parameters
         // This is a simplified implementation - in production you would parse the actual tool parameters
         if (toolCall.Arguments?.ContainsKey("resourceId") == true)
         {
             var resourceId = toolCall.Arguments["resourceId"]?.ToString() ?? string.Empty;
-            return new ResourceContext
+            return Task.FromResult<ResourceContext?>(new ResourceContext
             {
                 ResourceId = resourceId,
                 ResourceType = ExtractResourceTypeFromId(resourceId),
                 SubscriptionId = ExtractSubscriptionFromId(resourceId)
-            };
+            });
         }
 
-        return null;
+        return Task.FromResult<ResourceContext?>(null);
     }
 
-    private async Task<ResourceContext?> ExtractResourceContextFromResultAsync(McpToolCall toolCall, McpToolResult result)
+    private Task<ResourceContext?> ExtractResourceContextFromResultAsync(McpToolCall toolCall, McpToolResult result)
     {
         // Extract resource information from the tool call result
         if (result.Content is Dictionary<string, object> contentDict && contentDict.ContainsKey("resourceId"))
         {
             var resourceId = contentDict["resourceId"]?.ToString() ?? string.Empty;
-            return new ResourceContext
+            return Task.FromResult<ResourceContext?>(new ResourceContext
             {
                 ResourceId = resourceId,
                 ResourceType = ExtractResourceTypeFromId(resourceId),
                 SubscriptionId = ExtractSubscriptionFromId(resourceId)
-            };
+            });
         }
 
-        return null;
+        return Task.FromResult<ResourceContext?>(null);
     }
 
-    private async Task<List<PolicyViolation>> EvaluatePoliciesAsync(McpToolCall toolCall, ResourceContext resourceContext, CancellationToken cancellationToken)
+    private Task<List<PolicyViolation>> EvaluatePoliciesAsync(McpToolCall toolCall, ResourceContext resourceContext, CancellationToken cancellationToken)
     {
         var violations = new List<PolicyViolation>();
 
@@ -302,10 +302,10 @@ public class AzurePolicyService : IAzurePolicyService
             });
         }
 
-        return violations;
+        return Task.FromResult(violations);
     }
 
-    private async Task<List<ComplianceViolation>> EvaluateComplianceAsync(McpToolCall toolCall, McpToolResult result, ResourceContext resourceContext, CancellationToken cancellationToken)
+    private Task<List<ComplianceViolation>> EvaluateComplianceAsync(McpToolCall toolCall, McpToolResult result, ResourceContext resourceContext, CancellationToken cancellationToken)
     {
         var violations = new List<ComplianceViolation>();
 
@@ -325,7 +325,7 @@ public class AzurePolicyService : IAzurePolicyService
             });
         }
 
-        return violations;
+        return Task.FromResult(violations);
     }
 
     private GovernancePolicyDecision DeterminePolicyDecision(List<PolicyViolation> violations)
@@ -342,7 +342,7 @@ public class AzurePolicyService : IAzurePolicyService
         return GovernancePolicyDecision.AuditOnly;
     }
 
-    private async Task<List<string>> GetRequiredApproversAsync(List<PolicyViolation> violations)
+    private Task<List<string>> GetRequiredApproversAsync(List<PolicyViolation> violations)
     {
         var approvers = new List<string>();
 
@@ -361,7 +361,7 @@ public class AzurePolicyService : IAzurePolicyService
             approvers.Add("team-lead@company.com");
         }
 
-        return approvers;
+        return Task.FromResult(approvers);
     }
 
     private List<string> GenerateRemediationActions(List<ComplianceViolation> violations)

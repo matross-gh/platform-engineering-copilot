@@ -14,7 +14,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Platform.Engineering.Copilot.Core\Platform.Engineering.Copilot.Core.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.Data\Platform.Engineering.Copilot.Data.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Governance\Platform.Engineering.Copilot.Governance.csproj" />
   </ItemGroup>
 
 </Project>

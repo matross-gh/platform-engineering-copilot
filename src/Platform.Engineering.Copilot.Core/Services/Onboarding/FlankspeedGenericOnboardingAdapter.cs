@@ -143,7 +143,7 @@ public class FlankspeedGenericOnboardingAdapter : IGenericOnboardingService<Onbo
         string requestId, 
         CancellationToken cancellationToken = default)
     {
-        await _onboardingService.SubmitRequestAsync(requestId, cancellationToken);
+        await _onboardingService.SubmitRequestAsync(requestId, submittedBy: null, cancellationToken);
         
         var request = await _onboardingService.GetRequestAsync(requestId, cancellationToken);
         return request ?? throw new InvalidOperationException($"Request {requestId} not found after submission");

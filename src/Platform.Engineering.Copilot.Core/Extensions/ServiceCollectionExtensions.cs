@@ -6,9 +6,10 @@ using Azure.Identity;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Services.Cache;
-using Platform.Engineering.Copilot.Core.Services.Infrastructure;
 using Platform.Engineering.Copilot.Core.Services.Compliance;
 using Platform.Engineering.Copilot.Core.Plugins;
+using Platform.Engineering.Copilot.Core.Services.Infrastructure;
+using Platform.Engineering.Copilot.Core.Services.Onboarding;
 
 namespace Platform.Engineering.Copilot.Core.Extensions;
 
@@ -27,7 +28,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIntelligentChatCacheService, IntelligentChatCacheService>();
         
         // Register Semantic Kernel with Plugins (required by IntelligentChatService)
-        services.AddScoped<Kernel>(serviceProvider =>
+        // CHANGED TO TRANSIENT to avoid circular dependency deadlock
+        // Each resolution gets a fresh Kernel instance
+        // CRITICAL FIX: Register Kernel WITHOUT plugins to avoid circular dependency
+        // Plugins will be registered by IntelligentChatService using its own serviceProvider
+        services.AddTransient<Kernel>(serviceProvider =>
         {
             var configuration = serviceProvider.GetRequiredService<IConfiguration>();
             var logger = serviceProvider.GetRequiredService<ILogger<Kernel>>();
@@ -61,150 +66,61 @@ public static class ServiceCollectionExtensions
                 }
             }
             
+            logger.LogInformation("🔨 Building Kernel WITHOUT plugins (plugins added later by service)...");
             var kernel = builder.Build();
-            
-            // Register Semantic Kernel Plugins for automatic function calling
-            // Note: Plugins need to be registered after kernel is built because they need tool handlers from DI
-            try
-            {
-                // Get tool handlers from Extensions assembly
-                var infrastructureHandler = GetToolHandlerByName(serviceProvider, "InfrastructureProvisioningTool");
-                var complianceHandler = GetToolHandlerByName(serviceProvider, "AtoComplianceTool");
-                var costHandler = GetToolHandlerByName(serviceProvider, "CostManagementTool");
-                var documentHandler = GetToolHandlerByName(serviceProvider, "DocumentUploadAnalyzeTool");
-                var onboardingHandler = GetToolHandlerByName(serviceProvider, "FlankspeedOnboardingTool");
-                
-                // Register InfrastructurePlugin with new AI-powered service
-                try
-                {
-                    var infrastructureService = serviceProvider.GetService<IInfrastructureProvisioningService>();
-                    if (infrastructureService != null)
-                    {
-                        var infrastructurePlugin = new InfrastructurePlugin(
-                            serviceProvider.GetRequiredService<ILogger<InfrastructurePlugin>>(),
-                            kernel,
-                            infrastructureService);
-                        kernel.Plugins.AddFromObject(infrastructurePlugin, "Infrastructure");
-                        logger.LogInformation("Registered InfrastructurePlugin with Semantic Kernel");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to register InfrastructurePlugin");
-                }
-                
-                // Register CompliancePlugin with ComplianceService
-                try
-                {
-                    var complianceService = serviceProvider.GetRequiredService<ComplianceService>();
-                    var compliancePlugin = new CompliancePlugin(
-                        serviceProvider.GetRequiredService<ILogger<CompliancePlugin>>(),
-                        kernel,
-                        complianceService);
-                    kernel.Plugins.AddFromObject(compliancePlugin, "Compliance");
-                    logger.LogInformation("Registered CompliancePlugin with Semantic Kernel");
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to register CompliancePlugin");
-                }
-                
-                if (costHandler != null)
-                {
-                    var costPlugin = new CostManagementPlugin(
-                        costHandler,
-                        serviceProvider.GetRequiredService<ILogger<CostManagementPlugin>>(),
-                        kernel);
-                    kernel.Plugins.AddFromObject(costPlugin, "CostManagement");
-                    logger.LogInformation("Registered CostManagementPlugin with Semantic Kernel");
-                }
-                
-                if (documentHandler != null)
-                {
-                    var documentPlugin = new DocumentPlugin(
-                        documentHandler,
-                        serviceProvider.GetRequiredService<ILogger<DocumentPlugin>>(),
-                        kernel);
-                    kernel.Plugins.AddFromObject(documentPlugin, "Document");
-                    logger.LogInformation("Registered DocumentPlugin with Semantic Kernel");
-                }
-                
-                if (onboardingHandler != null)
-                {
-                    var onboardingPlugin = new OnboardingPlugin(
-                        onboardingHandler,
-                        serviceProvider.GetRequiredService<ILogger<OnboardingPlugin>>(),
-                        kernel);
-                    kernel.Plugins.AddFromObject(onboardingPlugin, "Onboarding");
-                    logger.LogInformation("Registered OnboardingPlugin with Semantic Kernel");
-                }
-                
-                // ResourceDiscoveryPlugin and SecurityPlugin use infrastructure handler
-                if (infrastructureHandler != null)
-                {
-                    var resourcePlugin = new ResourceDiscoveryPlugin(
-                        infrastructureHandler,
-                        serviceProvider.GetRequiredService<ILogger<ResourceDiscoveryPlugin>>(),
-                        kernel);
-                    kernel.Plugins.AddFromObject(resourcePlugin, "ResourceDiscovery");
-                    
-                    var securityPlugin = new SecurityPlugin(
-                        infrastructureHandler,
-                        serviceProvider.GetRequiredService<ILogger<SecurityPlugin>>(),
-                        kernel);
-                    kernel.Plugins.AddFromObject(securityPlugin, "Security");
-                    
-                    logger.LogInformation("Registered ResourceDiscoveryPlugin and SecurityPlugin with Semantic Kernel");
-                }
-                
-                logger.LogInformation("Successfully registered {PluginCount} Semantic Kernel plugins", kernel.Plugins.Count);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to register some Semantic Kernel plugins. This is expected during initial DI setup.");
-            }
+            logger.LogInformation("✅ Kernel built successfully (plugins will be added by IntelligentChatService)");
             
             return kernel;
         });
         
-        /// <summary>
-        /// Helper method to get tool handler by name from DI container
-        /// </summary>
-        static Platform.Engineering.Copilot.Core.Contracts.IMcpToolHandler? GetToolHandlerByName(IServiceProvider serviceProvider, string toolName)
-        {
-            try
-            {
-                var handlers = serviceProvider.GetServices<Platform.Engineering.Copilot.Core.Contracts.IMcpToolHandler>();
-                return handlers.FirstOrDefault(h => h.GetType().Name == toolName);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-        
-        // Register semantic processing services
-        services.AddSingleton<IToolSchemaRegistry, ToolSchemaRegistry>();
+        // NOTE: Plugins are NOT registered in Kernel factory to avoid circular dependencies.
+        // Instead, IntelligentChatService will register plugins when needed using its own serviceProvider.
         
         // NOTE: The following legacy services are marked as [Obsolete] and not registered:
-        // - IIntentClassifier / IntentClassifier (replaced by SK auto-calling in IntelligentChatService_v2)
+        // - IIntentClassifier / IntentClassifier (replaced by SK auto-calling in IntelligentChatService)
         // - IParameterExtractor / ParameterExtractor (replaced by SK auto-calling)
-        // - ISemanticQueryProcessor / SemanticQueryProcessor (replaced by IntelligentChatService_v2)
+        // - ISemanticQueryProcessor / SemanticQueryProcessor (replaced by IntelligentChatService)
+        // - IToolSchemaRegistry / ToolSchemaRegistry (not actively used, removed)
         // These services are kept in the codebase for reference but should not be used.
         
         services.AddScoped<ISemanticKernelService, SemanticKernelService>();
         
-        // Register IntelligentChatService V2 (uses SK auto-calling instead of manual routing)
-        services.AddScoped<IIntelligentChatService, IntelligentChatService_v2>();
+        // Register IntelligentChatService (uses SK auto-calling instead of manual routing)
+        services.AddScoped<IIntelligentChatService, IntelligentChatService>();
         
+        // Register Azure resource service (stub implementation for DI resolution)
+        services.AddScoped<IAzureResourceService, Platform.Engineering.Copilot.Core.Services.AzureServices.AzureResourceService>();
+        
+        // Register cost management services
+        services.AddHttpClient<AzureCostManagementService>();
+        services.AddScoped<AzureCostManagementService>();
+        services.AddScoped<IAzureCostManagementService>(sp => sp.GetRequiredService<AzureCostManagementService>());
+
         // Register cost optimization engine
         services.AddScoped<ICostOptimizationEngine, CostOptimizationEngine>();
         
         // Register environment management engine
         services.AddScoped<IEnvironmentManagementEngine, EnvironmentManagementEngine>();
         
+        // Register onboarding services
+        services.AddScoped<IOnboardingService, FlankspeedOnboardingService>();
+        
+        // Register deployment orchestration service (required by EnvironmentManagementEngine)
+        services.AddScoped<IDeploymentOrchestrationService, DeploymentOrchestrationService>();
+        
+        // Register Azure metrics service (required by CostOptimizationEngine)
+        services.AddScoped<IAzureMetricsService, AzureMetricsService>();
+
         // Register dynamic template generator
         services.AddScoped<IDynamicTemplateGenerator, DynamicTemplateGeneratorService>();
+        
+        // Register template generation enhancements
+        services.AddScoped<Platform.Engineering.Copilot.Core.Services.TemplateGeneration.IComplianceAwareTemplateEnhancer, 
+            Platform.Engineering.Copilot.Core.Services.TemplateGeneration.ComplianceAwareTemplateEnhancer>();
+        services.AddScoped<Platform.Engineering.Copilot.Core.Services.Infrastructure.INetworkTopologyDesignService, 
+            Platform.Engineering.Copilot.Core.Services.Infrastructure.NetworkTopologyDesignService>();
+        services.AddScoped<Platform.Engineering.Copilot.Core.Services.Security.IAzureSecurityConfigurationService, 
+            Platform.Engineering.Copilot.Core.Services.Security.AzureSecurityConfigurationService>();
         
         // Register infrastructure provisioning service (AI-powered, requires Kernel)
         services.AddScoped<IInfrastructureProvisioningService>(serviceProvider =>
@@ -234,15 +150,6 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddSemanticProcessing(this IServiceCollection services)
     {
         return services.AddSupervisorCore();
-    }
-
-    /// <summary>
-    /// Add only the tool registry service (for lightweight scenarios)
-    /// </summary>
-    public static IServiceCollection AddToolRegistry(this IServiceCollection services)
-    {
-        services.AddSingleton<IToolSchemaRegistry, ToolSchemaRegistry>();
-        return services;
     }
 
     /// <summary>

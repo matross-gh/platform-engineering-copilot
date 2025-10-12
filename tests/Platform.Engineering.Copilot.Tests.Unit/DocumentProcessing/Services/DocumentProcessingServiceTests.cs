@@ -81,7 +81,7 @@ public class DocumentProcessingServiceTests : IDisposable
     #region ProcessDocumentAsync Tests
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithNullFile_ThrowsArgumentNullException()
+    public async Task ProcessDocumentAsync_WithNullFile_ThrowsArgumentNullExceptionAsync()
     {
         // Arrange
         IFormFile? nullFile = null;
@@ -92,7 +92,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithValidPdfFile_ReturnsSuccessResult()
+    public async Task ProcessDocumentAsync_WithValidPdfFile_ReturnsSuccessResultAsync()
     {
         // Arrange
         var file = CreateMockFormFile("test.pdf", "PDF content");
@@ -107,7 +107,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithArchitectureAnalysisType_CallsDiagramAnalyzer()
+    public async Task ProcessDocumentAsync_WithArchitectureAnalysisType_CallsDiagramAnalyzerAsync()
     {
         // Arrange
         var file = CreateMockFormFile("diagram.vsdx", "Visio content");
@@ -123,7 +123,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithWordFile_ExtractsContent()
+    public async Task ProcessDocumentAsync_WithWordFile_ExtractsContentAsync()
     {
         // Arrange
         var file = CreateMockFormFile("document.docx", "Word document content");
@@ -137,7 +137,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithComplianceAnalysis_ProcessesDocument()
+    public async Task ProcessDocumentAsync_WithComplianceAnalysis_ProcessesDocumentAsync()
     {
         // Arrange
         var file = CreateMockFormFile("compliance.pdf", "Compliance document");
@@ -151,7 +151,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_SavesFileToUploadsDirectory()
+    public async Task ProcessDocumentAsync_SavesFileToUploadsDirectoryAsync()
     {
         // Arrange
         var fileName = "test_document.pdf";
@@ -166,7 +166,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithConversationId_IncludesInResult()
+    public async Task ProcessDocumentAsync_WithConversationId_IncludesInResultAsync()
     {
         // Arrange
         var file = CreateMockFormFile("test.pdf", "Content");
@@ -181,7 +181,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithTextFile_ExtractsFullText()
+    public async Task ProcessDocumentAsync_WithTextFile_ExtractsFullTextAsync()
     {
         // Arrange
         var content = "This is test text content";
@@ -195,7 +195,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithUnsupportedFileType_HandlesGracefully()
+    public async Task ProcessDocumentAsync_WithUnsupportedFileType_HandlesGracefullyAsync()
     {
         // Arrange
         var file = CreateMockFormFile("document.xyz", "Unknown format");
@@ -213,7 +213,7 @@ public class DocumentProcessingServiceTests : IDisposable
     #region GetProcessingStatusAsync Tests
 
     [Fact]
-    public async Task GetProcessingStatusAsync_WithValidDocumentId_ReturnsStatus()
+    public async Task GetProcessingStatusAsync_WithValidDocumentId_ReturnsStatusAsync()
     {
         // Arrange
         var file = CreateMockFormFile("test.pdf", "Content");
@@ -229,7 +229,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetProcessingStatusAsync_WithInvalidDocumentId_ThrowsKeyNotFoundException()
+    public async Task GetProcessingStatusAsync_WithInvalidDocumentId_ThrowsKeyNotFoundExceptionAsync()
     {
         // Arrange
         var invalidId = Guid.NewGuid().ToString();
@@ -240,7 +240,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetProcessingStatusAsync_TracksSProgressPercentage()
+    public async Task GetProcessingStatusAsync_TracksSProgressPercentageAsync()
     {
         // Arrange
         var file = CreateMockFormFile("test.pdf", "Content");
@@ -268,7 +268,7 @@ public class DocumentProcessingServiceTests : IDisposable
     [InlineData("readme.md", ".md")]
     [InlineData("image.png", ".png")]
     [InlineData("photo.jpg", ".jpg")]
-    public async Task ProcessDocumentAsync_DetectsFileExtensionCorrectly(string fileName, string expectedExtension)
+    public async Task ProcessDocumentAsync_DetectsFileExtensionCorrectlyAsync(string fileName, string expectedExtension)
     {
         // Arrange
         var file = CreateMockFormFile(fileName, "Content");
@@ -286,7 +286,7 @@ public class DocumentProcessingServiceTests : IDisposable
     #region Metadata Extraction Tests
 
     [Fact]
-    public async Task ProcessDocumentAsync_ExtractsFileMetadata()
+    public async Task ProcessDocumentAsync_ExtractsFileMetadataAsync()
     {
         // Arrange
         var file = CreateMockFormFile("test.pdf", "Content");
@@ -301,7 +301,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithPdfFile_ExtractsPageCount()
+    public async Task ProcessDocumentAsync_WithPdfFile_ExtractsPageCountAsync()
     {
         // Arrange
         var file = CreateMockFormFile("test.pdf", "PDF content with multiple pages");
@@ -319,7 +319,7 @@ public class DocumentProcessingServiceTests : IDisposable
     #region Error Handling Tests
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithProcessingError_UpdatesStatusToError()
+    public async Task ProcessDocumentAsync_WithProcessingError_UpdatesStatusToErrorAsync()
     {
         // Arrange
         var file = CreateMockFormFile("test.pdf", "Content");
@@ -333,7 +333,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithEmptyFile_HandlesGracefully()
+    public async Task ProcessDocumentAsync_WithEmptyFile_HandlesGracefullyAsync()
     {
         // Arrange
         var file = CreateMockFormFile("empty.txt", "");
@@ -350,7 +350,7 @@ public class DocumentProcessingServiceTests : IDisposable
     #region Content Extraction Tests
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithTextFile_ExtractsFullContent()
+    public async Task ProcessDocumentAsync_WithTextFile_ExtractsFullContentAsync()
     {
         // Arrange
         var content = "Line 1\nLine 2\nLine 3";
@@ -365,7 +365,7 @@ public class DocumentProcessingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessDocumentAsync_WithMarkdownFile_ExtractsContent()
+    public async Task ProcessDocumentAsync_WithMarkdownFile_ExtractsContentAsync()
     {
         // Arrange
         var content = "# Header\n## Subheader\nContent";
@@ -389,7 +389,7 @@ public class DocumentProcessingServiceTests : IDisposable
     [InlineData(DocumentAnalysisType.SecurityDocument)]
     [InlineData(DocumentAnalysisType.ComplianceDocument)]
     [InlineData(DocumentAnalysisType.General)]
-    public async Task ProcessDocumentAsync_HandlesAllAnalysisTypes(DocumentAnalysisType analysisType)
+    public async Task ProcessDocumentAsync_HandlesAllAnalysisTypesAsync(DocumentAnalysisType analysisType)
     {
         // Arrange
         var file = CreateMockFormFile("test.pdf", "Content");

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Platform.Engineering.Copilot.Governance.Services;
+using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Admin.Models;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;

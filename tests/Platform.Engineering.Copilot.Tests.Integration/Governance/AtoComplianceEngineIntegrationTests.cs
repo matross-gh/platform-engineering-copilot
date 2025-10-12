@@ -10,8 +10,8 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models;
-using Platform.Engineering.Copilot.Governance.Configuration;
-using Platform.Engineering.Copilot.Governance.Services;
+using Platform.Engineering.Copilot.Core.Configuration;
+using Platform.Engineering.Copilot.Core.Services.Compliance;
 using Xunit;
 
 namespace Platform.Engineering.Copilot.Tests.Integration.Governance;
@@ -44,7 +44,7 @@ public class AtoComplianceEngineIntegrationTests
         _options = Options.Create(new GovernanceOptions
         {
             EnforcePolicies = true,
-            RequireApprovals = false
+            RequireApproval = false
         });
     }
 

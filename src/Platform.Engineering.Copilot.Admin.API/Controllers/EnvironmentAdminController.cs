@@ -5,6 +5,7 @@ using Platform.Engineering.Copilot.Core.Models.EnvironmentManagement;
 using Platform.Engineering.Copilot.Data.Entities;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Admin.Models;
+using Platform.Engineering.Copilot.Core.Services.Infrastructure;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;
 

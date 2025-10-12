@@ -157,7 +157,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.Onboardin
             updatedDraft.Command.Should().Be("NAVWAR");
 
             // Act & Assert - Stage 3: Submit for Review
-            var submitSuccess = await _onboardingService.SubmitRequestAsync(requestId, cancellationToken);
+            var submitSuccess = await _onboardingService.SubmitRequestAsync(requestId, submittedBy: null, cancellationToken);
             submitSuccess.Should().BeTrue();
 
             var submittedRequest = await _onboardingService.GetRequestAsync(requestId, cancellationToken);
@@ -198,7 +198,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.Onboardin
                 { "RequestedVNetCidr", "10.101.0.0/16" }
             };
             await _onboardingService.UpdateDraftAsync(requestId, updates, cancellationToken);
-            await _onboardingService.SubmitRequestAsync(requestId, cancellationToken);
+            await _onboardingService.SubmitRequestAsync(requestId, submittedBy: null, cancellationToken);
 
             // Act - Reject the request
             var rejectSuccess = await _onboardingService.RejectRequestAsync(

@@ -1,0 +1,1303 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
+using Platform.Engineering.Copilot.Core.Interfaces;
+using Platform.Engineering.Copilot.Core.Models.EnvironmentManagement;
+using Platform.Engineering.Copilot.Core.Services.Infrastructure;
+using Platform.Engineering.Copilot.Data.Entities;
+using OnboardingStatus = Platform.Engineering.Copilot.Data.Entities.OnboardingStatus;
+using DeploymentStatus = Platform.Engineering.Copilot.Data.Entities.DeploymentStatus;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Platform.Engineering.Copilot.Core.Plugins;
+
+/// <summary>
+/// Semantic Kernel plugin for Azure environment lifecycle management.
+/// Integrates with IEnvironmentManagementEngine for business logic and DeploymentOrchestrationService for actual deployments.
+/// Connects onboarding workflows to environment provisioning.
+/// </summary>
+public class EnvironmentManagementPlugin : BaseSupervisorPlugin
+{
+    private readonly IEnvironmentManagementEngine _environmentEngine;
+    private readonly IOnboardingService _onboardingService;
+    private readonly EnvironmentStorageService _environmentStorage;
+
+    public EnvironmentManagementPlugin(
+        ILogger<EnvironmentManagementPlugin> logger,
+        Kernel kernel,
+        IEnvironmentManagementEngine environmentEngine,
+        IOnboardingService onboardingService,
+        EnvironmentStorageService environmentStorage) : base(logger, kernel)
+    {
+        _environmentEngine = environmentEngine ?? throw new ArgumentNullException(nameof(environmentEngine));
+        _onboardingService = onboardingService ?? throw new ArgumentNullException(nameof(onboardingService));
+        _environmentStorage = environmentStorage ?? throw new ArgumentNullException(nameof(environmentStorage));
+    }
+
+    [KernelFunction("create_environment")]
+    [Description("Create a new Azure environment (AKS, Web App, Function App, Container App). " +
+                 "Can be used standalone OR from an approved onboarding request. " +
+                 "For onboarding: provide onboardingRequestId. For direct creation: provide environmentName, resourceGroup, location, and type.")]
+    public async Task<string> CreateEnvironmentAsync(
+        [Description("Environment name (required for direct creation, optional if using onboardingRequestId)")] string? environmentName = null,
+        [Description("Environment type: 'aks', 'webapp', 'function', 'containerapp' (default: aks)")] string? environmentType = null,
+        [Description("Resource group name (required for direct creation)")] string? resourceGroup = null,
+        [Description("Azure region/location (default: eastus)")] string? location = null,
+        [Description("Onboarding request ID (GUID) - use this to create from approved onboarding request")] string? onboardingRequestId = null,
+        [Description("JSON string with additional configuration: {subscriptionId, tags, computeSize, storageSize, databaseEnabled, etc}")] string? configuration = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            EnvironmentCreationRequest creationRequest;
+
+            // SCENARIO 1: Create from approved onboarding request
+            if (!string.IsNullOrWhiteSpace(onboardingRequestId))
+            {
+                _logger.LogInformation("Creating environment from onboarding request: {RequestId}", onboardingRequestId);
+
+                var onboardingRequest = await _onboardingService.GetRequestAsync(onboardingRequestId, cancellationToken);
+                
+                if (onboardingRequest == null)
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = $"Onboarding request {onboardingRequestId} not found."
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+
+                // Check approval status (OnboardingStatus enum)
+                if (onboardingRequest.Status != OnboardingStatus.Approved)
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = $"Onboarding request must be approved. Current status: {onboardingRequest.Status}",
+                        currentStatus = onboardingRequest.Status.ToString(),
+                        onboardingRequestId = onboardingRequestId
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+
+                // Convert OnboardingRequest to EnvironmentCreationRequest
+                creationRequest = ConvertOnboardingToEnvironmentRequest(onboardingRequest, environmentType);
+                
+                _logger.LogInformation("Creating environment {Name} from onboarding request for mission {Mission}",
+                    creationRequest.Name, onboardingRequest.MissionName);
+            }
+            // SCENARIO 2: Direct environment creation
+            else
+            {
+                if (string.IsNullOrWhiteSpace(environmentName))
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = "Either 'environmentName' or 'onboardingRequestId' must be provided.",
+                        hint = "For direct creation: provide environmentName, resourceGroup, and location. For onboarding: provide onboardingRequestId."
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+
+                if (string.IsNullOrWhiteSpace(resourceGroup))
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = "resourceGroup is required for direct environment creation."
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+
+                _logger.LogInformation("Creating environment directly: {Name} in {ResourceGroup}", 
+                    environmentName, resourceGroup);
+
+                creationRequest = BuildDirectEnvironmentRequest(
+                    environmentName, 
+                    environmentType, 
+                    resourceGroup, 
+                    location, 
+                    configuration);
+            }
+
+            // Execute environment creation via EnvironmentManagementEngine
+            var result = await _environmentEngine.CreateEnvironmentAsync(creationRequest, cancellationToken);
+
+            if (result.Success)
+            {
+                _logger.LogInformation("Environment {Name} provisioning initiated. Deployment ID: {DeploymentId}",
+                    result.EnvironmentName, result.DeploymentId);
+
+                // Update onboarding request status if applicable
+                if (!string.IsNullOrWhiteSpace(onboardingRequestId))
+                {
+                    try
+                    {
+                        await _onboardingService.UpdateDraftAsync(
+                            onboardingRequestId, 
+                            new { 
+                                ProvisioningJobId = result.DeploymentId,
+                                Status = OnboardingStatus.Provisioning
+                            },
+                            cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to update onboarding request status");
+                    }
+                }
+
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    status = "provisioning",
+                    environmentName = result.EnvironmentName,
+                    resourceGroup = result.ResourceGroup,
+                    deploymentId = result.DeploymentId,
+                    estimatedCompletionTime = DateTime.UtcNow.AddMinutes(45),
+                    message = $"Environment '{result.EnvironmentName}' provisioning initiated. Deployment typically takes 45-60 minutes.",
+                    onboardingRequestId = onboardingRequestId,
+                    createdResources = result.CreatedResources,
+                    nextSteps = new[]
+                    {
+                        $"Monitor deployment progress by checking Azure Portal deployment ID: {result.DeploymentId}",
+                        "Say 'show me the status of environment {result.EnvironmentName}' once deployment completes to verify everything is healthy.",
+                        "Access your environment's credentials and secrets in Azure Key Vault after the deployment finishes."
+                    }
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+            else
+            {
+                _logger.LogError("Environment provisioning failed: {Error}", result.Message);
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = result.Message ?? "Environment provisioning failed",
+                    deploymentId = result.DeploymentId
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating environment");
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = $"Failed to create environment: {ex.Message}"
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    private EnvironmentCreationRequest ConvertOnboardingToEnvironmentRequest(
+        OnboardingRequest onboardingRequest, 
+        string? environmentTypeOverride)
+    {
+        // Determine environment type from requested services or use override
+        var envType = ParseEnvironmentType(environmentTypeOverride ?? DetermineEnvironmentTypeFromServices(onboardingRequest.RequiredServices));
+        
+        return new EnvironmentCreationRequest
+        {
+            Name = SanitizeEnvironmentName(onboardingRequest.MissionName),
+            Type = envType,
+            ResourceGroup = $"rg-{SanitizeEnvironmentName(onboardingRequest.MissionName)}-{onboardingRequest.Region?.ToLower() ?? "usgovvirginia"}",
+            Location = onboardingRequest.Region ?? "usgovvirginia",
+            SubscriptionId = onboardingRequest.ProvisionedSubscriptionId ?? onboardingRequest.RequestedSubscriptionName,
+            Tags = new Dictionary<string, string>
+            {
+                ["Mission"] = onboardingRequest.MissionName,
+                ["Command"] = onboardingRequest.Command,
+                ["Classification"] = onboardingRequest.ClassificationLevel,
+                ["OnboardingRequestId"] = onboardingRequest.Id,
+                ["MissionOwner"] = onboardingRequest.MissionOwner,
+                ["MissionOwnerEmail"] = onboardingRequest.MissionOwnerEmail,
+                ["CreatedBy"] = "Platform-Engineering-Copilot",
+                ["CreatedVia"] = "Onboarding",
+                ["FundingSource"] = onboardingRequest.FundingSource ?? "Unknown"
+            },
+            EnableMonitoring = true,
+            EnableLogging = true
+        };
+    }
+
+    private string DetermineEnvironmentTypeFromServices(List<string> requiredServices)
+    {
+        if (requiredServices == null || !requiredServices.Any())
+            return "aks";
+
+        // Check for specific service patterns
+        var servicesLower = requiredServices.Select(s => s.ToLowerInvariant()).ToList();
+        
+        if (servicesLower.Any(s => s.Contains("kubernetes") || s.Contains("aks")))
+            return "aks";
+        if (servicesLower.Any(s => s.Contains("webapp") || s.Contains("app service")))
+            return "webapp";
+        if (servicesLower.Any(s => s.Contains("function")))
+            return "function";
+        if (servicesLower.Any(s => s.Contains("container app")))
+            return "containerapp";
+        
+        // Default to AKS for general workloads
+        return "aks";
+    }
+
+    private EnvironmentCreationRequest BuildDirectEnvironmentRequest(
+        string environmentName,
+        string? environmentType,
+        string resourceGroup,
+        string? location,
+        string? configurationJson)
+    {
+        var envType = ParseEnvironmentType(environmentType ?? "aks");
+        var sanitizedName = SanitizeEnvironmentName(environmentName);
+        
+        var request = new EnvironmentCreationRequest
+        {
+            Name = sanitizedName,
+            Type = envType,
+            ResourceGroup = resourceGroup,
+            Location = location ?? "eastus",
+            SubscriptionId = "default-subscription",
+            Tags = new Dictionary<string, string>
+            {
+                ["CreatedBy"] = "Platform-Engineering-Copilot",
+                ["CreatedVia"] = "DirectCreation",
+                ["EnvironmentName"] = environmentName
+            },
+            EnableMonitoring = true,
+            EnableLogging = true
+        };
+
+        // Parse additional configuration if provided
+        if (!string.IsNullOrWhiteSpace(configurationJson))
+        {
+            try
+            {
+                var config = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(configurationJson);
+                if (config != null)
+                {
+                    if (config.TryGetValue("subscriptionId", out var subId))
+                        request.SubscriptionId = subId.GetString() ?? request.SubscriptionId;
+                    
+                    if (config.TryGetValue("tags", out var tagsElement))
+                    {
+                        var additionalTags = JsonSerializer.Deserialize<Dictionary<string, string>>(tagsElement.GetRawText());
+                        if (additionalTags != null)
+                        {
+                            foreach (var tag in additionalTags)
+                                request.Tags[tag.Key] = tag.Value;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse configuration JSON, using defaults");
+            }
+        }
+
+        return request;
+    }
+
+    #region Helper Methods
+
+    private static string SanitizeEnvironmentName(string name)
+    {
+        // Remove special characters, convert to lowercase, limit length
+        var sanitized = new string(name.Where(c => char.IsLetterOrDigit(c) || c == '-').ToArray())
+            .ToLowerInvariant()
+            .Replace(' ', '-');
+        
+        return sanitized.Length > 50 ? sanitized.Substring(0, 50) : sanitized;
+    }
+
+    private static EnvironmentType ParseEnvironmentType(string typeString)
+    {
+        return typeString?.ToLowerInvariant() switch
+        {
+            "aks" or "kubernetes" => EnvironmentType.AKS,
+            "webapp" or "web" or "appservice" => EnvironmentType.WebApp,
+            "function" or "functions" or "functionapp" => EnvironmentType.FunctionApp,
+            "containerapp" or "container" => EnvironmentType.ContainerApp,
+            _ => EnvironmentType.AKS // Default to AKS
+        };
+    }
+
+    #endregion
+
+    [KernelFunction("clone_environment")]
+    [Description("Clone an existing Azure environment to create a new environment with the same configuration. " +
+                 "Useful for creating dev/test copies of production environments or disaster recovery scenarios.")]
+    public async Task<string> CloneEnvironmentAsync(
+        [Description("Source environment name to clone from")] string sourceEnvironment,
+        [Description("Target environment name for the clone")] string targetEnvironment,
+        [Description("Source Azure resource group name")] string sourceResourceGroup,
+        [Description("Target Azure resource group name (optional, defaults to source RG)")] string? targetResourceGroup = null,
+        [Description("Whether to preserve data during clone (true/false). WARNING: true will copy production data!")] bool preserveData = false,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Cloning environment {Source} to {Target} (preserve data: {PreserveData})", 
+                sourceEnvironment, targetEnvironment, preserveData);
+
+            // Validate source environment exists
+            var sourceEnvs = await _environmentStorage.ListEnvironmentsAsync(
+                environmentType: null,
+                resourceGroup: sourceResourceGroup,
+                status: null,
+                cancellationToken: cancellationToken);
+
+            var sourceEnv = sourceEnvs.FirstOrDefault(e => 
+                e.Name.Equals(sourceEnvironment, StringComparison.OrdinalIgnoreCase));
+
+            if (sourceEnv == null)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = $"Source environment '{sourceEnvironment}' not found in resource group '{sourceResourceGroup}'",
+                    suggestion = "Verify the source environment name and resource group"
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Build clone request
+            var request = new EnvironmentCloneRequest
+            {
+                SourceEnvironment = sourceEnvironment,
+                SourceResourceGroup = sourceResourceGroup,
+                TargetEnvironments = new List<string> { targetEnvironment },
+                TargetResourceGroup = targetResourceGroup ?? sourceResourceGroup,
+                PreserveData = preserveData,
+                IncludePipelines = true,
+                CloneConfiguration = true
+            };
+
+            _logger.LogInformation("Executing clone operation from {Source}/{SrcRG} to {Target}/{TgtRG}",
+                sourceEnvironment, sourceResourceGroup, targetEnvironment, request.TargetResourceGroup);
+
+            var result = await _environmentEngine.CloneEnvironmentAsync(request, cancellationToken);
+
+            if (result.Success)
+            {
+                _logger.LogInformation("Environment clone completed successfully. Cloned: {Count} environments",
+                    result.ClonedEnvironments.Count);
+
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    status = "cloned",
+                    sourceEnvironment = sourceEnvironment,
+                    sourceResourceGroup = sourceResourceGroup,
+                    clonedEnvironments = result.ClonedEnvironments.Select(e => new
+                    {
+                        name = e.Name,
+                        resourceGroup = e.ResourceGroup,
+                        status = e.Status
+                    }).ToList(),
+                    dataPreserved = preserveData,
+                    cloneDuration = result.Duration,
+                    message = $"Successfully cloned '{sourceEnvironment}' to '{targetEnvironment}'. " +
+                             (preserveData ? "Production data was copied." : "Configuration cloned without data."),
+                    warnings = result.Warnings,
+                    nextSteps = new[]
+                    {
+                        "Verify the cloned environment configuration matches your expectations.",
+                        "Update any environment-specific settings like URLs, API endpoints, and connection strings.",
+                        preserveData ? "⚠️ CRITICAL: Review and sanitize the copied production data before use!" : "Say 'load test data into this environment' to populate with sample data.",
+                        "Update your DNS records if the new environment needs a custom domain.",
+                        "Configure your CI/CD pipelines to target the new environment for automated deployments."
+                    }
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+            else
+            {
+                _logger.LogError("Environment clone failed: {Error}", result.ErrorMessage);
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = result.ErrorMessage ?? "Clone operation failed",
+                    sourceEnvironment = sourceEnvironment,
+                    targetEnvironment = targetEnvironment
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cloning environment {Source}", sourceEnvironment);
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = $"Failed to clone environment: {ex.Message}",
+                sourceEnvironment = sourceEnvironment,
+                targetEnvironment = targetEnvironment
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    [KernelFunction("delete_environment")]
+    [Description("Delete an Azure environment with optional backup. Use with caution - requires user confirmation. " +
+                 "DESTRUCTIVE OPERATION: This will permanently delete all resources in the environment.")]
+    public async Task<string> DeleteEnvironmentAsync(
+        [Description("Name of environment to delete")] string environmentName,
+        [Description("Azure resource group name")] string resourceGroup,
+        [Description("Create backup before deletion (true/false, recommended: true)")] bool createBackup = true,
+        [Description("Confirmation flag - must be 'CONFIRM_DELETE' to proceed")] string? confirmation = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Delete request for environment: {Environment} (backup: {Backup})", 
+                environmentName, createBackup);
+
+            // Safety check - require explicit confirmation
+            if (confirmation != "CONFIRM_DELETE")
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    requiresConfirmation = true,
+                    error = "Deletion requires explicit confirmation to prevent accidental data loss.",
+                    message = "To proceed with deletion, call this function again with confirmation='CONFIRM_DELETE'",
+                    warning = $"This will permanently delete environment '{environmentName}' and all its resources!",
+                    recommendation = createBackup ? 
+                        "A backup will be created before deletion." : 
+                        "⚠️  NO BACKUP will be created. Consider setting createBackup=true."
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Check if environment exists
+            var environments = await _environmentStorage.ListEnvironmentsAsync(
+                environmentType: null,
+                resourceGroup: resourceGroup,
+                status: null,
+                cancellationToken: cancellationToken);
+
+            var environment = environments.FirstOrDefault(e => 
+                e.Name.Equals(environmentName, StringComparison.OrdinalIgnoreCase));
+
+            if (environment == null)
+            {
+                _logger.LogWarning("Environment {Environment} not found in {ResourceGroup}", 
+                    environmentName, resourceGroup);
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = $"Environment '{environmentName}' not found in resource group '{resourceGroup}'",
+                    suggestion = "The environment may have already been deleted or never existed"
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Prevent deletion of production environments without backup
+            var tags = environment.Tags != null 
+                ? JsonSerializer.Deserialize<Dictionary<string, string>>(environment.Tags)
+                : null;
+            
+            var isProduction = tags?.Any(t => 
+                (t.Key.Equals("Environment", StringComparison.OrdinalIgnoreCase) && 
+                 t.Value.Equals("production", StringComparison.OrdinalIgnoreCase)) ||
+                (t.Key.Equals("Classification", StringComparison.OrdinalIgnoreCase) &&
+                 (t.Value.Contains("SECRET") || t.Value.Contains("CLASSIFIED")))
+            ) ?? false;
+
+            if (isProduction && !createBackup)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = "Cannot delete production or classified environment without backup",
+                    environmentType = "production/classified",
+                    requirement = "createBackup must be true for production environments",
+                    tags = tags
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            _logger.LogWarning("DELETING ENVIRONMENT: {Environment} in {ResourceGroup} (Backup: {Backup})",
+                environmentName, resourceGroup, createBackup);
+
+            var result = await _environmentEngine.DeleteEnvironmentAsync(
+                environmentName, 
+                resourceGroup, 
+                createBackup,
+                cancellationToken: cancellationToken);
+
+            if (result.Success)
+            {
+                _logger.LogInformation("Environment {Environment} successfully deleted. Backup: {BackupLocation}",
+                    environmentName, result.BackupLocation);
+
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    status = "deleted",
+                    environmentName = result.EnvironmentName,
+                    resourceGroup = resourceGroup,
+                    backupCreated = result.BackupCreated,
+                    backupLocation = result.BackupLocation,
+                    deletedResources = result.DeletedResources?.Select(r => new
+                    {
+                        name = r.Name,
+                        type = r.Type,
+                        deletedAt = r.DeletedAt
+                    }).ToList(),
+                    deletionTime = DateTime.UtcNow,
+                    message = createBackup 
+                        ? $"Environment '{environmentName}' deleted successfully. Backup available at: {result.BackupLocation}"
+                        : $"Environment '{environmentName}' permanently deleted (no backup created)",
+                    nextSteps = createBackup ? new[]
+                    {
+                        "Backup is retained for 30 days",
+                        "To restore, use the backup location provided",
+                        "Review deletion audit logs"
+                    } : new[]
+                    {
+                        "Environment permanently deleted",
+                        "No recovery possible",
+                        "Review deletion audit logs"
+                    }
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+            else
+            {
+                _logger.LogError("Failed to delete environment {Environment}: {Error}",
+                    environmentName, result.ErrorMessage);
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = result.ErrorMessage ?? "Deletion failed",
+                    environmentName = environmentName,
+                    partialDeletion = result.DeletedResources?.Any() ?? false,
+                    deletedResources = result.DeletedResources?.Select(r => r.Name).ToList()
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting environment {Environment}", environmentName);
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = $"Failed to delete environment: {ex.Message}",
+                environmentName = environmentName,
+                resourceGroup = resourceGroup
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    [KernelFunction("list_environments")]
+    [Description("List all Azure environments for a mission owner. " +
+                 "Shows environments in a subscription or resource group with their status, type, and basic details. " +
+                 "Useful for discovering what environments exist and their current state. " +
+                 "Supports filtering by type, resource group, status, and searching by name, tags, or mission owner.")]
+    public async Task<string> ListEnvironmentsAsync(
+        [Description("Filter by environment type: 'aks', 'webapp', 'function', 'containerapp', or leave empty for all types")] 
+        string? environmentType = null,
+        [Description("Filter by resource group name (optional - leave empty to see all resource groups)")] 
+        string? resourceGroup = null,
+        [Description("Filter by status: 'running', 'deploying', 'failed', 'stopped', or leave empty for all statuses")] 
+        string? status = null,
+        [Description("Search by environment name, mission owner, or tag value (partial match supported)")] 
+        string? searchTerm = null,
+        [Description("Include detailed metrics for each environment (true/false, default: false)")] 
+        bool includeMetrics = false,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Listing environments - Type: {Type}, ResourceGroup: {RG}, Status: {Status}, Search: {Search}, Metrics: {Metrics}",
+                environmentType ?? "all", resourceGroup ?? "all", status ?? "all", searchTerm ?? "none", includeMetrics);
+
+            // Parse status if provided
+            DeploymentStatus? deploymentStatus = null;
+            if (!string.IsNullOrEmpty(status) && Enum.TryParse<DeploymentStatus>(status, true, out var parsedStatus))
+            {
+                deploymentStatus = parsedStatus;
+            }
+
+            // Query environments from storage
+            var environments = await _environmentStorage.ListEnvironmentsAsync(
+                environmentType: environmentType,
+                resourceGroup: resourceGroup,
+                status: deploymentStatus,
+                cancellationToken: cancellationToken);
+
+            // Apply search filter if provided
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var searchLower = searchTerm.ToLowerInvariant();
+                environments = environments.Where(e =>
+                {
+                    // Search in environment name
+                    if (e.Name?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true)
+                        return true;
+
+                    // Search in tags
+                    if (!string.IsNullOrEmpty(e.Tags))
+                    {
+                        var tags = JsonSerializer.Deserialize<Dictionary<string, string>>(e.Tags);
+                        if (tags != null)
+                        {
+                            // Search in tag values (especially MissionOwner, Classification, etc.)
+                            if (tags.Any(t => t.Value?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true))
+                                return true;
+                            
+                            // Search in tag keys
+                            if (tags.Any(t => t.Key?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true))
+                                return true;
+                        }
+                    }
+
+                    // Search in resource group
+                    if (e.ResourceGroupName?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true)
+                        return true;
+
+                    // Search in location
+                    if (e.Location?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true)
+                        return true;
+
+                    return false;
+                }).ToList();
+            }
+
+            if (!environments.Any())
+            {
+                var filters = new List<string>();
+                if (!string.IsNullOrEmpty(environmentType)) filters.Add($"type={environmentType}");
+                if (!string.IsNullOrEmpty(resourceGroup)) filters.Add($"resourceGroup={resourceGroup}");
+                if (!string.IsNullOrEmpty(status)) filters.Add($"status={status}");
+                if (!string.IsNullOrEmpty(searchTerm)) filters.Add($"search='{searchTerm}'");
+
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    environmentCount = 0,
+                    environments = Array.Empty<object>(),
+                    message = filters.Any() 
+                        ? $"No environments found matching filters: {string.Join(", ", filters)}"
+                        : "No environments found in your subscription",
+                    suggestion = filters.Any()
+                        ? "Try removing some filters or using a broader search term"
+                        : "Create your first environment using 'create_environment'"
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Group environments by resource group for better organization
+            var groupedEnvironments = environments.GroupBy(e => e.ResourceGroupName ?? "unknown");
+
+            var environmentsList = new List<object>();
+
+            foreach (var env in environments)
+            {
+                // Parse tags
+                var tags = env.Tags != null
+                    ? JsonSerializer.Deserialize<Dictionary<string, string>>(env.Tags)
+                    : new Dictionary<string, string>();
+
+                var envDetails = new Dictionary<string, object>
+                {
+                    ["name"] = env.Name ?? "unknown",
+                    ["type"] = env.EnvironmentType ?? "unknown",
+                    ["resourceGroup"] = env.ResourceGroupName ?? "unknown",
+                    ["location"] = env.Location ?? "unknown",
+                    ["status"] = env.Status.ToString(),
+                    ["createdAt"] = env.CreatedAt,
+                    ["lastUpdated"] = env.UpdatedAt,
+                    ["deploymentId"] = env.Id
+                };
+
+                // Add tags if they exist
+                if (tags.Any())
+                {
+                    envDetails["tags"] = tags;
+                    
+                    // Highlight important tags
+                    if (tags.TryGetValue("Environment", out var envTag))
+                        envDetails["environment"] = envTag;
+                    if (tags.TryGetValue("MissionOwner", out var owner))
+                        envDetails["missionOwner"] = owner;
+                    if (tags.TryGetValue("Classification", out var classification))
+                        envDetails["classification"] = classification;
+                    if (tags.TryGetValue("CostCenter", out var costCenter))
+                        envDetails["costCenter"] = costCenter;
+                }
+
+                // Add deployment progress details
+                envDetails["progressPercentage"] = env.ProgressPercentage;
+                if (env.IsPollingActive)
+                {
+                    envDetails["pollingStatus"] = "active";
+                    envDetails["lastPolledAt"] = env.LastPolledAt;
+                    envDetails["estimatedTimeRemaining"] = env.EstimatedTimeRemaining;
+                }
+
+                // Optionally include metrics
+                if (includeMetrics && env.Status == DeploymentStatus.Succeeded)
+                {
+                    try
+                    {
+                        var metricsRequest = new MetricsRequest
+                        {
+                            TimeRange = "1h",
+                            MetricTypes = new List<string> { "cpu", "memory", "connections", "requests" }
+                        };
+
+                        var metrics = await _environmentEngine.GetEnvironmentMetricsAsync(
+                            env.Name ?? string.Empty,
+                            env.ResourceGroupName ?? string.Empty,
+                            metricsRequest,
+                            cancellationToken: cancellationToken);
+
+                        if (metrics != null)
+                        {
+                            envDetails["metrics"] = new
+                            {
+                                cpu = metrics.Performance.CpuUsagePercent,
+                                memory = metrics.Performance.MemoryUsagePercent,
+                                requestsPerSecond = metrics.Requests.RequestsPerSecond,
+                                totalRequests = metrics.Requests.TotalRequests
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not fetch metrics for environment {Name}", env.Name);
+                        envDetails["metricsError"] = "Metrics unavailable";
+                    }
+                }
+
+                environmentsList.Add(envDetails);
+            }
+
+            // Generate summary statistics
+            var summary = new
+            {
+                total = environments.Count(),
+                byType = environments.GroupBy(e => e.EnvironmentType).Select(g => new { type = g.Key, count = g.Count() }),
+                byStatus = environments.GroupBy(e => e.Status).Select(g => new { status = g.Key.ToString(), count = g.Count() }),
+                byResourceGroup = groupedEnvironments.Select(g => new { resourceGroup = g.Key, count = g.Count() }),
+                succeeded = environments.Count(e => e.Status == DeploymentStatus.Succeeded),
+                inProgress = environments.Count(e => e.Status == DeploymentStatus.InProgress),
+                failed = environments.Count(e => e.Status == DeploymentStatus.Failed)
+            };
+
+            return JsonSerializer.Serialize(new
+            {
+                success = true,
+                environmentCount = environments.Count(),
+                summary = summary,
+                environments = environmentsList,
+                filters = new
+                {
+                    environmentType = environmentType ?? "all",
+                    resourceGroup = resourceGroup ?? "all",
+                    status = status ?? "all",
+                    searchTerm = searchTerm ?? "none",
+                    includeMetrics = includeMetrics
+                },
+                message = $"Found {environments.Count()} environment(s)" + 
+                         (!string.IsNullOrEmpty(searchTerm) ? $" matching '{searchTerm}'" : ""),
+                nextSteps = new[]
+                {
+                    "Say 'show me the status of environment <environment-name>' to get detailed health information about a specific environment.",
+                    "Say 'create a new environment called <name>' to provision new environments.",
+                    "Say 'scale environment <name> to <size>' to adjust resource capacity up or down.",
+                    "Filter results by saying 'list dev environments' or 'list environments in resource group <name>'.",
+                    "Search by saying 'find environments owned by <person>' or 'find environments tagged with <tag>'."
+                }
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing environments");
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = $"Failed to list environments: {ex.Message}",
+                suggestion = "Check your permissions and try again"
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    [KernelFunction("get_environment_status")]
+    [Description("Get the current status, health, and metrics of an Azure environment")]
+    public async Task<string> GetEnvironmentStatusAsync(
+        [Description("Name of environment to check")] string environmentName,
+        [Description("Azure resource group name")] string resourceGroup,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Getting status for environment: {Environment} in {ResourceGroup}", 
+                environmentName, resourceGroup);
+
+            // Query environment from database to get deployment info
+            var environments = await _environmentStorage.ListEnvironmentsAsync(
+                environmentType: null,
+                resourceGroup: resourceGroup,
+                status: null,
+                cancellationToken: cancellationToken);
+
+            var environment = environments.FirstOrDefault(e => 
+                e.Name.Equals(environmentName, StringComparison.OrdinalIgnoreCase));
+
+            if (environment == null)
+            {
+                _logger.LogWarning("Environment {Environment} not found in {ResourceGroup}", 
+                    environmentName, resourceGroup);
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = $"Environment '{environmentName}' not found in resource group '{resourceGroup}'",
+                    suggestion = "Verify the environment name and resource group are correct"
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Get comprehensive health status from engine
+            var health = await _environmentEngine.GetEnvironmentHealthAsync(
+                environmentName,
+                resourceGroup,
+                cancellationToken);
+
+            // Get metrics
+            var metricsRequest = new MetricsRequest
+            {
+                TimeRange = "1h",
+                MetricTypes = new List<string> { "cpu", "memory", "requests", "errors" }
+            };
+
+            var metrics = await _environmentEngine.GetEnvironmentMetricsAsync(
+                environmentName,
+                resourceGroup,
+                metricsRequest,
+                cancellationToken: cancellationToken);
+
+            return JsonSerializer.Serialize(new
+            {
+                success = true,
+                environmentName = environmentName,
+                resourceGroup = resourceGroup,
+                deploymentInfo = new
+                {
+                    deploymentId = environment.Id.ToString(),
+                    status = environment.Status.ToString(),
+                    type = environment.EnvironmentType,
+                    location = environment.Location,
+                    createdAt = environment.CreatedAt,
+                    deployedBy = environment.DeployedBy,
+                    progressPercentage = environment.ProgressPercentage
+                },
+                health = new
+                {
+                    overallHealth = health.OverallHealth.ToString(),
+                    lastChecked = health.LastChecked,
+                    checks = health.Checks?.Select(c => new
+                    {
+                        name = c.Name,
+                        category = c.Category,
+                        status = c.Status.ToString(),
+                        message = c.Message,
+                        details = c.Details,
+                        lastChecked = c.LastChecked
+                    }).ToList(),
+                    alerts = health.Alerts?.Select(a => new
+                    {
+                        id = a.Id,
+                        severity = a.Severity,
+                        message = a.Message,
+                        triggeredAt = a.TriggeredAt,
+                        resolutionSuggestion = a.ResolutionSuggestion
+                    }).ToList(),
+                    additionalData = health.AdditionalData
+                },
+                performance = new
+                {
+                    cpu = new
+                    {
+                        current = metrics.Performance.CpuUsagePercent,
+                        threshold = 80,
+                        status = metrics.Performance.CpuUsagePercent > 80 ? "Warning" : "Healthy"
+                    },
+                    memory = new
+                    {
+                        current = metrics.Performance.MemoryUsagePercent,
+                        threshold = 85,
+                        status = metrics.Performance.MemoryUsagePercent > 85 ? "Warning" : "Healthy"
+                    },
+                    disk = new
+                    {
+                        current = metrics.Performance.DiskUsagePercent,
+                        threshold = 90,
+                        status = metrics.Performance.DiskUsagePercent > 90 ? "Critical" : "Healthy"
+                    },
+                    responseTime = new
+                    {
+                        average = metrics.Performance.AverageResponseTimeMs,
+                        threshold = 1000,
+                        status = metrics.Performance.AverageResponseTimeMs > 1000 ? "Warning" : "Healthy"
+                    }
+                },
+                resources = new
+                {
+                    totalNodes = metrics.Resources.TotalNodes,
+                    totalPods = metrics.Resources.TotalPods,
+                    runningPods = metrics.Resources.RunningPods,
+                    allocatedCpuCores = metrics.Resources.AllocatedCpuCores,
+                    allocatedMemoryGb = metrics.Resources.AllocatedMemoryGb,
+                    availableCpuCores = metrics.Resources.AvailableCpuCores,
+                    availableMemoryGb = metrics.Resources.AvailableMemoryGb
+                },
+                traffic = new
+                {
+                    totalRequests = metrics.Requests.TotalRequests,
+                    successfulRequests = metrics.Requests.SuccessfulRequests,
+                    failedRequests = metrics.Requests.FailedRequests,
+                    errorRate = metrics.Requests.TotalRequests > 0 
+                        ? (double)metrics.Requests.FailedRequests / metrics.Requests.TotalRequests * 100 
+                        : 0,
+                    successRate = metrics.Requests.TotalRequests > 0
+                        ? (double)metrics.Requests.SuccessfulRequests / metrics.Requests.TotalRequests * 100
+                        : 100
+                },
+                cost = environment.ActualMonthlyCost.HasValue ? new
+                {
+                    estimated = environment.EstimatedMonthlyCost,
+                    actual = environment.ActualMonthlyCost,
+                    currency = "USD"
+                } : null,
+                collectedAt = metrics.CollectedAt,
+                tags = environment.Tags != null 
+                    ? JsonSerializer.Deserialize<Dictionary<string, string>>(environment.Tags) 
+                    : null
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting environment status {Environment}", environmentName);
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = $"Failed to get environment status: {ex.Message}",
+                environmentName = environmentName,
+                resourceGroup = resourceGroup
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    [KernelFunction("scale_environment")]
+    [Description("Scale an Azure environment. " +
+                 "For AKS: Use nodeCount (e.g., '3' or 'min=2,max=5'). " +
+                 "For App Service: Use sku (e.g., 'S1', 'P1v2'). " +
+                 "For VMs: Use vmSize (e.g., 'Standard_D2s_v3') or instanceCount.")]
+    public async Task<string> ScaleEnvironmentAsync(
+        [Description("Environment name to scale")] string environmentName,
+        [Description("Azure resource group name")] string resourceGroup,
+        [Description("Scale configuration: nodeCount='3' or 'min=2,max=5', sku='S1', vmSize='Standard_D2s_v3', instanceCount='5'")] 
+        string scaleTarget,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Scaling environment {Environment} with config: {Config}", 
+                environmentName, scaleTarget);
+
+            // Verify environment exists and get its type
+            var environments = await _environmentStorage.ListEnvironmentsAsync(
+                environmentType: null,
+                resourceGroup: resourceGroup,
+                status: null,
+                cancellationToken: cancellationToken);
+
+            var environment = environments.FirstOrDefault(e => 
+                e.Name.Equals(environmentName, StringComparison.OrdinalIgnoreCase));
+
+            if (environment == null)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = $"Environment '{environmentName}' not found in resource group '{resourceGroup}'",
+                    suggestion = "Verify environment name and resource group are correct"
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Parse scale configuration based on environment type
+            var scaleSettings = ParseScaleConfiguration(scaleTarget, environment.EnvironmentType);
+            
+            if (scaleSettings == null)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = "Invalid scale configuration format",
+                    environmentType = environment.EnvironmentType,
+                    examples = GetScaleExamples(environment.EnvironmentType),
+                    providedConfig = scaleTarget
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            _logger.LogInformation("Parsed scale settings: {@Settings} for environment type {Type}",
+                scaleSettings, environment.EnvironmentType);
+
+            var result = await _environmentEngine.ScaleEnvironmentAsync(
+                environmentName, 
+                resourceGroup, 
+                scaleSettings, 
+                cancellationToken);
+
+            if (result.Success)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    status = "scaled",
+                    environmentName = result.EnvironmentName,
+                    environmentType = environment.EnvironmentType,
+                    scalingOperation = new
+                    {
+                        previous = new
+                        {
+                            replicas = result.PreviousReplicas,
+                            details = result.PreviousScale
+                        },
+                        current = new
+                        {
+                            replicas = result.NewReplicas,
+                            details = result.NewScale
+                        },
+                        action = result.Action.ToString()
+                    },
+                    message = result.Action.ToString() == "ScaleUp" 
+                        ? $"Environment '{environmentName}' scaled up from {result.PreviousReplicas} to {result.NewReplicas} replicas"
+                        : $"Environment '{environmentName}' scaled down from {result.PreviousReplicas} to {result.NewReplicas} replicas",
+                    nextSteps = new[]
+                    {
+                        "✓ Scaling operation completed successfully!",
+                        "Say 'show me the status of environment {environmentName}' to monitor performance metrics after scaling.",
+                        result.Action.ToString() == "ScaleUp" 
+                            ? "Note: New resources may take a few minutes to become fully available and start handling traffic."
+                            : "Cost savings achieved - resources have been scaled down as requested."
+                    }
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+            else
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = result.ErrorMessage ?? "Scaling failed",
+                    environmentName = environmentName,
+                    providedConfig = scaleTarget,
+                    suggestion = "Check scale configuration and try again. Use examples for guidance."
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error scaling environment {Environment}", environmentName);
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = $"Failed to scale environment: {ex.Message}",
+                environmentName = environmentName,
+                scaleTarget = scaleTarget
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    private ScaleSettings? ParseScaleConfiguration(string scaleConfig, string environmentType)
+    {
+        if (string.IsNullOrWhiteSpace(scaleConfig))
+            return null;
+
+        var settings = new ScaleSettings();
+        var config = scaleConfig.ToLowerInvariant().Trim();
+
+        try
+        {
+            // Parse different formats based on environment type
+            if (environmentType.Equals("aks", StringComparison.OrdinalIgnoreCase))
+            {
+                // AKS: nodeCount='3' or 'min=2,max=5'
+                if (config.Contains("min=") && config.Contains("max="))
+                {
+                    // Autoscaling format: "min=2,max=5"
+                    var parts = config.Split(',');
+                    foreach (var part in parts)
+                    {
+                        var kv = part.Split('=');
+                        if (kv.Length == 2)
+                        {
+                            if (kv[0].Trim() == "min" && int.TryParse(kv[1].Trim(), out var min))
+                                settings.MinReplicas = min;
+                            else if (kv[0].Trim() == "max" && int.TryParse(kv[1].Trim(), out var max))
+                                settings.MaxReplicas = max;
+                        }
+                    }
+                    
+                    if (settings.MinReplicas.HasValue && settings.MaxReplicas.HasValue)
+                    {
+                        if (settings.MinReplicas.Value > settings.MaxReplicas.Value)
+                            return null; // Invalid: min > max
+                    }
+                }
+                else if (config.Contains("replicas="))
+                {
+                    var value = config.Replace("replicas=", "").Trim();
+                    if (int.TryParse(value, out var replicas))
+                        settings.TargetReplicas = replicas;
+                }
+                else if (int.TryParse(config.Replace("nodecount=", "").Trim(), out var nodeCount))
+                {
+                    // Fixed node count: "3" or "nodeCount=3"
+                    settings.TargetReplicas = nodeCount;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            else if (environmentType.Equals("appservice", StringComparison.OrdinalIgnoreCase))
+            {
+                // App Service: sku='S1', 'P1v2', etc., or instanceCount
+                if (config.Contains("sku="))
+                {
+                    var sku = config.Replace("sku=", "").Replace("'", "").Trim().ToUpperInvariant();
+                    if (IsValidAppServiceSku(sku))
+                    {
+                        // Store SKU change using TargetSku object
+                        settings.TargetSku = new TargetSku 
+                        { 
+                            Sku = sku, 
+                            Reason = "User-requested SKU change" 
+                        };
+                    }
+                    else
+                    {
+                        return null;
+                    }
+                }
+                else if (IsValidAppServiceSku(config.Replace("'", "").Trim().ToUpperInvariant()))
+                {
+                    var sku = config.Replace("'", "").Trim().ToUpperInvariant();
+                    settings.TargetSku = new TargetSku 
+                    { 
+                        Sku = sku, 
+                        Reason = "User-requested SKU change" 
+                    };
+                }
+                else if (int.TryParse(config.Replace("instancecount=", "").Replace("replicas=", "").Trim(), out var instances))
+                {
+                    settings.TargetReplicas = instances;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            else if (environmentType.Equals("vm", StringComparison.OrdinalIgnoreCase))
+            {
+                // VM: vmSize='Standard_D2s_v3' or instanceCount='5'
+                if (config.Contains("vmsize=") || config.Contains("standard_"))
+                {
+                    var vmSize = config.Replace("vmsize=", "").Replace("'", "").Trim();
+                    if (vmSize.StartsWith("standard_", StringComparison.OrdinalIgnoreCase))
+                    {
+                        settings.TargetVmSize = new TargetVmSize 
+                        { 
+                            VmSize = vmSize, 
+                            Reason = "User-requested VM size change" 
+                        };
+                    }
+                }
+                else if (int.TryParse(config.Replace("instancecount=", "").Replace("replicas=", "").Trim(), out var instances))
+                {
+                    settings.TargetReplicas = instances;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                // Generic: try to parse as instance count or min/max
+                if (config.Contains("min=") && config.Contains("max="))
+                {
+                    var parts = config.Split(',');
+                    foreach (var part in parts)
+                    {
+                        var kv = part.Split('=');
+                        if (kv.Length == 2)
+                        {
+                            if (kv[0].Trim() == "min" && int.TryParse(kv[1].Trim(), out var min))
+                                settings.MinReplicas = min;
+                            else if (kv[0].Trim() == "max" && int.TryParse(kv[1].Trim(), out var max))
+                                settings.MaxReplicas = max;
+                        }
+                    }
+                }
+                else if (int.TryParse(config.Replace("replicas=", "").Replace("target=", "").Trim(), out var count))
+                {
+                    settings.TargetReplicas = count;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+
+            return settings;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private bool IsValidAppServiceSku(string sku)
+    {
+        // Valid App Service SKUs
+        var validSkus = new[]
+        {
+            "F1", "D1",  // Free/Shared
+            "B1", "B2", "B3",  // Basic
+            "S1", "S2", "S3",  // Standard
+            "P1V2", "P2V2", "P3V2",  // Premium V2
+            "P1V3", "P2V3", "P3V3",  // Premium V3
+            "I1V2", "I2V2", "I3V2"   // Isolated V2
+        };
+
+        return validSkus.Contains(sku);
+    }
+
+    private string[] GetScaleExamples(string environmentType)
+    {
+        return environmentType.ToLowerInvariant() switch
+        {
+            "aks" => new[]
+            {
+                "Fixed nodes: nodeCount='3' or just '3'",
+                "Autoscaling: 'min=2,max=5'",
+                "Specific replicas: 'replicas=4'"
+            },
+            "appservice" => new[]
+            {
+                "Change tier: sku='S1' or sku='P1v2'",
+                "Just tier: 'S1' or 'P1V2'",
+                "Scale instances: instanceCount='3'"
+            },
+            "vm" => new[]
+            {
+                "Change size: vmSize='Standard_D2s_v3'",
+                "Scale instances: instanceCount='5'"
+            },
+            _ => new[]
+            {
+                "Instance count: '3' or instanceCount='3'",
+                "Autoscaling: 'min=2,max=5'"
+            }
+        };
+    }
+}

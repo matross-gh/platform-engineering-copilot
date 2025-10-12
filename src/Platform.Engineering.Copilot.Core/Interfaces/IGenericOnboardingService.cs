@@ -1,4 +1,3 @@
-using Platform.Engineering.Copilot.Core.Contracts;
 using Platform.Engineering.Copilot.Core.Models.Onboarding;
 
 namespace Platform.Engineering.Copilot.Core.Interfaces;

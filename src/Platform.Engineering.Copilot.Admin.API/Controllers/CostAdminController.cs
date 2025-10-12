@@ -60,24 +60,14 @@ public class CostAdminController : ControllerBase
             var subId = subscriptionId ?? _configuration["Azure:SubscriptionId"];
             if (string.IsNullOrWhiteSpace(subId))
             {
-                _logger.LogWarning("No Azure subscription ID configured, returning mock data");
-                return Ok(GenerateMockEnvironmentCost(envId, days));
+                return BadRequest("No Azure subscription ID configured");
             }
 
             var endDate = DateTimeOffset.UtcNow;
             var startDate = endDate.AddDays(-days);
 
-            // Get cost dashboard data (with fallback to mock data on error)
-            CostMonitoringDashboard dashboard;
-            try
-            {
-                dashboard = await _costService.GetCostDashboardAsync(subId, startDate, endDate);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to retrieve Azure cost data, returning mock data");
-                return Ok(GenerateMockEnvironmentCost(envId, days));
-            }
+            // Get cost dashboard data
+            var dashboard = await _costService.GetCostDashboardAsync(subId, startDate, endDate);
             
             // Get resource-level cost breakdown
             var resourceBreakdown = await _costService.GetResourceCostBreakdownAsync(subId, startDate, endDate);
@@ -167,22 +157,19 @@ public class CostAdminController : ControllerBase
             var subId = subscriptionId ?? _configuration["Azure:SubscriptionId"];
             if (string.IsNullOrWhiteSpace(subId))
             {
-                _logger.LogWarning("No Azure subscription ID configured, returning mock data");
-                return Ok(GenerateMockCostSummary(days));
+                return BadRequest("No Azure subscription ID configured");
             }
 
             var endDate = DateTimeOffset.UtcNow;
             var startDate = endDate.AddDays(-days);
 
-            // Get comprehensive cost dashboard (with fallback to mock data)
-            try
-            {
-                var dashboard = await _costService.GetCostDashboardAsync(subId, startDate, endDate);
+            // Get comprehensive cost dashboard
+            var dashboard = await _costService.GetCostDashboardAsync(subId, startDate, endDate);
+        
+            // Get cost trends
+            var trends = await _costService.GetCostTrendsAsync(subId, startDate, endDate);
             
-                // Get cost trends
-                var trends = await _costService.GetCostTrendsAsync(subId, startDate, endDate);
-                
-                // Get optimization recommendations
+            // Get optimization recommendations
                 var recommendations = await _costService.GetOptimizationRecommendationsAsync(subId);
                 
                 // Get cost anomalies
@@ -241,12 +228,6 @@ public class CostAdminController : ControllerBase
                     response.TotalCost, response.RecommendationCount, response.PotentialSavings);
 
                 return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to retrieve Azure cost data, returning mock data");
-                return Ok(GenerateMockCostSummary(days));
-            }
         }
         catch (Exception ex)
         {
@@ -331,131 +312,6 @@ public class CostAdminController : ControllerBase
             _logger.LogError(ex, "Error retrieving optimization recommendations");
             return StatusCode(StatusCodes.Status500InternalServerError, "Error retrieving optimization recommendations");
         }
-    }
-
-    // Private helper methods for mock data generation
-    private EnvironmentCostData GenerateMockEnvironmentCost(string envId, int days)
-    {
-        var random = new Random(envId.GetHashCode()); // Consistent for same env
-        var baseCost = (decimal)(random.NextDouble() * 400 + 100); // $100-$500/day
-        
-        var dailyCosts = new List<DailyCost>();
-        for (int i = days - 1; i >= 0; i--)
-        {
-            var date = DateTime.UtcNow.AddDays(-i);
-            var variation = (decimal)(random.NextDouble() - 0.5) * 50;
-            dailyCosts.Add(new DailyCost
-            {
-                Date = date,
-                Cost = Math.Max(0, baseCost + variation),
-                Currency = "USD"
-            });
-        }
-
-        var services = new[] { "Azure Kubernetes Service", "Azure Storage", "Virtual Network", "Azure Database", "Azure Monitor" };
-        var serviceCosts = services.Select(service => new ServiceCost
-        {
-            ServiceName = service,
-            Cost = baseCost * (decimal)random.NextDouble() / services.Length,
-            Currency = "USD",
-            ResourceCount = random.Next(1, 10)
-        }).ToList();
-
-        var totalCost = serviceCosts.Sum(s => s.Cost);
-
-        return new EnvironmentCostData
-        {
-            EnvironmentId = envId,
-            EnvironmentName = $"Environment-{envId}",
-            TotalCost = totalCost,
-            Currency = "USD",
-            Period = new CostPeriod
-            {
-                StartDate = DateTime.UtcNow.AddDays(-days),
-                EndDate = DateTime.UtcNow,
-                Days = days
-            },
-            DailyCosts = dailyCosts,
-            ServiceCosts = serviceCosts.OrderByDescending(s => s.Cost).ToList(),
-            Recommendations = new List<string>
-            {
-                "Consider using reserved instances to save 20-30%",
-                "Reduce storage tier for infrequently accessed data",
-                "Enable auto-shutdown for non-production VMs"
-            }
-        };
-    }
-
-    private CostSummary GenerateMockCostSummary(int days)
-    {
-        var random = new Random();
-        var baseCost = (decimal)(random.NextDouble() * 2000 + 500); // $500-$2500/day
-        
-        var dailyCosts = new List<DailyCost>();
-        for (int i = days - 1; i >= 0; i--)
-        {
-            var date = DateTime.UtcNow.AddDays(-i);
-            var variation = (decimal)(random.NextDouble() - 0.5) * 200;
-            dailyCosts.Add(new DailyCost
-            {
-                Date = date,
-                Cost = Math.Max(0, baseCost + variation),
-                Currency = "USD"
-            });
-        }
-
-        var services = new[]
-        {
-            "Azure Kubernetes Service",
-            "Azure Storage",
-            "Virtual Machines",
-            "Azure Database",
-            "Azure Monitor",
-            "Virtual Network",
-            "Load Balancer",
-            "Application Gateway",
-            "Key Vault",
-            "Container Registry"
-        };
-
-        var topServices = services.Take(10).Select(service => new ServiceCost
-        {
-            ServiceName = service,
-            Cost = baseCost * (decimal)random.NextDouble() / 5,
-            Currency = "USD",
-            ResourceCount = random.Next(5, 50)
-        }).OrderByDescending(s => s.Cost).ToList();
-
-        var totalCost = dailyCosts.Sum(d => d.Cost);
-        var avgCost = totalCost / days;
-        var previousAvg = avgCost * (decimal)(0.9 + random.NextDouble() * 0.2);
-        var trendPercentage = ((avgCost - previousAvg) / previousAvg) * 100;
-
-        return new CostSummary
-        {
-            TotalCost = totalCost,
-            Currency = "USD",
-            Period = new CostPeriod
-            {
-                StartDate = DateTime.UtcNow.AddDays(-days),
-                EndDate = DateTime.UtcNow,
-                Days = days
-            },
-            TrendPercentage = trendPercentage,
-            DailyCosts = dailyCosts,
-            TopServices = topServices,
-            PotentialSavings = (decimal)(random.NextDouble() * 500 + 100),
-            RecommendationCount = random.Next(3, 8),
-            AnomalyCount = random.Next(0, 3),
-            BudgetStatus = new BudgetStatusSummary
-            {
-                BudgetName = "Monthly Budget",
-                BudgetAmount = totalCost * 1.2m,
-                CurrentSpend = totalCost,
-                PercentageUsed = (totalCost / (totalCost * 1.2m)) * 100,
-                Status = totalCost > (totalCost * 1.2m * 0.8m) ? "Warning" : "Ok"
-            }
-        };
     }
 }
 

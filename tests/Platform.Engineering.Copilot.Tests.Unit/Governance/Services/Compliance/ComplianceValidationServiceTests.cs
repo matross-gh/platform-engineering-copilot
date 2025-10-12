@@ -5,8 +5,8 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models;
-using Platform.Engineering.Copilot.Governance.Configuration;
-using Platform.Engineering.Copilot.Governance.Services;
+using Platform.Engineering.Copilot.Core.Configuration;
+using Platform.Engineering.Copilot.Core.Services.Compliance;
 using Xunit;
 
 namespace Platform.Engineering.Copilot.Tests.Unit.Governance.Services.Compliance;
@@ -134,7 +134,7 @@ public class ComplianceValidationServiceTests
     #region ValidateConfigurationAsync Tests
 
     [Fact]
-    public async Task ValidateConfigurationAsync_WithValidConfiguration_ReturnsValidResult()
+    public async Task ValidateConfigurationAsync_WithValidConfiguration_ReturnsValidResultAsync()
     {
         // Arrange
         var service = CreateComplianceValidationService();
@@ -160,7 +160,7 @@ public class ComplianceValidationServiceTests
     }
 
     [Fact]
-    public async Task ValidateConfigurationAsync_WithUnknownVersion_AddsError()
+    public async Task ValidateConfigurationAsync_WithUnknownVersion_AddsErrorAsync()
     {
         // Arrange
         var service = CreateComplianceValidationService();
@@ -179,7 +179,7 @@ public class ComplianceValidationServiceTests
     }
 
     [Fact]
-    public async Task ValidateConfigurationAsync_WithNullCatalog_AddsError()
+    public async Task ValidateConfigurationAsync_WithNullCatalog_AddsErrorAsync()
     {
         // Arrange
         var service = CreateComplianceValidationService();
@@ -202,7 +202,7 @@ public class ComplianceValidationServiceTests
     }
 
     [Fact]
-    public async Task ValidateConfigurationAsync_WithException_AddsError()
+    public async Task ValidateConfigurationAsync_WithException_AddsErrorAsync()
     {
         // Arrange
         var service = CreateComplianceValidationService();
@@ -226,7 +226,7 @@ public class ComplianceValidationServiceTests
     #region ValidateControlMappingsAsync Tests
 
     [Fact]
-    public async Task ValidateControlMappingsAsync_WithAllValidControls_ReturnsValidResult()
+    public async Task ValidateControlMappingsAsync_WithAllValidControls_ReturnsValidResultAsync()
     {
         // Arrange
         var service = CreateComplianceValidationService();
@@ -247,7 +247,7 @@ public class ComplianceValidationServiceTests
     }
 
     [Fact]
-    public async Task ValidateControlMappingsAsync_WithInvalidControl_AddsWarning()
+    public async Task ValidateControlMappingsAsync_WithInvalidControl_AddsWarningAsync()
     {
         // Arrange
         var service = CreateComplianceValidationService();
@@ -270,7 +270,7 @@ public class ComplianceValidationServiceTests
     }
 
     [Fact]
-    public async Task ValidateControlMappingsAsync_WithException_AddsError()
+    public async Task ValidateControlMappingsAsync_WithException_AddsErrorAsync()
     {
         // Arrange
         var service = CreateComplianceValidationService();
@@ -436,7 +436,7 @@ public class ComplianceValidationServiceTests
         {
             SubscriptionId = Guid.NewGuid().ToString(),
             ResourceGroupName = "test-rg",
-            Configuration = null
+            Configuration = null!
         };
 
         // Act
@@ -705,7 +705,7 @@ public class ComplianceValidationServiceTests
     #region NistControlsHealthCheck Tests
 
     [Fact]
-    public async Task CheckHealthAsync_WithHealthyService_ReturnsHealthyStatus()
+    public async Task CheckHealthAsync_WithHealthyService_ReturnsHealthyStatusAsync()
     {
         // Arrange
         var healthCheck = CreateNistControlsHealthCheck();
@@ -731,7 +731,7 @@ public class ComplianceValidationServiceTests
     }
 
     [Fact]
-    public async Task CheckHealthAsync_WithUnknownVersion_ReturnsDegraded()
+    public async Task CheckHealthAsync_WithUnknownVersion_ReturnsDegradedAsync()
     {
         // Arrange
         var healthCheck = CreateNistControlsHealthCheck();
@@ -750,7 +750,7 @@ public class ComplianceValidationServiceTests
     }
 
     [Fact]
-    public async Task CheckHealthAsync_WithPartialControlValidation_ReturnsDegraded()
+    public async Task CheckHealthAsync_WithPartialControlValidation_ReturnsDegradedAsync()
     {
         // Arrange
         var healthCheck = CreateNistControlsHealthCheck();
@@ -782,7 +782,7 @@ public class ComplianceValidationServiceTests
     }
 
     [Fact]
-    public async Task CheckHealthAsync_WithNoValidControls_ReturnsUnhealthy()
+    public async Task CheckHealthAsync_WithNoValidControls_ReturnsUnhealthyAsync()
     {
         // Arrange
         var healthCheck = CreateNistControlsHealthCheck();
@@ -805,7 +805,7 @@ public class ComplianceValidationServiceTests
     }
 
     [Fact]
-    public async Task CheckHealthAsync_WithException_ReturnsUnhealthy()
+    public async Task CheckHealthAsync_WithException_ReturnsUnhealthyAsync()
     {
         // Arrange
         var healthCheck = CreateNistControlsHealthCheck();
@@ -825,7 +825,7 @@ public class ComplianceValidationServiceTests
     }
 
     [Fact]
-    public async Task CheckHealthAsync_WithCancellation_ReturnsDegraded()
+    public async Task CheckHealthAsync_WithCancellation_ReturnsDegradedAsync()
     {
         // Arrange
         var healthCheck = CreateNistControlsHealthCheck();

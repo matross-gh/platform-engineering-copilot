@@ -179,6 +179,8 @@ namespace Platform.Engineering.Copilot.Core.Models.EnvironmentManagement
         public TimeSpan Duration { get; set; }
         public List<string> Warnings { get; set; } = new();
         public string? ErrorMessage { get; set; }
+        public string? Message { get; set; } // User-friendly message
+        public List<ClonedEnvironment>? FailedEnvironments { get; set; } // For tracking failures
     }
     
     /// <summary>
@@ -188,6 +190,7 @@ namespace Platform.Engineering.Copilot.Core.Models.EnvironmentManagement
     {
         public string Name { get; set; } = string.Empty;
         public string ResourceId { get; set; } = string.Empty;
+        public string ResourceGroup { get; set; } = string.Empty; // Add this
         public string Status { get; set; } = string.Empty;
         public bool DataCloned { get; set; }
         public bool PipelinesCloned { get; set; }
@@ -204,8 +207,19 @@ namespace Platform.Engineering.Copilot.Core.Models.EnvironmentManagement
         public DateTime DeletedAt { get; set; } = DateTime.UtcNow;
         public bool BackupCreated { get; set; }
         public string? BackupLocation { get; set; }
-        public List<string> DeletedResources { get; set; } = new();
+        public List<DeletedResource> DeletedResources { get; set; } = new(); // Changed to typed list
         public string? ErrorMessage { get; set; }
+        public string? Message { get; set; } // User-friendly message
+    }
+    
+    /// <summary>
+    /// Individual deleted resource details
+    /// </summary>
+    public class DeletedResource
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public DateTime DeletedAt { get; set; } = DateTime.UtcNow;
     }
     
     /// <summary>
@@ -231,9 +245,14 @@ namespace Platform.Engineering.Copilot.Core.Models.EnvironmentManagement
         public string EnvironmentName { get; set; } = string.Empty;
         public int PreviousReplicas { get; set; }
         public int NewReplicas { get; set; }
+        public string? PreviousScale { get; set; } // Additional scale info (e.g., "S1", "Standard_D2s_v3")
+        public string? NewScale { get; set; } // Additional scale info
+        public string? ScalingStatus { get; set; } // Status message
+        public string? EstimatedCompletionTime { get; set; } // ETA
         public ScalingAction Action { get; set; }
         public DateTime ScaledAt { get; set; } = DateTime.UtcNow;
         public string? ErrorMessage { get; set; }
+        public string? Message { get; set; } // User-friendly message
     }
     
     /// <summary>
@@ -326,8 +345,28 @@ namespace Platform.Engineering.Copilot.Core.Models.EnvironmentManagement
         public int? TargetMemoryUtilization { get; set; }
         public bool CostOptimization { get; set; } = false;
         public bool TrafficBasedScaling { get; set; } = false;
+        public TargetVmSize? TargetVmSize { get; set; }
+        public TargetSku ? TargetSku { get; set; }
     }
-    
+
+    /// <summary>   
+    /// Preferred VM size for scaling operations
+    /// </summary>
+    public class TargetVmSize 
+    {
+        public string VmSize { get; set; } = string.Empty;
+        public string Reason { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Preferred SKU for scaling operations
+    /// </summary>
+    public class TargetSku
+    {
+        public string Sku { get; set; } = string.Empty;
+        public string Reason { get; set; } = string.Empty;
+    }
+
     /// <summary>
     /// Compliance settings for environment
     /// </summary>

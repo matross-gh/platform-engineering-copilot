@@ -39,7 +39,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var dockerfile = files["Dockerfile"];
+        var dockerfile = GetGeneratedFile(files, "Dockerfile");
 
         // Assert
         Assert.Contains(expectedImage, dockerfile);
@@ -60,7 +60,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var dockerfile = files["Dockerfile"];
+        var dockerfile = GetGeneratedFile(files, "Dockerfile");
 
         // Assert
         Assert.Contains("AS builder", dockerfile);
@@ -85,7 +85,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var dockerfile = files["Dockerfile"];
+        var dockerfile = GetGeneratedFile(files, "Dockerfile");
 
         // Assert
         Assert.Contains(expectedUser, dockerfile);
@@ -104,7 +104,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var dockerfile = files["Dockerfile"];
+        var dockerfile = GetGeneratedFile(files, "Dockerfile");
 
         // Assert
         Assert.Contains("HEALTHCHECK", dockerfile);
@@ -119,7 +119,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var dockerfile = files["Dockerfile"];
+        var dockerfile = GetGeneratedFile(files, "Dockerfile");
 
         // Assert
         Assert.Contains("npm ci", dockerfile);
@@ -136,11 +136,12 @@ public class DockerfileGeneratorTests
         // Arrange
         var generator = new DockerfileGenerator();
         var request = CreateSampleRequest(ProgrammingLanguage.Python);
-        request.Application.Framework = framework;
+        var application = request.Application ?? throw new System.InvalidOperationException("Sample request missing application details.");
+        application.Framework = framework;
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var dockerfile = files["Dockerfile"];
+        var dockerfile = GetGeneratedFile(files, "Dockerfile");
 
         // Assert
         Assert.Contains(expectedServer, dockerfile);
@@ -155,7 +156,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var dockerfile = files["Dockerfile"];
+        var dockerfile = GetGeneratedFile(files, "Dockerfile");
 
         // Assert
         Assert.Contains("dotnet restore", dockerfile);
@@ -173,7 +174,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var dockerfile = files["Dockerfile"];
+        var dockerfile = GetGeneratedFile(files, "Dockerfile");
 
         // Assert
         Assert.Contains("mvn", dockerfile);
@@ -190,7 +191,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var dockerfile = files["Dockerfile"];
+        var dockerfile = GetGeneratedFile(files, "Dockerfile");
 
         // Assert
         Assert.Contains("CGO_ENABLED=0", dockerfile);
@@ -212,7 +213,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var dockerignore = files[".dockerignore"];
+        var dockerignore = GetGeneratedFile(files, ".dockerignore");
 
         // Assert
         Assert.Contains(expectedPattern, dockerignore);
@@ -229,14 +230,15 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var compose = files["docker-compose.yml"];
+        var compose = GetGeneratedFile(files, "docker-compose.yml");
+        var application = request.Application ?? throw new System.InvalidOperationException("Sample request missing application details.");
 
         // Assert
         Assert.Contains("version:", compose);
         Assert.Contains("services:", compose);
         Assert.Contains(request.ServiceName, compose);
         Assert.Contains("ports:", compose);
-        Assert.Contains($"{request.Application.Port}:", compose);
+        Assert.Contains($"{application.Port}:", compose);
     }
 
     [Theory]
@@ -259,7 +261,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var compose = files["docker-compose.yml"];
+        var compose = GetGeneratedFile(files, "docker-compose.yml");
 
         // Assert
         Assert.Contains(expectedImage, compose);
@@ -275,7 +277,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var compose = files["docker-compose.yml"];
+        var compose = GetGeneratedFile(files, "docker-compose.yml");
 
         // Assert
         Assert.Contains("networks:", compose);
@@ -290,7 +292,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var composeDev = files["docker-compose.dev.yml"];
+        var composeDev = GetGeneratedFile(files, "docker-compose.dev.yml");
 
         // Assert
         Assert.Contains("version:", composeDev);
@@ -309,7 +311,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var composeDev = files["docker-compose.dev.yml"];
+        var composeDev = GetGeneratedFile(files, "docker-compose.dev.yml");
 
         // Assert
         Assert.Contains("node_modules", composeDev);
@@ -324,7 +326,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var composeDev = files["docker-compose.dev.yml"];
+        var composeDev = GetGeneratedFile(files, "docker-compose.dev.yml");
 
         // Assert
         Assert.Contains("environment:", composeDev);
@@ -345,7 +347,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var compose = files["docker-compose.yml"];
+        var compose = GetGeneratedFile(files, "docker-compose.yml");
 
         // Assert
         Assert.Contains("postgres:15", compose);
@@ -360,7 +362,8 @@ public class DockerfileGeneratorTests
         // Arrange
         var generator = new DockerfileGenerator();
         var request = CreateSampleRequest(ProgrammingLanguage.NodeJS);
-        request.Application.EnvironmentVariables = new Dictionary<string, string>
+        var application = request.Application ?? throw new System.InvalidOperationException("Sample request missing application details.");
+        application.EnvironmentVariables = new Dictionary<string, string>
         {
             { "API_KEY", "secret" },
             { "LOG_LEVEL", "debug" }
@@ -368,7 +371,7 @@ public class DockerfileGeneratorTests
 
         // Act
         var files = generator.GenerateDockerFiles(request);
-        var compose = files["docker-compose.yml"];
+        var compose = GetGeneratedFile(files, "docker-compose.yml");
 
         // Assert
         Assert.Contains("API_KEY", compose);
@@ -406,5 +409,11 @@ public class DockerfileGeneratorTests
             },
             Databases = new List<DatabaseSpec>()
         };
+    }
+
+    private static string GetGeneratedFile(System.Collections.Generic.IDictionary<string, string> files, string key)
+    {
+        Assert.True(files.TryGetValue(key, out var value), $"Expected generated file '{key}'.");
+        return value ?? throw new System.InvalidOperationException($"Generator returned null for '{key}'.");
     }
 }

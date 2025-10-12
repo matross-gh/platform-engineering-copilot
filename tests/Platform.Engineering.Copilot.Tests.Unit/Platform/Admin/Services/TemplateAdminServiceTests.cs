@@ -38,7 +38,7 @@ public class TemplateAdminServiceTests
     #region CreateTemplateAsync Tests
 
     [Fact]
-    public async Task CreateTemplateAsync_WithValidRequest_CreatesTemplate()
+    public async Task CreateTemplateAsync_WithValidRequest_CreatesTemplateAsync()
     {
         // Arrange
         var request = new CreateTemplateRequest
@@ -93,7 +93,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task CreateTemplateAsync_WhenGenerationFails_ReturnsFailure()
+    public async Task CreateTemplateAsync_WhenGenerationFails_ReturnsFailureAsync()
     {
         // Arrange
         var request = new CreateTemplateRequest
@@ -123,7 +123,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task CreateTemplateAsync_WhenStorageThrowsException_ReturnsFailure()
+    public async Task CreateTemplateAsync_WhenStorageThrowsException_ReturnsFailureAsync()
     {
         // Arrange
         var request = new CreateTemplateRequest
@@ -156,7 +156,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task CreateTemplateAsync_WithComputeConfiguration_AppliesConfiguration()
+    public async Task CreateTemplateAsync_WithComputeConfiguration_AppliesConfigurationAsync()
     {
         // Arrange
         var request = new CreateTemplateRequest
@@ -208,7 +208,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task CreateTemplateAsync_WithNetworkConfiguration_AppliesConfiguration()
+    public async Task CreateTemplateAsync_WithNetworkConfiguration_AppliesConfigurationAsync()
     {
         // Arrange
         var request = new CreateTemplateRequest
@@ -255,10 +255,13 @@ public class TemplateAdminServiceTests
         result.Success.Should().BeTrue();
         _mockTemplateGenerator.Verify(g => g.GenerateTemplateAsync(
             It.Is<TemplateGenerationRequest>(req =>
+                req.Infrastructure != null &&
                 req.Infrastructure.IncludeNetworking == true &&
+                req.Infrastructure.NetworkConfig != null &&
                 req.Infrastructure.NetworkConfig.VNetName == "test-vnet" &&
                 req.Infrastructure.NetworkConfig.VNetAddressSpace == "10.1.0.0/16" &&
                 req.Infrastructure.NetworkConfig.EnableNetworkSecurityGroup == true &&
+                req.Infrastructure.NetworkConfig.Subnets != null &&
                 req.Infrastructure.NetworkConfig.Subnets.Count == 1
             ),
             It.IsAny<CancellationToken>()
@@ -270,7 +273,7 @@ public class TemplateAdminServiceTests
     #region UpdateTemplateAsync Tests
 
     [Fact]
-    public async Task UpdateTemplateAsync_WithValidRequest_UpdatesTemplate()
+    public async Task UpdateTemplateAsync_WithValidRequest_UpdatesTemplateAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -316,7 +319,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task UpdateTemplateAsync_WithNonExistentTemplate_ReturnsFailure()
+    public async Task UpdateTemplateAsync_WithNonExistentTemplate_ReturnsFailureAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -336,7 +339,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task UpdateTemplateAsync_WithTemplateGenerationRequest_RegeneratesTemplate()
+    public async Task UpdateTemplateAsync_WithTemplateGenerationRequest_RegeneratesTemplateAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -385,7 +388,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task UpdateTemplateAsync_WhenRegenerationFails_ReturnsFailure()
+    public async Task UpdateTemplateAsync_WhenRegenerationFails_ReturnsFailureAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -423,7 +426,7 @@ public class TemplateAdminServiceTests
     #region ListTemplatesAsync Tests
 
     [Fact]
-    public async Task ListTemplatesAsync_WithoutSearchTerm_ReturnsAllTemplates()
+    public async Task ListTemplatesAsync_WithoutSearchTerm_ReturnsAllTemplatesAsync()
     {
         // Arrange
         var templates = new List<EnvironmentTemplate>
@@ -446,7 +449,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task ListTemplatesAsync_WithSearchTerm_FiltersTemplates()
+    public async Task ListTemplatesAsync_WithSearchTerm_FiltersTemplatesAsync()
     {
         // Arrange
         var templates = new List<EnvironmentTemplate>
@@ -469,7 +472,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task ListTemplatesAsync_SearchIsCaseInsensitive()
+    public async Task ListTemplatesAsync_SearchIsCaseInsensitiveAsync()
     {
         // Arrange
         var templates = new List<EnvironmentTemplate>
@@ -493,7 +496,7 @@ public class TemplateAdminServiceTests
     #region GetTemplateAsync Tests
 
     [Fact]
-    public async Task GetTemplateAsync_WithExistingTemplate_ReturnsTemplate()
+    public async Task GetTemplateAsync_WithExistingTemplate_ReturnsTemplateAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -512,7 +515,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task GetTemplateAsync_WithNonExistentTemplate_ReturnsNull()
+    public async Task GetTemplateAsync_WithNonExistentTemplate_ReturnsNullAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -533,7 +536,7 @@ public class TemplateAdminServiceTests
     #region DeleteTemplateAsync Tests
 
     [Fact]
-    public async Task DeleteTemplateAsync_WithExistingTemplate_DeletesTemplate()
+    public async Task DeleteTemplateAsync_WithExistingTemplate_DeletesTemplateAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -556,7 +559,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task DeleteTemplateAsync_WithNonExistentTemplate_ReturnsFalse()
+    public async Task DeleteTemplateAsync_WithNonExistentTemplate_ReturnsFalseAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -573,7 +576,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task DeleteTemplateAsync_WhenStorageThrowsException_ReturnsFalse()
+    public async Task DeleteTemplateAsync_WhenStorageThrowsException_ReturnsFalseAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -599,7 +602,7 @@ public class TemplateAdminServiceTests
     #region UpdateTemplateFileAsync Tests
 
     [Fact]
-    public async Task UpdateTemplateFileAsync_WithValidFile_UpdatesFile()
+    public async Task UpdateTemplateFileAsync_WithValidFile_UpdatesFileAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -634,7 +637,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task UpdateTemplateFileAsync_WithNonExistentTemplate_ReturnsFalse()
+    public async Task UpdateTemplateFileAsync_WithNonExistentTemplate_ReturnsFalseAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();
@@ -651,7 +654,7 @@ public class TemplateAdminServiceTests
     }
 
     [Fact]
-    public async Task UpdateTemplateFileAsync_WithNonExistentFile_ReturnsFalse()
+    public async Task UpdateTemplateFileAsync_WithNonExistentFile_ReturnsFalseAsync()
     {
         // Arrange
         var templateId = Guid.NewGuid().ToString();

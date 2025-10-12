@@ -143,13 +143,14 @@ public class AzureCostManagementService : IAzureCostManagementService
                 return ParseCostTrendsResponse(response);
             }
 
-            // Fallback to mock data if API call fails
-            return GenerateMockCostTrends(startDate, endDate);
+            // Return empty list if API call fails
+            _logger.LogWarning("Cost trends API returned null response");
+            return new List<CostTrend>();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch cost trends from Azure API, using mock data");
-            return GenerateMockCostTrends(startDate, endDate);
+            _logger.LogError(ex, "Failed to fetch cost trends from Azure API");
+            throw;
         }
     }
 
@@ -167,13 +168,14 @@ public class AzureCostManagementService : IAzureCostManagementService
                 return ParseBudgetsResponse(response);
             }
 
-            // Return mock budget data
-            return GenerateMockBudgets(subscriptionId);
+            // Return empty list if API returns null
+            _logger.LogWarning("Budgets API returned null response");
+            return new List<BudgetStatus>();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch budgets from Azure API, using mock data");
-            return GenerateMockBudgets(subscriptionId);
+            _logger.LogError(ex, "Failed to fetch budgets from Azure API");
+            throw;
         }
     }
 
@@ -197,14 +199,14 @@ public class AzureCostManagementService : IAzureCostManagementService
             }
 
             // Add custom optimization recommendations
-            recommendations.AddRange(await GenerateCustomOptimizationRecommendations(subscriptionId, cancellationToken));
+            recommendations.AddRange(await GenerateCustomOptimizationRecommendationsAsync(subscriptionId, cancellationToken));
 
             return recommendations;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch optimization recommendations, using mock data");
-            return GenerateMockOptimizationRecommendations();
+            _logger.LogError(ex, "Failed to fetch optimization recommendations");
+            throw;
         }
     }
 
@@ -377,13 +379,14 @@ public class AzureCostManagementService : IAzureCostManagementService
                 return ParseResourceCostBreakdownResponse(response);
             }
 
-            // Return mock data if API fails
-            return GenerateMockResourceCostBreakdown();
+            // Return empty list if API returns null
+            _logger.LogWarning("Resource cost breakdown API returned null response");
+            return new List<ResourceCostBreakdown>();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch resource cost breakdown, using mock data");
-            return GenerateMockResourceCostBreakdown();
+            _logger.LogError(ex, "Failed to fetch resource cost breakdown");
+            throw;
         }
     }
 
@@ -540,190 +543,44 @@ public class AzureCostManagementService : IAzureCostManagementService
 
     #endregion
 
-    #region Mock Data Generators (for fallback when APIs are unavailable)
+    #region Response Parsing Methods
 
-    private List<CostTrend> GenerateMockCostTrends(DateTimeOffset startDate, DateTimeOffset endDate)
+    private List<CostTrend> ParseCostTrendsResponse(JsonDocument response)
     {
-        var trends = new List<CostTrend>();
-        var random = new Random();
-        var baseCost = 150m;
-
-        for (var date = startDate.Date; date <= endDate.Date; date = date.AddDays(1))
-        {
-            var dailyCost = baseCost + (decimal)(random.NextDouble() * 50 - 25); // ±$25 variation
-            
-            trends.Add(new CostTrend
-            {
-                Date = date,
-                DailyCost = Math.Max(0, dailyCost),
-                CumulativeMonthlyCost = trends.Where(t => t.Date.Month == date.Month).Sum(t => t.DailyCost) + dailyCost,
-                ServiceCosts = new Dictionary<string, decimal>
-                {
-                    ["Microsoft.Compute"] = dailyCost * 0.4m,
-                    ["Microsoft.Storage"] = dailyCost * 0.25m,
-                    ["Microsoft.Network"] = dailyCost * 0.15m,
-                    ["Microsoft.KeyVault"] = dailyCost * 0.1m,
-                    ["Other"] = dailyCost * 0.1m
-                },
-                ResourceCount = random.Next(15, 25),
-                CostDrivers = new List<string> { "vm-prod-001", "storage-main", "app-gateway-01" }
-            });
-        }
-
-        return trends;
+        // TODO: Implement proper Azure Cost Management API response parsing
+        // For now, return empty list - requires real Azure API integration
+        _logger.LogWarning("ParseCostTrendsResponse not yet implemented - requires Azure Cost Management API integration");
+        return new List<CostTrend>();
     }
 
-    private List<BudgetStatus> GenerateMockBudgets(string subscriptionId)
+    private List<BudgetStatus> ParseBudgetsResponse(JsonDocument response)
     {
-        return new List<BudgetStatus>
-        {
-            new BudgetStatus
-            {
-                BudgetId = $"budget-monthly-{subscriptionId}",
-                Name = "Monthly Production Budget",
-                Amount = 5000m,
-                CurrentSpend = 3750m,
-                RemainingBudget = 1250m,
-                UtilizationPercentage = 75m,
-                Period = BudgetPeriod.Monthly,
-                StartDate = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1),
-                EndDate = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.DaysInMonth(DateTime.Now.Year, DateTime.Now.Month)),
-                HealthStatus = BudgetHealthStatus.Warning,
-                Thresholds = new List<BudgetThreshold>
-                {
-                    new BudgetThreshold { Percentage = 50m, Severity = BudgetAlertSeverity.Info },
-                    new BudgetThreshold { Percentage = 80m, Severity = BudgetAlertSeverity.Warning },
-                    new BudgetThreshold { Percentage = 100m, Severity = BudgetAlertSeverity.Critical }
-                }
-            },
-            new BudgetStatus
-            {
-                BudgetId = $"budget-quarterly-{subscriptionId}",
-                Name = "Quarterly Development Budget",
-                Amount = 12000m,
-                CurrentSpend = 8500m,
-                RemainingBudget = 3500m,
-                UtilizationPercentage = 70.8m,
-                Period = BudgetPeriod.Quarterly,
-                HealthStatus = BudgetHealthStatus.Healthy
-            }
-        };
+        // TODO: Implement proper Azure Budgets API response parsing
+        _logger.LogWarning("ParseBudgetsResponse not yet implemented - requires Azure Budgets API integration");
+        return new List<BudgetStatus>();
     }
 
-    private List<CostOptimizationRecommendation> GenerateMockOptimizationRecommendations()
+    private List<CostOptimizationRecommendation> ParseAdvisorRecommendations(JsonDocument response)
     {
-        return new List<CostOptimizationRecommendation>
-        {
-            new CostOptimizationRecommendation
-            {
-                Type = OptimizationType.Rightsizing,
-                Priority = OptimizationPriority.High,
-                Title = "Rightsize underutilized VMs",
-                Description = "Several VMs are consistently running below 20% CPU utilization",
-                PotentialMonthlySavings = 450m,
-                PotentialAnnualSavings = 5400m,
-                ImplementationComplexity = OptimizationComplexity.Simple,
-                Risk = OptimizationRisk.Low,
-                AffectedResources = new List<string> { "vm-dev-001", "vm-test-002", "vm-staging-003" },
-                Category = OptimizationCategory.Compute,
-                IsAutomatable = true
-            },
-            new CostOptimizationRecommendation
-            {
-                Type = OptimizationType.UnusedResources,
-                Priority = OptimizationPriority.Critical,
-                Title = "Remove unused storage accounts",
-                Description = "Found 3 storage accounts with no activity in the last 30 days",
-                PotentialMonthlySavings = 125m,
-                PotentialAnnualSavings = 1500m,
-                ImplementationComplexity = OptimizationComplexity.Simple,
-                Risk = OptimizationRisk.Medium,
-                Category = OptimizationCategory.Storage,
-                IsAutomatable = false
-            }
-        };
+        // TODO: Implement proper Azure Advisor API response parsing
+        _logger.LogWarning("ParseAdvisorRecommendations not yet implemented - requires Azure Advisor API integration");
+        return new List<CostOptimizationRecommendation>();
     }
 
-    private List<ResourceCostBreakdown> GenerateMockResourceCostBreakdown()
+    private List<ResourceCostBreakdown> ParseResourceCostBreakdownResponse(JsonDocument response)
     {
-        var random = new Random();
-        return new List<ResourceCostBreakdown>
-        {
-            new ResourceCostBreakdown
-            {
-                ResourceId = "/subscriptions/sub1/resourceGroups/rg-prod/providers/Microsoft.Compute/virtualMachines/vm-web-01",
-                ResourceName = "vm-web-01",
-                ResourceType = "Microsoft.Compute/virtualMachines",
-                ResourceGroup = "rg-prod",
-                Location = "East US",
-                DailyCost = 45.50m,
-                MonthlyCost = 1365m,
-                YearToDateCost = 12285m,
-                CostTrend = 2.5m,
-                Efficiency = CostEfficiencyRating.Good,
-                Tags = new Dictionary<string, string> { ["Environment"] = "Production", ["Owner"] = "WebTeam" }
-            },
-            new ResourceCostBreakdown
-            {
-                ResourceName = "storage-main",
-                ResourceType = "Microsoft.Storage/storageAccounts",
-                ResourceGroup = "rg-storage",
-                DailyCost = 25.75m,
-                MonthlyCost = 772.50m,
-                YearToDateCost = 6952.50m,
-                Efficiency = CostEfficiencyRating.Fair,
-                CostOptimizationFlags = new List<string> { "Hot storage tier may be oversized", "Consider lifecycle management" }
-            },
-            new ResourceCostBreakdown
-            {
-                ResourceName = "kv-production",
-                ResourceType = "Microsoft.KeyVault/vaults",
-                ResourceGroup = "rg-security",
-                DailyCost = 5.25m,
-                MonthlyCost = 157.50m,
-                YearToDateCost = 1417.50m,
-                Efficiency = CostEfficiencyRating.Excellent
-            }
-        };
+        // TODO: Implement proper Azure Cost Management resource breakdown parsing
+        _logger.LogWarning("ParseResourceCostBreakdownResponse not yet implemented - requires Azure Cost Management API integration");
+        return new List<ResourceCostBreakdown>();
     }
 
-    private async Task<List<CostOptimizationRecommendation>> GenerateCustomOptimizationRecommendations(string subscriptionId, CancellationToken cancellationToken)
+    private Task<List<CostOptimizationRecommendation>> GenerateCustomOptimizationRecommendationsAsync(
+        string subscriptionId, 
+        CancellationToken cancellationToken)
     {
-        // In a production system, this would analyze resource utilization, spending patterns, etc.
-        return new List<CostOptimizationRecommendation>
-        {
-            new CostOptimizationRecommendation
-            {
-                Type = OptimizationType.SchedulingAutomation,
-                Priority = OptimizationPriority.Medium,
-                Title = "Implement VM scheduling for dev/test environments",
-                Description = "Development and testing VMs are running 24/7 but only used during business hours",
-                PotentialMonthlySavings = 680m,
-                PotentialAnnualSavings = 8160m,
-                ImplementationComplexity = OptimizationComplexity.Moderate,
-                Risk = OptimizationRisk.Low,
-                Category = OptimizationCategory.Compute,
-                IsAutomatable = true,
-                RecommendedActions = new List<OptimizationAction>
-                {
-                    new OptimizationAction
-                    {
-                        Name = "Configure auto-shutdown",
-                        Description = "Set up automatic shutdown for dev/test VMs at 7 PM",
-                        Steps = new List<string>
-                        {
-                            "Navigate to Azure portal > Virtual Machines",
-                            "Select dev/test VMs",
-                            "Configure auto-shutdown policy",
-                            "Set shutdown time to 7:00 PM",
-                            "Configure notification settings"
-                        },
-                        EstimatedSavings = 680m,
-                        EstimatedImplementationTime = TimeSpan.FromHours(2)
-                    }
-                }
-            }
-        };
+        // TODO: Implement custom optimization logic based on actual resource analysis
+        _logger.LogInformation("GenerateCustomOptimizationRecommendationsAsync called for subscription {SubscriptionId}", subscriptionId);
+        return Task.FromResult(new List<CostOptimizationRecommendation>());
     }
 
     private List<BudgetAlert> GenerateBudgetAlerts(List<BudgetStatus> budgets)
@@ -757,12 +614,6 @@ public class AzureCostManagementService : IAzureCostManagementService
 
         return alerts;
     }
-
-    // Response parsing methods would be implemented here
-    private List<CostTrend> ParseCostTrendsResponse(JsonDocument response) => GenerateMockCostTrends(DateTimeOffset.Now.AddDays(-30), DateTimeOffset.Now);
-    private List<BudgetStatus> ParseBudgetsResponse(JsonDocument response) => GenerateMockBudgets("mock-subscription");
-    private List<CostOptimizationRecommendation> ParseAdvisorRecommendations(JsonDocument response) => new List<CostOptimizationRecommendation>();
-    private List<ResourceCostBreakdown> ParseResourceCostBreakdownResponse(JsonDocument response) => GenerateMockResourceCostBreakdown();
 
     #endregion
 

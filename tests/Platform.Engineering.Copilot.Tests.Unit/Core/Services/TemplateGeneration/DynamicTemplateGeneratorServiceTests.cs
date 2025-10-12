@@ -75,7 +75,7 @@ public class DynamicTemplateGeneratorServiceTests
     #region Basic Generation Tests
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithValidRequest_Succeeds()
+    public async Task GenerateTemplateAsync_WithValidRequest_SucceedsAsync()
     {
         // Arrange
         var request = CreateBasicRequest("test-service", ComputePlatform.AKS);
@@ -91,7 +91,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithNullRequest_ThrowsArgumentNullException()
+    public async Task GenerateTemplateAsync_WithNullRequest_ThrowsArgumentNullExceptionAsync()
     {
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
@@ -99,7 +99,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_GeneratesMultipleFiles()
+    public async Task GenerateTemplateAsync_GeneratesMultipleFilesAsync()
     {
         // Arrange
         var request = CreateBasicRequest("multi-file-test", ComputePlatform.AKS);
@@ -122,7 +122,7 @@ public class DynamicTemplateGeneratorServiceTests
     [InlineData(ComputePlatform.ContainerApps)]
     [InlineData(ComputePlatform.ECS)]
     [InlineData(ComputePlatform.GKE)]
-    public async Task GenerateTemplateAsync_WithDifferentPlatforms_Succeeds(ComputePlatform platform)
+    public async Task GenerateTemplateAsync_WithDifferentPlatforms_SucceedsAsync(ComputePlatform platform)
     {
         // Arrange
         var request = CreateBasicRequest($"platform-{platform}-test", platform);
@@ -136,7 +136,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithAKS_GeneratesKubernetesFiles()
+    public async Task GenerateTemplateAsync_WithAKS_GeneratesKubernetesFilesAsync()
     {
         // Arrange
         var request = CreateBasicRequest("aks-k8s-test", ComputePlatform.AKS);
@@ -154,7 +154,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithAppService_DoesNotGenerateKubernetesFiles()
+    public async Task GenerateTemplateAsync_WithAppService_DoesNotGenerateKubernetesFilesAsync()
     {
         // Arrange
         var request = CreateBasicRequest("appservice-test", ComputePlatform.AppService);
@@ -176,7 +176,7 @@ public class DynamicTemplateGeneratorServiceTests
     [Theory]
     [InlineData(InfrastructureFormat.Bicep, "bicep")]
     [InlineData(InfrastructureFormat.Terraform, "terraform")]
-    public async Task GenerateTemplateAsync_WithDifferentFormats_GeneratesCorrectFiles(
+    public async Task GenerateTemplateAsync_WithDifferentFormats_GeneratesCorrectFilesAsync(
         InfrastructureFormat format, string expectedInPath)
     {
         // Arrange
@@ -207,7 +207,7 @@ public class DynamicTemplateGeneratorServiceTests
     [InlineData(ProgrammingLanguage.DotNet, ".csproj")]
     [InlineData(ProgrammingLanguage.Go, "go.mod")]
     [InlineData(ProgrammingLanguage.Java, "pom.xml")]
-    public async Task GenerateTemplateAsync_WithDifferentLanguages_GeneratesLanguageFiles(
+    public async Task GenerateTemplateAsync_WithDifferentLanguages_GeneratesLanguageFilesAsync(
         ProgrammingLanguage language, string expectedFile)
     {
         // Arrange
@@ -235,7 +235,7 @@ public class DynamicTemplateGeneratorServiceTests
     [InlineData(DatabaseType.Redis)]
     [InlineData(DatabaseType.MongoDB)]
     [InlineData(DatabaseType.CosmosDB)]
-    public async Task GenerateTemplateAsync_WithDatabase_GeneratesDatabaseResources(DatabaseType dbType)
+    public async Task GenerateTemplateAsync_WithDatabase_GeneratesDatabaseResourcesAsync(DatabaseType dbType)
     {
         // Arrange
         var request = CreateBasicRequest($"db-{dbType}-test", ComputePlatform.AKS);
@@ -262,7 +262,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithMultipleDatabases_GeneratesAllResources()
+    public async Task GenerateTemplateAsync_WithMultipleDatabases_GeneratesAllResourcesAsync()
     {
         // Arrange
         var request = CreateBasicRequest("multi-db-test", ComputePlatform.AKS);
@@ -287,7 +287,7 @@ public class DynamicTemplateGeneratorServiceTests
     #region Security Tests
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithRBACEnabled_GeneratesRBACResources()
+    public async Task GenerateTemplateAsync_WithRBACEnabled_GeneratesRBACResourcesAsync()
     {
         // Arrange
         var request = CreateBasicRequest("rbac-test", ComputePlatform.AKS);
@@ -305,7 +305,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithNetworkPoliciesEnabled_GeneratesNetworkPolicies()
+    public async Task GenerateTemplateAsync_WithNetworkPoliciesEnabled_GeneratesNetworkPoliciesAsync()
     {
         // Arrange
         var request = CreateBasicRequest("netpol-test", ComputePlatform.AKS);
@@ -322,7 +322,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithTLSEnabled_GeneratesTLSConfiguration()
+    public async Task GenerateTemplateAsync_WithTLSEnabled_GeneratesTLSConfigurationAsync()
     {
         // Arrange
         var request = CreateBasicRequest("tls-test", ComputePlatform.AKS);
@@ -347,7 +347,7 @@ public class DynamicTemplateGeneratorServiceTests
     [InlineData(1, 1, 5)]
     [InlineData(3, 2, 10)]
     [InlineData(5, 3, 15)]
-    public async Task GenerateTemplateAsync_WithReplicaConfiguration_GeneratesCorrectReplicas(
+    public async Task GenerateTemplateAsync_WithReplicaConfiguration_GeneratesCorrectReplicasAsync(
         int replicas, int minReplicas, int maxReplicas)
     {
         // Arrange
@@ -390,7 +390,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithAutoScaling_GeneratesHPA()
+    public async Task GenerateTemplateAsync_WithAutoScaling_GeneratesHPAAsync()
     {
         // Arrange
         var request = CreateBasicRequest("hpa-test", ComputePlatform.AKS);
@@ -414,7 +414,7 @@ public class DynamicTemplateGeneratorServiceTests
     #region Observability Tests
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithPrometheus_GeneratesPrometheusConfiguration()
+    public async Task GenerateTemplateAsync_WithPrometheus_GeneratesPrometheusConfigurationAsync()
     {
         // Arrange
         var request = CreateBasicRequest("prometheus-test", ComputePlatform.AKS);
@@ -431,7 +431,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithApplicationInsights_GeneratesAIConfiguration()
+    public async Task GenerateTemplateAsync_WithApplicationInsights_GeneratesAIConfigurationAsync()
     {
         // Arrange
         var request = CreateBasicRequest("appinsights-test", ComputePlatform.AKS);
@@ -453,7 +453,7 @@ public class DynamicTemplateGeneratorServiceTests
     #region Networking Tests
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithNetworking_GeneratesNetworkResources()
+    public async Task GenerateTemplateAsync_WithNetworking_GeneratesNetworkResourcesAsync()
     {
         // Arrange
         var request = CreateBasicRequest("network-test", ComputePlatform.AKS);
@@ -478,7 +478,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_WithPrivateEndpoints_GeneratesPrivateEndpointResources()
+    public async Task GenerateTemplateAsync_WithPrivateEndpoints_GeneratesPrivateEndpointResourcesAsync()
     {
         // Arrange
         var request = CreateBasicRequest("pe-test", ComputePlatform.AKS);
@@ -505,7 +505,7 @@ public class DynamicTemplateGeneratorServiceTests
     #region File Organization Tests
 
     [Fact]
-    public async Task GenerateTemplateAsync_OrganizesFilesInDirectories()
+    public async Task GenerateTemplateAsync_OrganizesFilesInDirectoriesAsync()
     {
         // Arrange
         var request = CreateBasicRequest("file-org-test", ComputePlatform.AKS);
@@ -521,7 +521,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_GeneratesREADME()
+    public async Task GenerateTemplateAsync_GeneratesREADMEAsync()
     {
         // Arrange
         var request = CreateBasicRequest("readme-test", ComputePlatform.AKS);
@@ -537,7 +537,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_GeneratesGitignore()
+    public async Task GenerateTemplateAsync_GeneratesGitignoreAsync()
     {
         // Arrange
         var request = CreateBasicRequest("gitignore-test", ComputePlatform.AKS);
@@ -557,7 +557,7 @@ public class DynamicTemplateGeneratorServiceTests
     #region Result Validation Tests
 
     [Fact]
-    public async Task GenerateTemplateAsync_PopulatesSummary()
+    public async Task GenerateTemplateAsync_PopulatesSummaryAsync()
     {
         // Arrange
         var request = CreateBasicRequest("summary-test", ComputePlatform.AKS);
@@ -572,7 +572,7 @@ public class DynamicTemplateGeneratorServiceTests
     }
 
     [Fact]
-    public async Task GenerateTemplateAsync_PopulatesGeneratedComponents()
+    public async Task GenerateTemplateAsync_PopulatesGeneratedComponentsAsync()
     {
         // Arrange
         var request = CreateBasicRequest("components-test", ComputePlatform.AKS);

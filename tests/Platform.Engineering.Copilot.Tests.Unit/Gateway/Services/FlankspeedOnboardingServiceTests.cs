@@ -70,8 +70,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
 
         #region Draft Request Management Tests
 
-        [Fact]
-        public async Task CreateDraftRequestAsync_CreatesNewRequest_WithDraftStatus()
+    [Fact]
+    public async Task CreateDraftRequestAsync_CreatesNewRequest_WithDraftStatusAsync()
         {
             // Act
             var requestId = await _service.CreateDraftRequestAsync();
@@ -86,8 +86,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             request.LastUpdatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
         }
 
-        [Fact]
-        public async Task UpdateDraftAsync_WithDictionaryUpdates_UpdatesRequestProperties()
+    [Fact]
+    public async Task UpdateDraftAsync_WithDictionaryUpdates_UpdatesRequestPropertiesAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -110,8 +110,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             request.Command.Should().Be("COMNAVAIRLANT");
         }
 
-        [Fact]
-        public async Task UpdateDraftAsync_WithNonDraftStatus_ReturnsFalse()
+    [Fact]
+    public async Task UpdateDraftAsync_WithNonDraftStatus_ReturnsFalseAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -131,8 +131,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             result.Should().BeFalse();
         }
 
-        [Fact]
-        public async Task UpdateDraftAsync_WithNonExistentRequest_ReturnsFalse()
+    [Fact]
+    public async Task UpdateDraftAsync_WithNonExistentRequest_ReturnsFalseAsync()
         {
             // Arrange
             var fakeRequestId = Guid.NewGuid().ToString();
@@ -153,7 +153,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Request Submission Tests
 
         [Fact]
-        public async Task SubmitRequestAsync_WithValidDraft_ChangesStatusToPendingReview()
+    public async Task SubmitRequestAsync_WithValidDraft_ChangesStatusToPendingReviewAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -180,7 +180,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task SubmitRequestAsync_WithNonDraftStatus_ReturnsFalse()
+    public async Task SubmitRequestAsync_WithNonDraftStatus_ReturnsFalseAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -196,7 +196,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task SubmitRequestAsync_WithMissingRequiredFields_ReturnsFalse()
+    public async Task SubmitRequestAsync_WithMissingRequiredFields_ReturnsFalseAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -214,7 +214,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Request Retrieval Tests
 
         [Fact]
-        public async Task GetRequestAsync_WithExistingId_ReturnsRequest()
+    public async Task GetRequestAsync_WithExistingId_ReturnsRequestAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -228,7 +228,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task GetRequestAsync_WithNonExistentId_ReturnsNull()
+    public async Task GetRequestAsync_WithNonExistentId_ReturnsNullAsync()
         {
             // Arrange
             var fakeRequestId = Guid.NewGuid().ToString();
@@ -241,7 +241,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task GetPendingRequestsAsync_ReturnsOnlyPendingAndUnderReview()
+    public async Task GetPendingRequestsAsync_ReturnsOnlyPendingAndUnderReviewAsync()
         {
             // Arrange
             var request1 = new OnboardingRequest
@@ -266,7 +266,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            _context.OnboardingRequests.AddRange(request1, request2, request3);
+            await _context.OnboardingRequests.AddRangeAsync(request1, request2, request3);
             await _context.SaveChangesAsync();
 
             // Act
@@ -280,7 +280,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task GetPendingRequestsAsync_OrdersByPriorityThenCreatedDate()
+    public async Task GetPendingRequestsAsync_OrdersByPriorityThenCreatedDateAsync()
         {
             // Arrange
             var request1 = new OnboardingRequest
@@ -298,7 +298,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
                 CreatedAt = DateTime.UtcNow.AddDays(-2)
             };
 
-            _context.OnboardingRequests.AddRange(request1, request2);
+            await _context.OnboardingRequests.AddRangeAsync(request1, request2);
             await _context.SaveChangesAsync();
 
             // Act
@@ -311,7 +311,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task GetRequestsByOwnerAsync_ReturnsOnlyMatchingOwnerRequests()
+    public async Task GetRequestsByOwnerAsync_ReturnsOnlyMatchingOwnerRequestsAsync()
         {
             // Arrange
             var email = "john.doe@navy.mil";
@@ -328,7 +328,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            _context.OnboardingRequests.AddRange(request1, request2);
+            await _context.OnboardingRequests.AddRangeAsync(request1, request2);
             await _context.SaveChangesAsync();
 
             // Act
@@ -344,7 +344,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Cancellation Tests
 
         [Fact]
-        public async Task CancelRequestAsync_WithValidRequest_UpdatesStatusToCancelled()
+    public async Task CancelRequestAsync_WithValidRequest_UpdatesStatusToCancelledAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -362,7 +362,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task CancelRequestAsync_WithTerminalState_ReturnsFalse()
+    public async Task CancelRequestAsync_WithTerminalState_ReturnsFalseAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -378,7 +378,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task CancelRequestAsync_WithNonExistentRequest_ReturnsFalse()
+    public async Task CancelRequestAsync_WithNonExistentRequest_ReturnsFalseAsync()
         {
             // Arrange
             var fakeRequestId = Guid.NewGuid().ToString();
@@ -395,7 +395,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Approval Workflow Tests
 
         [Fact]
-        public async Task ApproveRequestAsync_WithValidRequest_UpdatesStatusAndStartsProvisioning()
+    public async Task ApproveRequestAsync_WithValidRequest_UpdatesStatusAndStartsProvisioningAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -431,7 +431,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task ApproveRequestAsync_WithNonExistentRequest_ReturnsFailure()
+    public async Task ApproveRequestAsync_WithNonExistentRequest_ReturnsFailureAsync()
         {
             // Arrange
             var fakeRequestId = Guid.NewGuid().ToString();
@@ -446,7 +446,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task ApproveRequestAsync_WithInvalidStatus_ReturnsFailure()
+    public async Task ApproveRequestAsync_WithInvalidStatus_ReturnsFailureAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -464,7 +464,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task RejectRequestAsync_WithValidRequest_UpdatesStatusToRejected()
+    public async Task RejectRequestAsync_WithValidRequest_UpdatesStatusToRejectedAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -492,7 +492,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Provisioning Tests (These test the initiation, not the background execution)
 
         [Fact]
-        public async Task ApproveRequestAsync_InitiatesProvisioningWithCorrectJobId()
+    public async Task ApproveRequestAsync_InitiatesProvisioningWithCorrectJobIdAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -524,7 +524,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Validation Tests
 
         [Fact]
-        public async Task SubmitRequestAsync_WithMissingMissionName_ReturnsFalse()
+    public async Task SubmitRequestAsync_WithMissingMissionName_ReturnsFalseAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -542,7 +542,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task SubmitRequestAsync_WithMissingOwnerEmail_ReturnsFalse()
+    public async Task SubmitRequestAsync_WithMissingOwnerEmail_ReturnsFalseAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -564,7 +564,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Property Update Tests
 
         [Fact]
-        public async Task UpdateDraftAsync_UpdatesLastUpdatedTimestamp()
+    public async Task UpdateDraftAsync_UpdatesLastUpdatedTimestampAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -587,7 +587,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         }
 
         [Fact]
-        public async Task UpdateDraftAsync_WithCaseInsensitivePropertyName_UpdatesCorrectly()
+    public async Task UpdateDraftAsync_WithCaseInsensitivePropertyName_UpdatesCorrectlyAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
@@ -610,7 +610,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         #region Notification Tests (Verify notification service is called)
 
         [Fact]
-        public async Task ApproveRequestAsync_SendsApprovalNotification()
+    public async Task ApproveRequestAsync_SendsApprovalNotificationAsync()
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();

@@ -45,7 +45,7 @@ public class ConfigurationValidationServiceTests
         var request = new TemplateGenerationRequest
         {
             ServiceName = "test-service",
-            Infrastructure = null
+            Infrastructure = null!
         };
 
         // Act
@@ -410,7 +410,7 @@ public class ConfigurationValidationServiceTests
         var request = new TemplateGenerationRequest
         {
             ServiceName = "test-service",
-            Infrastructure = null
+            Infrastructure = null!
         };
 
         // Act

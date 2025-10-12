@@ -77,7 +77,7 @@ builder.Services.AddHttpClient();
 
 // Add Gateway services manually (excluding problematic singletons that depend on scoped services)
 // Azure Services
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.IAzureResourceService, Platform.Engineering.Copilot.Core.Services.AzureGatewayService>();
+builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.IAzureResourceService, Platform.Engineering.Copilot.Core.Services.AzureServices.AzureResourceService>();
 builder.Services.AddSingleton<Platform.Engineering.Copilot.Core.Interfaces.IAzureMetricsService, Platform.Engineering.Copilot.Core.Services.AzureMetricsService>();
 // Note: AzureResourceHealthService temporarily excluded from Governance project - see Governance.csproj
 // builder.Services.AddSingleton<Platform.Engineering.Copilot.Core.Interfaces.IAzureResourceHealthService, Platform.Engineering.Copilot.Core.Services.StubAzureResourceHealthService>();
@@ -89,10 +89,10 @@ builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.IAzureCo
 
 // Cost Optimization and Predictive Scaling Engines (now properly scoped)
 builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.ICostOptimizationEngine, Platform.Engineering.Copilot.Core.Services.CostOptimizationEngine>();
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.IPredictiveScalingEngine, Platform.Engineering.Copilot.Core.Services.PredictiveScalingEngine>();
+builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.Infrastructure.IPredictiveScalingEngine, Platform.Engineering.Copilot.Core.Services.Infrastructure.PredictiveScalingEngine>();
 
 // Environment Storage Service (for database persistence)
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.EnvironmentStorageService>();
+builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.Infrastructure.EnvironmentStorageService>();
 
 // Deployment Orchestration Service
 builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.IDeploymentOrchestrationService, Platform.Engineering.Copilot.Core.Services.DeploymentOrchestrationService>();
@@ -123,25 +123,25 @@ builder.Services.AddSingleton<Platform.Engineering.Copilot.Core.Interfaces.ITeam
 builder.Services.AddMemoryCache();
 
 // Add ComplianceMetricsService (needed by NistControlsService)
-builder.Services.AddScoped<Platform.Engineering.Copilot.Governance.Services.ComplianceMetricsService>();
+builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.Compliance.ComplianceMetricsService>();
 
 // Add services needed by AtoComplianceEngine
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.INistControlsService, Platform.Engineering.Copilot.Governance.Services.NistControlsService>();
+builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.INistControlsService, Platform.Engineering.Copilot.Core.Services.Compliance.NistControlsService>();
 
 // Environment Management Engine (for environment lifecycle operations)
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.IEnvironmentManagementEngine, Platform.Engineering.Copilot.Core.Services.EnvironmentManagementEngine>();
+builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.IEnvironmentManagementEngine, Platform.Engineering.Copilot.Core.Services.Infrastructure.EnvironmentManagementEngine>();
 
 // Infrastructure Provisioning Service (for foundational infrastructure resources)
 builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.IInfrastructureProvisioningService, Platform.Engineering.Copilot.Core.Services.Infrastructure.InfrastructureProvisioningService>();
 
 // Governance Engine (for policy enforcement and approval workflows)
-builder.Services.AddScoped<Platform.Engineering.Copilot.Governance.Services.IGovernanceEngine, Platform.Engineering.Copilot.Governance.Services.GovernanceEngine>();
+builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.IGovernanceEngine, Platform.Engineering.Copilot.Core.Services.Governance.GovernanceEngine>();
 
 // Azure Policy Service (for Azure policy evaluation)
 builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.IAzurePolicyService, Platform.Engineering.Copilot.Core.Services.AzurePolicyService>();
 
 // ATO Compliance Engine (for security scanning) - Will be registered as optional for now
-// builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.IAtoComplianceEngine, Platform.Engineering.Copilot.Governance.Services.AtoComplianceEngine>();
+// builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Interfaces.IAtoComplianceEngine, Platform.Engineering.Copilot.Core.Services.Compliance.AtoComplianceEngine>();
 
 // Dynamic Template Generator (core service for template creation)
 builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.IDynamicTemplateGenerator, Platform.Engineering.Copilot.Core.Services.DynamicTemplateGeneratorService>();

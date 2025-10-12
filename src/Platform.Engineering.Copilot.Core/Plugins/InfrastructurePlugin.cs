@@ -24,8 +24,7 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
     }
 
     [KernelFunction("provision_infrastructure")]
-    [Description("Provision Azure infrastructure from natural language query. " +
-                 "Supports storage accounts, VNets, Key Vaults, NSGs, managed identities, Load Balancers, and more.")]
+    [Description("Provisions Azure infrastructure from natural language.")]
     public async Task<string> ProvisionInfrastructureAsync(
         [Description("Natural language query describing the infrastructure to provision. " +
                      "Examples: 'Create a storage account named mydata in eastus', " +

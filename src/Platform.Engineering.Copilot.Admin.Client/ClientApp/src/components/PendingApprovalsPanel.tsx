@@ -415,8 +415,41 @@ const OnboardingDetails: React.FC<{
   onReject: () => void;
   isInProgress: boolean;
 }> = ({ request, onApprove, onReject, isInProgress }) => {
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <>
+      {/* Submission Information */}
+      {request.submittedForApprovalAt && (
+        <div className="submission-info-banner" style={{
+          backgroundColor: '#e3f2fd',
+          padding: '12px 16px',
+          borderRadius: '4px',
+          marginBottom: '16px',
+          border: '1px solid #90caf9'
+        }}>
+          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+            <div>
+              <strong>📤 Submitted:</strong> {formatDate(request.submittedForApprovalAt)}
+            </div>
+            {request.submittedBy && (
+              <div>
+                <strong>👤 Submitted By:</strong> {request.submittedBy}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="details-grid">
         <div className="detail-item">
           <strong>Mission:</strong>
@@ -475,6 +508,33 @@ const OnboardingDetails: React.FC<{
         <div className="justification-section">
           <strong>Business Justification:</strong>
           <p>{request.businessJustification}</p>
+        </div>
+      )}
+
+      {/* Show approval/rejection feedback if present */}
+      {request.approvalComments && request.approvedBy && (
+        <div className="feedback-section" style={{
+          backgroundColor: '#e8f5e9',
+          padding: '12px 16px',
+          borderRadius: '4px',
+          marginTop: '12px',
+          border: '1px solid #81c784'
+        }}>
+          <strong>✅ Approval Feedback ({formatDate(request.approvedAt)}):</strong>
+          <p style={{ margin: '8px 0 0 0' }}><strong>{request.approvedBy}:</strong> {request.approvalComments}</p>
+        </div>
+      )}
+
+      {request.rejectionReason && request.rejectedBy && (
+        <div className="feedback-section" style={{
+          backgroundColor: '#ffebee',
+          padding: '12px 16px',
+          borderRadius: '4px',
+          marginTop: '12px',
+          border: '1px solid #ef5350'
+        }}>
+          <strong>❌ Rejection Feedback ({formatDate(request.rejectedAt)}):</strong>
+          <p style={{ margin: '8px 0 0 0' }}><strong>{request.rejectedBy}:</strong> {request.rejectionReason}</p>
         </div>
       )}
 
