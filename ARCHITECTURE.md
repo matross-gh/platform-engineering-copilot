@@ -369,7 +369,7 @@ public enum OnboardingStatus
 
 ---
 
-### 6. Platform.Engineering.Copilot.Chat.App
+### 4. Platform.Engineering.Copilot.Chat
 
 **Purpose**: Full-stack chat application for user onboarding with AI assistance.
 
@@ -397,7 +397,7 @@ public enum OnboardingStatus
 
 ---
 
-### 7. Platform.Engineering.Copilot.Admin.API
+### 5. Platform.Engineering.Copilot.Admin.API
 
 **Purpose**: Admin backend API for platform management and operations.
 
@@ -414,7 +414,7 @@ public enum OnboardingStatus
 
 ---
 
-### 8. Platform.Engineering.Copilot.Admin.Client
+### 6. Platform.Engineering.Copilot.Admin.Client
 
 **Purpose**: Full-stack admin console SPA for platform administration.
 
@@ -446,7 +446,7 @@ public enum OnboardingStatus
 
 ---
 
-### 9. Platform.Engineering.Copilot.Mcp
+### 7. Platform.Engineering.Copilot.Mcp
 
 **Purpose**: Model Context Protocol server exposing platform capabilities to external AI agents.
 
@@ -1130,16 +1130,14 @@ public async Task<bool> DeleteResourceGroupAsync(
 
 | Project | Lines of Code | Key Metrics |
 |---------|---------------|-------------|
-| Core | ~15,000 | 40+ interfaces, 8 plugins, 60+ services |
+| Core | ~15,000 | 40+ interfaces, 8 plugins, 60+ services (includes governance & document processing) |
 | Data | ~3,000 | 20+ entities, 50+ migrations |
-| Governance | ~2,000 | 10+ services |
-| DocumentProcessing | ~1,500 | Document AI integration |
 | API | ~2,000 | REST endpoints |
-| Chat.App | ~3,000 | Backend + React frontend |
+| Chat | ~3,000 | Backend + React frontend |
 | Admin.API | ~1,500 | Admin endpoints |
 | Admin.Client | ~4,000 | React SPA |
 | Mcp | ~500 | MCP server |
-| **Total** | **~32,500** | Production code (excluding tests) |
+| **Total** | **~29,000** | Production code (excluding tests) |
 
 ### Version History
 
