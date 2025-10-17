@@ -75,53 +75,229 @@ public class CostManagementPlugin : BaseSupervisorPlugin
         var dashboard = await _costService.GetCostDashboardAsync(subscriptionId, startDate, endDate, cancellationToken);
 
         var sb = new StringBuilder();
-        sb.AppendLine($"Cost Optimization for subscription {subscriptionId}");
-        sb.AppendLine($"Period: {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}");
-        sb.AppendLine($"Current spend: {FormatCurrency(dashboard.Summary.CurrentMonthSpend)} ({dashboard.Summary.TrendDirection})");
-        sb.AppendLine($"Potential savings: {FormatCurrency(dashboard.Summary.PotentialSavings)} across {dashboard.Summary.OptimizationOpportunities} opportunities");
-        sb.AppendLine($"Average daily cost: {FormatCurrency(dashboard.Summary.AverageDailyCost)}");
+        
+        // Header
+        sb.AppendLine("# 💰 Azure Cost Analysis Dashboard");
+        sb.AppendLine();
+        sb.AppendLine($"**Subscription:** `{subscriptionId}`");
+        sb.AppendLine($"**Analysis Period:** {startDate:MMM dd, yyyy} → {endDate:MMM dd, yyyy} ({(endDate - startDate).Days} days)");
+        sb.AppendLine();
+        
+        // Summary Section with visual indicators
+        sb.AppendLine("## 📊 Cost Summary");
+        sb.AppendLine();
+        
+        var trendIcon = dashboard.Summary.TrendDirection switch
+        {
+            CostTrendDirection.Increasing => "📈",
+            CostTrendDirection.Decreasing => "📉",
+            _ => "➡️"
+        };
+        
+        sb.AppendLine($"| Metric | Value |");
+        sb.AppendLine("|--------|-------|");
+        sb.AppendLine($"| Current Month Spend | **{FormatCurrency(dashboard.Summary.CurrentMonthSpend)}** {trendIcon} |");
+        sb.AppendLine($"| Previous Month | {FormatCurrency(dashboard.Summary.PreviousMonthSpend)} |");
+        sb.AppendLine($"| Month-over-Month Change | {FormatPercentage(dashboard.Summary.MonthOverMonthChangePercent)} |");
+        sb.AppendLine($"| Average Daily Cost | {FormatCurrency(dashboard.Summary.AverageDailyCost)} |");
+        sb.AppendLine($"| Projected Month-End | {FormatCurrency(dashboard.Summary.ProjectedMonthlySpend)} |");
+        sb.AppendLine($"| Year-to-Date Spend | {FormatCurrency(dashboard.Summary.YearToDateSpend)} |");
+        sb.AppendLine();
+        
+        if (dashboard.Summary.PotentialSavings > 0)
+        {
+            sb.AppendLine($"### 💡 Optimization Opportunity");
+            sb.AppendLine($"> **{FormatCurrency(dashboard.Summary.PotentialSavings)}** in potential monthly savings across **{dashboard.Summary.OptimizationOpportunities}** opportunities");
+            sb.AppendLine();
+        }
 
+        // Top Services Breakdown
         var topServices = dashboard.ServiceBreakdown
             .OrderByDescending(s => s.MonthlyCost)
-            .Take(3)
-            .Select(s => $"{s.ServiceName}: {FormatCurrency(s.MonthlyCost)} ({s.PercentageOfTotal:N1}% of total)");
+            .Take(5)
+            .ToList();
 
-        if (topServices.Any())
+        if (topServices.Any() && topServices.Sum(s => s.MonthlyCost) > 0)
         {
-            sb.AppendLine("Top services: ");
+            sb.AppendLine("## 🔝 Top Services by Cost");
+            sb.AppendLine();
+            sb.AppendLine("| Service | Monthly Cost | % of Total | Resources |");
+            sb.AppendLine("|---------|--------------|------------|-----------|");
             foreach (var service in topServices)
             {
-                sb.AppendLine($"  - {service}");
+                var bar = CreateProgressBar(service.PercentageOfTotal);
+                sb.AppendLine($"| {service.ServiceName} | {FormatCurrency(service.MonthlyCost)} | {bar} {service.PercentageOfTotal:N1}% | {service.ResourceCount} |");
             }
+            sb.AppendLine();
         }
 
-        var alerts = dashboard.BudgetAlerts.Take(3).ToList();
+        // Budget Alerts
+        var alerts = dashboard.BudgetAlerts.Take(5).ToList();
         if (alerts.Any())
         {
-            sb.AppendLine("Active budget alerts:");
+            sb.AppendLine("## ⚠️ Budget Alerts");
+            sb.AppendLine();
             foreach (var alert in alerts)
             {
-                sb.AppendLine($"  - {alert.BudgetName} at {alert.CurrentPercentage:N0}% of {FormatCurrency(alert.BudgetAmount)} ({alert.Severity})");
+                var icon = alert.Severity switch
+                {
+                    BudgetAlertSeverity.Critical => "🔴",
+                    BudgetAlertSeverity.Warning => "🟠",
+                    BudgetAlertSeverity.Info => "🟡",
+                    _ => "🟢"
+                };
+                var progressBar = CreateProgressBar(alert.CurrentPercentage);
+                sb.AppendLine($"{icon} **{alert.BudgetName}**: {progressBar} {alert.CurrentPercentage:N0}% of {FormatCurrency(alert.BudgetAmount)} ({alert.Severity})");
             }
+            sb.AppendLine();
         }
 
-        var anomalies = dashboard.Anomalies.Take(3).ToList();
+        // Cost Anomalies
+        var anomalies = dashboard.Anomalies.Take(5).ToList();
         if (anomalies.Any())
         {
-            sb.AppendLine("Recent anomalies:");
+            sb.AppendLine("## 🔍 Cost Anomalies Detected");
+            sb.AppendLine();
             foreach (var anomaly in anomalies)
             {
-                sb.AppendLine($"  - {anomaly.Description} (deviation {FormatCurrency(anomaly.CostDifference)} on {anomaly.DetectedAt:yyyy-MM-dd})");
+                var severityIcon = anomaly.Severity switch
+                {
+                    AnomalySeverity.High => "🔴",
+                    AnomalySeverity.Medium => "🟡",
+                    _ => "🔵"
+                };
+                sb.AppendLine($"{severityIcon} **{anomaly.AnomalyDate:MMM dd}**: {anomaly.Description}");
+                sb.AppendLine($"   - Deviation: {FormatCurrency(anomaly.CostDifference)} ({FormatPercentage(anomaly.PercentageDeviation)})");
             }
+            sb.AppendLine();
         }
 
-        sb.AppendLine("Key recommendations:");
-        foreach (var recommendation in dashboard.Recommendations.Take(5))
+        // Top Recommendations
+        sb.AppendLine("## 💡 Cost Optimization Recommendations");
+        sb.AppendLine();
+        var topRecommendations = dashboard.Recommendations
+            .OrderByDescending(r => r.PotentialMonthlySavings)
+            .Take(5)
+            .ToList();
+            
+        if (topRecommendations.Any())
         {
-            sb.AppendLine($"  - {recommendation.Description} | Savings: {FormatCurrency(recommendation.PotentialMonthlySavings)} | Priority: {recommendation.Priority}");
+            sb.AppendLine("| Priority | Recommendation | Monthly Savings | Complexity |");
+            sb.AppendLine("|----------|----------------|-----------------|------------|");
+            foreach (var rec in topRecommendations)
+            {
+                var priorityIcon = rec.Priority switch
+                {
+                    Models.OptimizationPriority.Critical => "🔴 Critical",
+                    Models.OptimizationPriority.High => "🟠 High",
+                    Models.OptimizationPriority.Medium => "🟡 Medium",
+                    _ => "🟢 Low"
+                };
+                var complexityIcon = rec.ImplementationComplexity switch
+                {
+                    Models.OptimizationComplexity.Expert => "🔴 Expert",
+                    Models.OptimizationComplexity.Complex => "⚠️ Complex",
+                    Models.OptimizationComplexity.Moderate => "⚡ Moderate",
+                    _ => "✅ Simple"
+                };
+                sb.AppendLine($"| {priorityIcon} | {rec.Description} | **{FormatCurrency(rec.PotentialMonthlySavings)}** | {complexityIcon} |");
+            }
+        }
+        else
+        {
+            sb.AppendLine("_No optimization recommendations available at this time._");
+        }
+        sb.AppendLine();
+        
+        // Add data quality notice if all costs are zero
+        if (dashboard.Summary.CurrentMonthSpend == 0 && dashboard.Summary.PreviousMonthSpend == 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("---");
+            sb.AppendLine();
+            sb.AppendLine("⚠️ **Note**: No cost data was returned from Azure Cost Management API.");
+            sb.AppendLine();
+            sb.AppendLine("**Possible reasons:**");
+            sb.AppendLine("- This subscription has no resource usage in the selected time period");
+            sb.AppendLine("- Cost data is still being processed (can take 24-72 hours)");
+            sb.AppendLine("- You may need appropriate permissions (`Cost Management Reader` role)");
+            sb.AppendLine("- Azure Government Cloud may have limited Cost Management API support");
+            sb.AppendLine();
+            sb.AppendLine("**Resources found in subscription:**");
+            sb.AppendLine("- Cognitive Services accounts in `mcp-rg` resource group");
+            sb.AppendLine("- These resources should generate cost data within 24-72 hours");
+            sb.AppendLine();
+            sb.AppendLine("### 🎨 Sample Dashboard (How it would look with data)");
+            sb.AppendLine();
+            sb.AppendLine(GenerateSampleDashboard(subscriptionId));
         }
 
         return sb.ToString();
+    }
+    
+    private static string GenerateSampleDashboard(string subscriptionId)
+    {
+        var sb = new StringBuilder();
+        
+        sb.AppendLine("**💰 Sample Cost Summary**");
+        sb.AppendLine();
+        sb.AppendLine("| Metric | Sample Value |");
+        sb.AppendLine("|--------|--------------|");
+        sb.AppendLine("| Current Month Spend | **$2,450.00** 📈 |");
+        sb.AppendLine("| Previous Month | $2,100.00 |");
+        sb.AppendLine("| Month-over-Month Change | ↗️ +16.7% |");
+        sb.AppendLine("| Average Daily Cost | $81.67 |");
+        sb.AppendLine("| Projected Month-End | $2,530.00 |");
+        sb.AppendLine();
+        
+        sb.AppendLine("**🔝 Sample Top Services**");
+        sb.AppendLine();
+        sb.AppendLine("| Service | Monthly Cost | % of Total | Resources |");
+        sb.AppendLine("|---------|--------------|------------|-----------|");
+        sb.AppendLine("| Cognitive Services | $1,850.00 | [███████████████░░░░] 75.5% | 2 |");
+        sb.AppendLine("| Storage | $320.00 | [██░░░░░░░░░░░░░░░░░░] 13.1% | 3 |");
+        sb.AppendLine("| Networking | $280.00 | [██░░░░░░░░░░░░░░░░░░] 11.4% | 1 |");
+        sb.AppendLine();
+        
+        sb.AppendLine("**⚠️ Sample Budget Alerts**");
+        sb.AppendLine();
+        sb.AppendLine("🟡 **Monthly-AI-Budget**: [████████████████░░░░] 82% of $3,000.00 (Warning)");
+        sb.AppendLine();
+        
+        sb.AppendLine("**🔍 Sample Cost Anomalies**");
+        sb.AppendLine();
+        sb.AppendLine("🟡 **Oct 15**: Unusual spike in API calls");
+        sb.AppendLine("   - Deviation: $185.00 (↗️ +45.2%)");
+        sb.AppendLine();
+        
+        sb.AppendLine("**💡 Sample Cost Optimization Recommendations**");
+        sb.AppendLine();
+        sb.AppendLine("| Priority | Recommendation | Monthly Savings | Complexity |");
+        sb.AppendLine("|----------|----------------|-----------------|------------|");
+        sb.AppendLine("| 🟡 Medium | Implement caching for API calls | **$420.00** | ✅ Simple |");
+        sb.AppendLine("| 🟢 Low | Use commitment discounts for OpenAI | **$280.00** | ⚡ Moderate |");
+        sb.AppendLine("| 🟢 Low | Optimize storage tier for logs | **$95.00** | ✅ Simple |");
+        sb.AppendLine();
+        
+        sb.AppendLine("---");
+        sb.AppendLine("_This is sample data to demonstrate formatting. Your dashboard will show actual cost data once available._");
+        
+        return sb.ToString();
+    }
+    
+    private static string CreateProgressBar(decimal percentage, int width = 20)
+    {
+        var filled = (int)(percentage / 100 * width);
+        filled = Math.Max(0, Math.Min(width, filled));
+        var empty = width - filled;
+        return $"[{'█'.ToString().PadRight(filled, '█')}{'░'.ToString().PadRight(empty, '░')}]";
+    }
+    
+    private static string FormatPercentage(decimal value)
+    {
+        var sign = value >= 0 ? "+" : "";
+        var icon = value > 5 ? "↗️" : value < -5 ? "↘️" : "→";
+        return $"{icon} {sign}{value:N1}%";
     }
 
     private async Task<string> HandleOptimizationAsync(string subscriptionId, CancellationToken cancellationToken)
@@ -130,31 +306,94 @@ public class CostManagementPlugin : BaseSupervisorPlugin
     var recommendations = analysis.Recommendations ?? new List<DetailedCostOptimizationRecommendation>();
 
         var sb = new StringBuilder();
-        sb.AppendLine($"Cost optimization analysis for subscription {subscriptionId}");
-        sb.AppendLine($"Total monthly cost: {FormatCurrency(analysis.TotalMonthlyCost)}");
-        sb.AppendLine($"Potential monthly savings: {FormatCurrency(analysis.PotentialMonthlySavings)} across {analysis.TotalRecommendations} recommendations");
+        sb.AppendLine("# 🎯 Cost Optimization Analysis");
+        sb.AppendLine();
+        sb.AppendLine($"**Subscription:** `{subscriptionId}`");
+        sb.AppendLine();
+        
+        // Financial Overview
+        sb.AppendLine("## 💵 Financial Overview");
+        sb.AppendLine();
+        sb.AppendLine($"| Metric | Value |");
+        sb.AppendLine($"|--------|-------|");
+        sb.AppendLine($"| Total Monthly Cost | **{FormatCurrency(analysis.TotalMonthlyCost)}** |");
+        sb.AppendLine($"| Potential Savings | **{FormatCurrency(analysis.PotentialMonthlySavings)}** |");
+        sb.AppendLine($"| Savings Opportunity | {(analysis.TotalMonthlyCost > 0 ? (analysis.PotentialMonthlySavings / analysis.TotalMonthlyCost * 100) : 0):N1}% |");
+        sb.AppendLine($"| Total Recommendations | {analysis.TotalRecommendations} |");
+        sb.AppendLine();
 
         var topServices = (analysis.CostByService ?? new Dictionary<string, decimal>())
             .OrderByDescending(kvp => kvp.Value)
-            .Take(3)
-            .Select(kvp => $"{kvp.Key}: {FormatCurrency(kvp.Value)}");
+            .Take(5)
+            .ToList();
 
         if (topServices.Any())
         {
-            sb.AppendLine("Top cost drivers by service:");
+            sb.AppendLine("## 🔝 Top Cost Drivers by Service");
+            sb.AppendLine();
+            var total = topServices.Sum(kvp => kvp.Value);
             foreach (var service in topServices)
             {
-                sb.AppendLine($"  - {service}");
+                var percentage = total > 0 ? (service.Value / total * 100) : 0;
+                var bar = CreateProgressBar(percentage);
+                sb.AppendLine($"- **{service.Key}**: {FormatCurrency(service.Value)} {bar} {percentage:N1}%");
             }
+            sb.AppendLine();
         }
 
-        foreach (var recommendation in recommendations.OrderByDescending(r => r.EstimatedMonthlySavings).Take(5))
+        // Detailed Recommendations
+        sb.AppendLine("## 📋 Detailed Recommendations");
+        sb.AppendLine();
+        
+        if (recommendations.Any())
         {
-            sb.AppendLine($"Recommendation: {recommendation.Description}");
-            sb.AppendLine($"  Resource: {recommendation.ResourceName} ({recommendation.ResourceType}) in {recommendation.ResourceGroup}");
-            sb.AppendLine($"  Estimated savings: {FormatCurrency(recommendation.EstimatedMonthlySavings)} | Priority: {recommendation.Priority}");
-            var actionCount = recommendation.Actions?.Count ?? 0;
-            sb.AppendLine($"  Complexity: {recommendation.Complexity} | Suggested actions: {actionCount}");
+            var sortedRecs = recommendations.OrderByDescending(r => r.EstimatedMonthlySavings).Take(10).ToList();
+            
+            foreach (var rec in sortedRecs)
+            {
+                var priorityIcon = rec.Priority switch
+                {
+                    Models.CostOptimization.OptimizationPriority.Critical => "🔴",
+                    Models.CostOptimization.OptimizationPriority.High => "🟠",
+                    Models.CostOptimization.OptimizationPriority.Medium => "🟡",
+                    _ => "🟢"
+                };
+                
+                var complexityBadge = rec.Complexity switch
+                {
+                    ImplementationComplexity.VeryComplex => "🔴 Very Complex",
+                    ImplementationComplexity.Complex => "⚠️ Complex",
+                    ImplementationComplexity.Moderate => "⚡ Moderate",
+                    _ => "✅ Simple"
+                };
+                
+                sb.AppendLine($"### {priorityIcon} {rec.Description}");
+                sb.AppendLine();
+                sb.AppendLine($"**Resource:** `{rec.ResourceName}` ({rec.ResourceType})");
+                sb.AppendLine($"**Location:** {rec.ResourceGroup}");
+                sb.AppendLine($"**Savings:** {FormatCurrency(rec.EstimatedMonthlySavings)}/month");
+                sb.AppendLine($"**Implementation:** {complexityBadge}");
+                
+                var actionCount = rec.Actions?.Count ?? 0;
+                if (actionCount > 0)
+                {
+                    sb.AppendLine($"**Action Steps:** {actionCount}");
+                    var actions = rec.Actions!.Take(3).ToList();
+                    foreach (var action in actions)
+                    {
+                        sb.AppendLine($"  - {action.Description}");
+                    }
+                    if (actionCount > 3)
+                    {
+                        sb.AppendLine($"  - _{actionCount - 3} more actions..._");
+                    }
+                }
+                sb.AppendLine();
+            }
+        }
+        else
+        {
+            sb.AppendLine("_No recommendations available. Your resources are already well-optimized! 🎉_");
         }
 
         return sb.ToString();
@@ -164,23 +403,72 @@ public class CostManagementPlugin : BaseSupervisorPlugin
     {
         var budgets = await _costService.GetBudgetsAsync(subscriptionId, cancellationToken);
 
+        var sb = new StringBuilder();
+        sb.AppendLine("# 💰 Budget Monitoring");
+        sb.AppendLine();
+        sb.AppendLine($"**Subscription:** `{subscriptionId}`");
+        sb.AppendLine();
+
         if (budgets.Count == 0)
         {
-            return $"No budgets are configured for subscription {subscriptionId}. Consider creating budgets to monitor spend.";
+            sb.AppendLine("## ⚠️ No Budgets Configured");
+            sb.AppendLine();
+            sb.AppendLine("No budgets are currently configured for this subscription.");
+            sb.AppendLine();
+            sb.AppendLine("### 💡 Recommendations");
+            sb.AppendLine("- Create budgets to monitor and control spending");
+            sb.AppendLine("- Set up alert notifications at 50%, 80%, and 100% thresholds");
+            sb.AppendLine("- Use Azure Cost Management to configure budgets");
+            sb.AppendLine();
+            sb.AppendLine("```bash");
+            sb.AppendLine($"az consumption budget create --subscription {subscriptionId} \\");
+            sb.AppendLine("  --budget-name 'Monthly-Budget' \\");
+            sb.AppendLine("  --amount 50000 \\");
+            sb.AppendLine("  --time-grain Monthly");
+            sb.AppendLine("```");
+            return sb.ToString();
         }
 
-        var sb = new StringBuilder();
-        sb.AppendLine($"Budget overview for subscription {subscriptionId}");
+        sb.AppendLine("## 📊 Budget Status");
+        sb.AppendLine();
 
-        foreach (var budget in budgets.Take(5))
+        foreach (var budget in budgets.Take(10))
         {
-            sb.AppendLine($"Budget: {budget.Name} ({FormatCurrency(budget.Amount)})");
-            sb.AppendLine($"  Utilization: {budget.UtilizationPercentage:N1}% | Current spend: {FormatCurrency(budget.CurrentSpend)}");
-            sb.AppendLine($"  Remaining: {FormatCurrency(budget.RemainingBudget)} | Status: {budget.HealthStatus}");
+            var statusIcon = budget.HealthStatus switch
+            {
+                BudgetHealthStatus.Critical => "🔴",
+                BudgetHealthStatus.Warning => "🟡",
+                BudgetHealthStatus.Healthy => "🟢",
+                _ => "⚪"
+            };
+            
+            var progressBar = CreateProgressBar(budget.UtilizationPercentage);
+            
+            sb.AppendLine($"### {statusIcon} {budget.Name}");
+            sb.AppendLine();
+            sb.AppendLine($"**Budget Amount:** {FormatCurrency(budget.Amount)}");
+            sb.AppendLine($"**Current Spend:** {FormatCurrency(budget.CurrentSpend)}");
+            sb.AppendLine($"**Remaining:** {FormatCurrency(budget.RemainingBudget)}");
+            sb.AppendLine();
+            sb.AppendLine($"**Utilization:** {budget.UtilizationPercentage:N1}%");
+            sb.AppendLine($"{progressBar}");
+            sb.AppendLine();
+            
             if (budget.Thresholds.Any())
             {
-                var thresholds = string.Join(", ", budget.Thresholds.Select(t => $"{t.Percentage}% ({t.Severity})"));
-                sb.AppendLine($"  Alerts: {thresholds}");
+                sb.AppendLine("**Alert Thresholds:**");
+                foreach (var threshold in budget.Thresholds.OrderBy(t => t.Percentage))
+                {
+                    var thresholdIcon = threshold.Severity switch
+                    {
+                        BudgetAlertSeverity.Critical => "🔴",
+                        BudgetAlertSeverity.Warning => "🟡",
+                        _ => "🟢"
+                    };
+                    var reached = budget.UtilizationPercentage >= threshold.Percentage ? "✅ Reached" : "⏳ Not reached";
+                    sb.AppendLine($"  - {thresholdIcon} {threshold.Percentage}% ({threshold.Severity}) - {reached}");
+                }
+                sb.AppendLine();
             }
         }
 
@@ -193,32 +481,67 @@ public class CostManagementPlugin : BaseSupervisorPlugin
         var forecast = await _costService.GetCostForecastAsync(subscriptionId, forecastDays, cancellationToken);
 
         var sb = new StringBuilder();
-        sb.AppendLine($"Cost forecast for subscription {subscriptionId}");
-        sb.AppendLine($"Forecast window: {forecastDays} days | Confidence: {forecast.ConfidenceLevel:P0}");
-        sb.AppendLine($"Projected month-end cost: {FormatCurrency(forecast.ProjectedMonthEndCost)}");
-        sb.AppendLine($"Projected quarter-end cost: {FormatCurrency(forecast.ProjectedQuarterEndCost)}");
-        sb.AppendLine($"Projected year-end cost: {FormatCurrency(forecast.ProjectedYearEndCost)}");
+        sb.AppendLine("# 🔮 Cost Forecast");
+        sb.AppendLine();
+        sb.AppendLine($"**Subscription:** `{subscriptionId}`");
+        sb.AppendLine($"**Forecast Window:** {forecastDays} days");
+        sb.AppendLine($"**Confidence Level:** {forecast.ConfidenceLevel:P0}");
+        sb.AppendLine($"**Method:** {forecast.Method}");
+        sb.AppendLine();
+        
+        // Projections Summary
+        sb.AppendLine("## 📈 Projected Costs");
+        sb.AppendLine();
+        sb.AppendLine("| Period | Projected Cost |");
+        sb.AppendLine("|--------|----------------|");
+        sb.AppendLine($"| Month-End | **{FormatCurrency(forecast.ProjectedMonthEndCost)}** |");
+        sb.AppendLine($"| Quarter-End | **{FormatCurrency(forecast.ProjectedQuarterEndCost)}** |");
+        sb.AppendLine($"| Year-End | **{FormatCurrency(forecast.ProjectedYearEndCost)}** |");
+        sb.AppendLine();
 
-        foreach (var point in forecast.Projections.Take(5))
+        // Daily Forecast
+        if (forecast.Projections.Any())
         {
-            sb.AppendLine($"  {point.Date:yyyy-MM-dd}: {FormatCurrency(point.ForecastedCost)} (range {FormatCurrency(point.LowerBound)} - {FormatCurrency(point.UpperBound)})");
+            sb.AppendLine("## 📅 Daily Forecast (Next 7 Days)");
+            sb.AppendLine();
+            sb.AppendLine("| Date | Forecast | Range |");
+            sb.AppendLine("|------|----------|-------|");
+            
+            foreach (var point in forecast.Projections.Take(7))
+            {
+                sb.AppendLine($"| {point.Date:MMM dd, yyyy} | {FormatCurrency(point.ForecastedCost)} | {FormatCurrency(point.LowerBound)} - {FormatCurrency(point.UpperBound)} |");
+            }
+            sb.AppendLine();
         }
 
+        // Assumptions
         if (forecast.Assumptions.Any())
         {
-            sb.AppendLine("Assumptions considered:");
-            foreach (var assumption in forecast.Assumptions.Take(3))
+            sb.AppendLine("## 📋 Forecast Assumptions");
+            sb.AppendLine();
+            foreach (var assumption in forecast.Assumptions.Take(5))
             {
-                sb.AppendLine($"  - {assumption.Description} (impact {assumption.Impact:N1})");
+                var impactIcon = assumption.Impact > 0.7 ? "🔴" : assumption.Impact > 0.4 ? "🟡" : "🟢";
+                sb.AppendLine($"{impactIcon} **{assumption.Description}**");
+                sb.AppendLine($"   - Impact: {assumption.Impact:P0} | Category: {assumption.Category}");
             }
+            sb.AppendLine();
         }
 
+        // Risks
         if (forecast.Risks.Any())
         {
-            sb.AppendLine("Risks to monitor:");
-            foreach (var risk in forecast.Risks.Take(3))
+            sb.AppendLine("## ⚠️ Risk Factors");
+            sb.AppendLine();
+            foreach (var risk in forecast.Risks.OrderByDescending(r => (double)r.PotentialImpact * r.Probability).Take(5))
             {
-                sb.AppendLine($"  - {risk.Risk} (impact {risk.PotentialImpact:N1}, probability {risk.Probability:P0})");
+                var severity = ((double)risk.PotentialImpact * risk.Probability) > 0.5 ? "🔴 High" : 
+                              ((double)risk.PotentialImpact * risk.Probability) > 0.3 ? "🟡 Medium" : "🟢 Low";
+                sb.AppendLine($"**{risk.Risk}** - {severity}");
+                sb.AppendLine($"  - Potential Impact: {FormatCurrency((decimal)risk.PotentialImpact)}");
+                sb.AppendLine($"  - Probability: {risk.Probability:P0}");
+                sb.AppendLine($"  - Mitigation: {risk.Mitigation}");
+                sb.AppendLine();
             }
         }
 

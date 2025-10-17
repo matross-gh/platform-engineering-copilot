@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Platform.Engineering.Copilot.Data.Context;
 
@@ -10,9 +11,11 @@ using Platform.Engineering.Copilot.Data.Context;
 namespace Platform.Engineering.Copilot.Data.Migrations
 {
     [DbContext(typeof(EnvironmentManagementContext))]
-    partial class EnvironmentManagementContextModelSnapshot : ModelSnapshot
+    [Migration("20251017152337_AddApprovalWorkflowsTable")]
+    partial class AddApprovalWorkflowsTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
@@ -160,7 +163,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
                     b.HasIndex("Status", "Priority", "CreatedAt")
                         .HasDatabaseName("IX_ApprovalWorkflows_Status_Priority_CreatedAt");
 
-                    b.ToTable("ApprovalWorkflows", (string)null);
+                    b.ToTable("ApprovalWorkflows");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.ComplianceFinding", b =>
@@ -232,7 +235,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("ScanId", "Severity");
 
-                    b.ToTable("ComplianceFindings", (string)null);
+                    b.ToTable("ComplianceFindings");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.ComplianceScan", b =>
@@ -305,7 +308,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
                     b.HasIndex("DeploymentId", "Standard", "CompletedAt")
                         .HasDatabaseName("IX_ComplianceScans_Deployment_Standard_Completed");
 
-                    b.ToTable("ComplianceScans", (string)null);
+                    b.ToTable("ComplianceScans");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.DeploymentHistory", b =>
@@ -355,7 +358,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("DeploymentId", "StartedAt");
 
-                    b.ToTable("DeploymentHistory", (string)null);
+                    b.ToTable("DeploymentHistory");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.EnvironmentActivity", b =>
@@ -407,7 +410,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("EnvironmentLifecycleId", "Timestamp");
 
-                    b.ToTable("EnvironmentActivities", (string)null);
+                    b.ToTable("EnvironmentActivities");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.EnvironmentClone", b =>
@@ -477,7 +480,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("SourceEnvironmentId", "TargetEnvironmentId");
 
-                    b.ToTable("EnvironmentClones", (string)null);
+                    b.ToTable("EnvironmentClones");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.EnvironmentCostTracking", b =>
@@ -528,7 +531,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("EnvironmentLifecycleId", "Date");
 
-                    b.ToTable("EnvironmentCostTrackings", (string)null);
+                    b.ToTable("EnvironmentCostTrackings");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.EnvironmentDeployment", b =>
@@ -641,7 +644,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
                     b.HasIndex("SubscriptionId", "ResourceGroupName", "Status")
                         .HasDatabaseName("IX_EnvironmentDeployments_Subscription_ResourceGroup_Status");
 
-                    b.ToTable("EnvironmentDeployments", (string)null);
+                    b.ToTable("EnvironmentDeployments");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.EnvironmentLifecycle", b =>
@@ -740,7 +743,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
                     b.HasIndex("OwnerTeam", "Project", "Status")
                         .HasDatabaseName("IX_EnvironmentLifecycles_Team_Project_Status");
 
-                    b.ToTable("EnvironmentLifecycles", (string)null);
+                    b.ToTable("EnvironmentLifecycles");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.EnvironmentMetrics", b =>
@@ -786,7 +789,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
                     b.HasIndex("DeploymentId", "MetricType", "Timestamp")
                         .HasDatabaseName("IX_EnvironmentMetrics_Deployment_Type_Time");
 
-                    b.ToTable("EnvironmentMetrics", (string)null);
+                    b.ToTable("EnvironmentMetrics");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.EnvironmentSynchronization", b =>
@@ -859,7 +862,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("SourceEnvironmentId", "TargetEnvironmentId");
 
-                    b.ToTable("EnvironmentSynchronizations", (string)null);
+                    b.ToTable("EnvironmentSynchronizations");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.EnvironmentTemplate", b =>
@@ -972,7 +975,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("TemplateType", "DeploymentTier");
 
-                    b.ToTable("EnvironmentTemplates", (string)null);
+                    b.ToTable("EnvironmentTemplates");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.IntentFeedback", b =>
@@ -1014,7 +1017,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("IntentId", "FeedbackType");
 
-                    b.ToTable("IntentFeedback", (string)null);
+                    b.ToTable("IntentFeedback");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.IntentPattern", b =>
@@ -1079,7 +1082,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("IntentCategory", "IntentAction");
 
-                    b.ToTable("IntentPatterns", (string)null);
+                    b.ToTable("IntentPatterns");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.OnboardingRequest", b =>
@@ -1270,7 +1273,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("OnboardingRequests", (string)null);
+                    b.ToTable("OnboardingRequests");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.ScalingEvent", b =>
@@ -1326,7 +1329,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("PolicyId", "CreatedAt");
 
-                    b.ToTable("ScalingEvents", (string)null);
+                    b.ToTable("ScalingEvents");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.ScalingPolicy", b =>
@@ -1409,7 +1412,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("DeploymentId", "PolicyType");
 
-                    b.ToTable("ScalingPolicies", (string)null);
+                    b.ToTable("ScalingPolicies");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.SemanticIntent", b =>
@@ -1472,7 +1475,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("UserId", "CreatedAt");
 
-                    b.ToTable("SemanticIntents", (string)null);
+                    b.ToTable("SemanticIntents");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.TemplateFile", b =>
@@ -1519,7 +1522,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
 
                     b.HasIndex("TemplateId");
 
-                    b.ToTable("TemplateFiles", (string)null);
+                    b.ToTable("TemplateFiles");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.TemplateVersion", b =>
@@ -1561,7 +1564,7 @@ namespace Platform.Engineering.Copilot.Data.Migrations
                     b.HasIndex("TemplateId", "Version")
                         .IsUnique();
 
-                    b.ToTable("TemplateVersions", (string)null);
+                    b.ToTable("TemplateVersions");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.ComplianceFinding", b =>

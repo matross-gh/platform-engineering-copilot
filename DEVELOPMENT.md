@@ -1,6 +1,8 @@
 # Development Guide
 
-This comprehensive guide covers the architecture, development setup, contribution guidelines, and API documentation for the Platform MCP Platform.Engineering.Copilot.
+**Last Updated:** January 17, 2025
+
+This comprehensive guide covers the architecture, development setup, contribution guidelines, and API documentation for the Platform Engineering Copilot.
 
 ## 📋 Table of Contents
 
@@ -19,7 +21,7 @@ This comprehensive guide covers the architecture, development setup, contributio
 
 ### System Architecture
 
-The Platform Engineering Copilot uses a **direct integration architecture** that eliminates unnecessary proxy layers:
+The Platform Engineering Copilot uses a **direct integration architecture** with clean separation of concerns:
 
 ```mermaid
 graph TB
@@ -29,25 +31,31 @@ graph TB
     end
     
     subgraph "Application Layer"
-        Browser --> Chat[Chat Service :5000]
-        VSCode --> Chat
-        Chat --> API[Platform API :7001]
+        Browser --> AdminConsole[Admin Console :3001]
+        Browser --> ChatApp[Chat App :3000]
+        VSCode --> API[Platform API :7001]
     end
     
     subgraph "Service Layer"
-        API --> Tools[Platform Tools]
-        API --> Azure[Azure Services]
-        API --> Compliance[ATO Compliance]
-        API --> Cost[Cost Management]
+        API --> Core[Core Services]
+        AdminConsole --> AdminAPI[Admin API :7002]
+        Core --> Azure[Azure Services]
+        Core --> Compliance[ATO Compliance]
+        Core --> Cost[Cost Management]
     end
     
     subgraph "Data Layer"
-        API --> Database[(SQL Server)]
-        API --> Cache[(Redis)]
+        API --> Database[(SQLite/SQL Server)]
+        API --> Cache[(Redis - Optional)]
         API --> KeyVault[Azure Key Vault]
     end
     
     subgraph "External Services"
+        Azure --> AzureGov[Azure Government]
+        Azure --> AzureCommercial[Azure Commercial]
+        Core --> AzureOpenAI[Azure OpenAI]
+    end
+```
         Azure --> AzureGov[Azure Government]
         Azure --> AzureCommercial[Azure Commercial]
         Tools --> GitHub[GitHub APIs]
@@ -57,39 +65,75 @@ graph TB
 
 ### Core Components
 
-#### Chat Service (`Platform.Engineering.Copilot.Chat`)
-- **Purpose**: SignalR-based real-time chat interface
-- **Port**: 5000
-- **Technology**: ASP.NET Core, SignalR, Razor Pages
-- **Responsibilities**:
-  - MCP command detection and parsing
-  - Real-time communication with users
-  - Integration with Azure OpenAI for AI responses
-  - Command routing to API server
-
 #### Platform API (`Platform.Engineering.Copilot.API`)
 - **Purpose**: Core platform services and tool execution
 - **Port**: 7001
-- **Technology**: ASP.NET Core Web API, Entity Framework Core
+- **Technology**: ASP.NET Core Web API, Entity Framework Core 9.0
 - **Responsibilities**:
-  - Tool execution and orchestration
-  - Azure service integration
-  - ATO compliance scanning
+  - RESTful API endpoints for infrastructure operations
+  - Semantic Kernel plugin orchestration
+  - Azure Resource Manager integration
+  - ATO compliance scanning (NIST 800-53 Rev 5)
   - Cost analysis and optimization
-  - Infrastructure management
+  - Natural language query processing
+
+#### Admin API (`Platform.Engineering.Copilot.Admin.API`)
+- **Purpose**: Administrative backend API
+- **Port**: 7002
+- **Technology**: ASP.NET Core Web API
+- **Responsibilities**:
+  - Template management
+  - Approval workflow administration
+  - User management
+  - Configuration management
+
+#### Admin Console (`Platform.Engineering.Copilot.Admin.Client`)
+- **Purpose**: React-based administrative UI
+- **Port**: 3001
+- **Technology**: React 18, ASP.NET Core (host)
+- **Responsibilities**:
+  - Template browsing and management
+  - Approval workflow UI
+  - System configuration
+  - User administration
+
+#### Chat App (`Platform.Engineering.Copilot.Chat`)
+- **Purpose**: Real-time chat interface for onboarding
+- **Port**: 3000
+- **Technology**: React, SignalR, ASP.NET Core
+- **Responsibilities**:
+  - Real-time conversational AI interface
+  - Onboarding workflow guidance
+  - Natural language interaction
+  - Integration with Platform API
 
 #### Core Library (`Platform.Engineering.Copilot.Core`)
-- **Purpose**: Shared contracts, models, and utilities
-- **Technology**: .NET 9 Class Library
+- **Purpose**: Business logic and domain services
+- **Technology**: .NET 9.0 Class Library
 - **Responsibilities**:
-  - Common interfaces and contracts
-  - Shared data models
-  - Extension methods and utilities
-  - Cross-project dependencies
+  - Semantic Kernel plugins (7 plugins)
+  - Domain services (40+ services)
+  - Azure service integration
+  - Compliance engines (NIST 800-53, Azure Policy)
+  - Cost management services
+  - Infrastructure provisioning services
 
-#### Gateway Service (`Platform.Engineering.Copilot.Gateway`)
-- **Purpose**: Multi-cloud API gateway and authentication
-- **Technology**: .NET 9 Class Library
+#### Data Layer (`Platform.Engineering.Copilot.Data`)
+- **Purpose**: Data access and persistence
+- **Technology**: Entity Framework Core 9.0
+- **Responsibilities**:
+  - Entity definitions (20+ entities)
+  - Database context (EnvironmentManagementContext)
+  - Migrations and seeding
+  - Supports: SQLite, SQL Server, In-Memory
+
+#### MCP Server (`Platform.Engineering.Copilot.Mcp`)
+- **Purpose**: Model Context Protocol server for AI agents
+- **Technology**: .NET 9.0 Console Application
+- **Responsibilities**:
+  - MCP protocol implementation
+  - AI agent integration
+  - Tool execution for external agents
 - **Responsibilities**:
   - Azure Government Cloud integration
   - Authentication and authorization
@@ -100,29 +144,39 @@ graph TB
 
 #### Backend
 - **.NET 9.0**: Primary framework
-- **ASP.NET Core**: Web API and SignalR
-- **Entity Framework Core**: Data access layer
-- **Azure SDK**: Azure service integration
-- **AutoMapper**: Object mapping
-- **FluentValidation**: Input validation
+- **ASP.NET Core 9.0**: Web API and hosting
+- **Entity Framework Core 9.0**: Data access layer
+- **Microsoft Semantic Kernel 1.26.0**: AI orchestration
+- **Azure SDK 1.48.0+**: Azure service integration (11+ packages)
+- **SignalR 9.0**: Real-time communication
 - **Serilog**: Structured logging
 
 #### Frontend
+- **React 18**: UI framework for Admin Console and Chat App
 - **SignalR Client**: Real-time communication
-- **Bootstrap 5**: UI framework
-- **JavaScript ES6+**: Client-side interactions
-- **Chart.js**: Data visualization
+- **Axios**: HTTP client
+- **Tailwind CSS**: Styling framework
+- **Monaco Editor**: Code editor component
 
+#### AI & ML
+- **Azure OpenAI GPT-4o**: Natural language understanding
+- **Semantic Kernel**: AI plugin orchestration and function calling
+- **Intent Classification**: Query routing to specialized plugins
+- **Context Management**: Conversation memory across sessions
 #### Data Storage
-- **SQL Server**: Primary database
-- **Redis**: Caching and session storage
+- **SQLite**: Default development database (environment_management.db)
+- **SQL Server**: Production database option
+- **Redis**: Optional caching and session storage
 - **Azure Key Vault**: Secrets management
 - **Azure Blob Storage**: File storage
 
 #### Cloud Services
-- **Azure Government**: Primary cloud platform
+- **Azure Government**: Primary cloud platform (management.usgovcloudapi.net)
 - **Azure Commercial**: Secondary cloud support
-- **Azure OpenAI**: AI/ML services
+- **Azure OpenAI**: AI/ML services (GPT-4o deployment)
+- **Azure Resource Manager**: Infrastructure provisioning
+- **Azure Policy Insights API**: Policy evaluation
+- **Azure Cost Management API**: Cost analysis
 - **Azure Monitor**: Observability and monitoring
 
 ---

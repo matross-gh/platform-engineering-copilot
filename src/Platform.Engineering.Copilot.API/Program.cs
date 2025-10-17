@@ -83,7 +83,8 @@ public class Program
         // Register other core services
         builder.Services.AddSingleton<GitHubGatewayService>();
         builder.Services.AddSingleton<IGitHubServices>(provider => provider.GetRequiredService<GitHubGatewayService>());
-        builder.Services.AddSingleton<AzurePolicyEngine>();
+        // Changed to Scoped because AzurePolicyEngine now requires EnvironmentManagementContext (DbContext)
+        builder.Services.AddScoped<AzurePolicyEngine>();
 
         // NOTE: Dynamic PluginSystem removed - using Semantic Kernel plugins instead
         

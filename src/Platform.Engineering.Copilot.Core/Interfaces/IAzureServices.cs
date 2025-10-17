@@ -52,6 +52,7 @@ namespace Platform.Engineering.Copilot.Core.Interfaces
         Task<IEnumerable<object>> ListResourceGroupsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default);
         Task<object?> GetResourceGroupAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default);
         Task<object> CreateResourceGroupAsync(string resourceGroupName, string location, string? subscriptionId = null, Dictionary<string, string>? tags = null, CancellationToken cancellationToken = default);
+        Task DeleteResourceGroupAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default);
 
         // Resource operations
         Task<IEnumerable<object>> ListResourcesAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default);
@@ -139,6 +140,8 @@ namespace Platform.Engineering.Copilot.Core.Interfaces
         Task<object> CreateAksClusterAsync(string clusterName, string resourceGroupName, string location, Dictionary<string, object>? aksSettings = null, string? subscriptionId = null, CancellationToken cancellationToken = default);
         Task<object> CreateWebAppAsync(string appName, string resourceGroupName, string location, Dictionary<string, object>? appSettings = null, string? subscriptionId = null, CancellationToken cancellationToken = default);
         Task<object> CreateStorageAccountAsync(string storageAccountName, string resourceGroupName, string location, Dictionary<string, object>? storageSettings = null, string? subscriptionId = null, CancellationToken cancellationToken = default);
+        Task<object> CreateKeyVaultAsync(string keyVaultName, string resourceGroupName, string location, Dictionary<string, object>? keyVaultSettings = null, string? subscriptionId = null, CancellationToken cancellationToken = default);
+        Task<object> CreateBlobContainerAsync(string containerName, string storageAccountName, string resourceGroupName, Dictionary<string, object>? containerSettings = null, string? subscriptionId = null, CancellationToken cancellationToken = default);
 
         // Resource Health
         Task<IEnumerable<object>> GetResourceHealthEventsAsync(string subscriptionId, CancellationToken cancellationToken = default);

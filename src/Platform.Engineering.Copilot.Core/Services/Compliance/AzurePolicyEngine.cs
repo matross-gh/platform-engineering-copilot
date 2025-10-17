@@ -1,12 +1,18 @@
+using Azure;
 using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
-// using Azure.ResourceManager.PolicyInsights;
+using Azure.ResourceManager.PolicyInsights;
 using Azure.ResourceManager.PolicyInsights.Models;
+using Azure.ResourceManager.Resources;
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Services;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Platform.Engineering.Copilot.Data.Context;
+using Platform.Engineering.Copilot.Data.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Platform.Engineering.Copilot.Core.Services.Compliance;
 
@@ -14,21 +20,27 @@ public class AzurePolicyEngine : IAzurePolicyService
 {
     private readonly ILogger<AzurePolicyEngine> _logger;
     private readonly ArmClient _armClient;
-    // private readonly PolicyInsightsClient _policyInsightsClient;
-    private readonly Dictionary<string, ApprovalWorkflow> _approvalWorkflows;
+    private readonly TokenCredential _credential;
+    private readonly EnvironmentManagementContext _dbContext;
     private readonly Dictionary<string, List<AzurePolicyEvaluation>> _policyEvaluationCache;
+    private readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(5);
+    private readonly Dictionary<string, DateTime> _cacheTimestamps;
 
-    public AzurePolicyEngine(ILogger<AzurePolicyEngine> logger)
+    public AzurePolicyEngine(
+        ILogger<AzurePolicyEngine> logger,
+        EnvironmentManagementContext dbContext)
     {
         _logger = logger;
+        _dbContext = dbContext;
         
         // Initialize Azure clients with default credential
-        var credential = new DefaultAzureCredential();
-        _armClient = new ArmClient(credential);
-        // _policyInsightsClient = new PolicyInsightsClient(credential);
+        _credential = new DefaultAzureCredential();
+        _armClient = new ArmClient(_credential);
         
-        _approvalWorkflows = new Dictionary<string, ApprovalWorkflow>();
         _policyEvaluationCache = new Dictionary<string, List<AzurePolicyEvaluation>>();
+        _cacheTimestamps = new Dictionary<string, DateTime>();
+        
+        _logger.LogInformation("AzurePolicyEngine initialized with Azure Policy Insights integration and database persistence");
     }
 
     public async Task<PreFlightGovernanceResult> EvaluatePreFlightPoliciesAsync(McpToolCall toolCall, CancellationToken cancellationToken = default)
@@ -67,12 +79,12 @@ public class AzurePolicyEngine : IAzurePolicyService
             {
                 case GovernancePolicyDecision.Allow:
                     result.IsApproved = true;
-                    result.Messages.Add("All policies passed - tool execution approved");
+                    result.Messages.Add("All policies passed - approved");
                     break;
 
                 case GovernancePolicyDecision.Deny:
                     result.IsApproved = false;
-                    result.Messages.Add("Policy violation detected - tool execution denied");
+                    result.Messages.Add("Policy violation detected - denied");
                     break;
 
                 case GovernancePolicyDecision.RequiresApproval:
@@ -87,7 +99,7 @@ public class AzurePolicyEngine : IAzurePolicyService
 
                 case GovernancePolicyDecision.AuditOnly:
                     result.IsApproved = true;
-                    result.Messages.Add("Audit-only policy - tool execution allowed with logging");
+                    result.Messages.Add("Audit-only policy - allowed with logging");
                     break;
             }
 
@@ -164,39 +176,121 @@ public class AzurePolicyEngine : IAzurePolicyService
         }
     }
 
-    public Task<List<AzurePolicyEvaluation>> GetPolicyEvaluationsForResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+    public async Task<List<AzurePolicyEvaluation>> GetPolicyEvaluationsForResourceAsync(string resourceId, CancellationToken cancellationToken = default)
     {
-        if (_policyEvaluationCache.TryGetValue(resourceId, out var cachedEvaluations))
+        // Check cache first
+        if (_policyEvaluationCache.TryGetValue(resourceId, out var cachedEvaluations) &&
+            _cacheTimestamps.TryGetValue(resourceId, out var cacheTime) &&
+            DateTime.UtcNow - cacheTime < _cacheExpiration)
         {
-            return Task.FromResult(cachedEvaluations);
+            _logger.LogDebug("Returning cached policy evaluations for resource: {ResourceId}", resourceId);
+            return cachedEvaluations;
         }
 
         try
         {
+            _logger.LogInformation("Fetching policy evaluations from Azure for resource: {ResourceId}", resourceId);
+            
             var evaluations = new List<AzurePolicyEvaluation>();
             
-            // Query policy insights for the resource
-            // Note: This is a simplified implementation - in production you would use the actual Azure Policy Insights API
-            var mockEvaluation = new AzurePolicyEvaluation
+            // Parse resource ID to get subscription
+            var subscriptionId = ExtractSubscriptionFromId(resourceId);
+            if (string.IsNullOrEmpty(subscriptionId) || subscriptionId == "Unknown")
             {
-                PolicyDefinitionId = "/providers/Microsoft.Authorization/policyDefinitions/mock-policy",
-                PolicyAssignmentId = "/subscriptions/mock-sub/providers/Microsoft.Authorization/policyAssignments/mock-assignment",
-                ResourceId = resourceId,
-                ComplianceState = Core.Models.PolicyComplianceState.Compliant,
-                PolicyEffect = "audit",
-                EvaluatedAt = DateTime.UtcNow
-            };
+                _logger.LogWarning("Could not extract subscription ID from resource ID: {ResourceId}", resourceId);
+                return evaluations;
+            }
+
+            // Get subscription resource
+            var subscriptionResourceId = new global::Azure.Core.ResourceIdentifier($"/subscriptions/{subscriptionId}");
+            var subscription = _armClient.GetSubscriptionResource(subscriptionResourceId);
             
-            evaluations.Add(mockEvaluation);
-            
+            // Query policy compliance using Azure Resource Manager REST API
+            // This approach works consistently across SDK versions
+            try
+            {
+                // Build the policy states query URL
+                var policyStatesUrl = $"{subscriptionResourceId}/providers/Microsoft.PolicyInsights/policyStates/latest/queryResults?api-version=2019-10-01&$filter=ResourceId eq '{resourceId}'";
+                
+                // Use HttpClient to query the REST API
+                using var httpClient = new HttpClient();
+                var token = await _credential.GetTokenAsync(
+                    new global::Azure.Core.TokenRequestContext(new[] { "https://management.azure.com/.default" }),
+                    cancellationToken);
+                
+                httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
+                
+                var response = await httpClient.PostAsync(policyStatesUrl, null, cancellationToken);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var policyStates = JsonSerializer.Deserialize<PolicyStatesResponse>(content);
+                    
+                    if (policyStates?.Value != null)
+                    {
+                        foreach (var policyState in policyStates.Value)
+                        {
+                            var evaluation = new AzurePolicyEvaluation
+                            {
+                                PolicyDefinitionId = policyState.PolicyDefinitionId ?? "unknown",
+                                PolicyAssignmentId = policyState.PolicyAssignmentId ?? "unknown",
+                                ResourceId = resourceId,
+                                ComplianceState = MapComplianceState(policyState.ComplianceState),
+                                PolicyEffect = policyState.PolicyDefinitionAction ?? "unknown",
+                                EvaluatedAt = policyState.Timestamp
+                            };
+                            
+                            evaluations.Add(evaluation);
+                            
+                            _logger.LogDebug("Policy evaluation: {PolicyId} - {ComplianceState}", 
+                                evaluation.PolicyDefinitionId, evaluation.ComplianceState);
+                        }
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Policy states API returned {StatusCode} for resource: {ResourceId}", 
+                        response.StatusCode, resourceId);
+                }
+            }
+            catch (global::Azure.RequestFailedException ex) when (ex.Status == 404 || ex.Status == 403)
+            {
+                _logger.LogWarning(ex, "Unable to query policy states (permission or resource not found): {ResourceId}", resourceId);
+                // Return empty list - this is expected for resources without policies or insufficient permissions
+            }
+
+            // Cache the results
             _policyEvaluationCache[resourceId] = evaluations;
-            return Task.FromResult(evaluations);
+            _cacheTimestamps[resourceId] = DateTime.UtcNow;
+            
+            _logger.LogInformation("Retrieved {Count} policy evaluations for resource: {ResourceId}", 
+                evaluations.Count, resourceId);
+            
+            return evaluations;
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            _logger.LogWarning("Resource not found or no policy states available: {ResourceId}", resourceId);
+            return new List<AzurePolicyEvaluation>();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving policy evaluations for resource: {ResourceId}", resourceId);
-            return Task.FromResult(new List<AzurePolicyEvaluation>());
+            return new List<AzurePolicyEvaluation>();
         }
+    }
+
+    private Core.Models.PolicyComplianceState MapComplianceState(string? azureComplianceState)
+    {
+        return azureComplianceState?.ToLowerInvariant() switch
+        {
+            "compliant" => Core.Models.PolicyComplianceState.Compliant,
+            "noncompliant" => Core.Models.PolicyComplianceState.NonCompliant,
+            "unknown" => Core.Models.PolicyComplianceState.Unknown,
+            _ => Core.Models.PolicyComplianceState.Unknown
+        };
     }
 
     public async Task<ApprovalWorkflow> CreateApprovalWorkflowAsync(McpToolCall toolCall, List<PolicyViolation> violations, CancellationToken cancellationToken = default)
@@ -213,27 +307,52 @@ public class AzurePolicyEngine : IAzurePolicyService
                       violations.Any(v => v.Severity == PolicyViolationSeverity.High) ? 4 : 3
         };
 
-        _approvalWorkflows[workflow.Id] = workflow;
+        // Persist to database
+        var entity = MapToEntity(workflow);
+        _dbContext.ApprovalWorkflows.Add(entity);
+        await _dbContext.SaveChangesAsync(cancellationToken);
         
-        _logger.LogInformation("Created approval workflow {WorkflowId} for tool call {ToolCall}", 
+        _logger.LogInformation("Created and persisted approval workflow {WorkflowId} for tool call {ToolCall}", 
             workflow.Id, toolCall.Name);
 
         return workflow;
     }
 
-    public Task<ApprovalWorkflow?> GetApprovalWorkflowAsync(string workflowId, CancellationToken cancellationToken = default)
+    public async Task<ApprovalWorkflow?> GetApprovalWorkflowAsync(string workflowId, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(_approvalWorkflows.TryGetValue(workflowId, out var workflow) ? workflow : null);
+        var entity = await _dbContext.ApprovalWorkflows
+            .FirstOrDefaultAsync(w => w.Id == workflowId, cancellationToken);
+        
+        return entity != null ? MapFromEntity(entity) : null;
     }
 
-    public Task<ApprovalWorkflow> UpdateApprovalWorkflowAsync(ApprovalWorkflow workflow, CancellationToken cancellationToken = default)
+    public async Task<ApprovalWorkflow> UpdateApprovalWorkflowAsync(ApprovalWorkflow workflow, CancellationToken cancellationToken = default)
     {
-        _approvalWorkflows[workflow.Id] = workflow;
+        var entity = await _dbContext.ApprovalWorkflows
+            .FirstOrDefaultAsync(w => w.Id == workflow.Id, cancellationToken);
+        
+        if (entity == null)
+        {
+            throw new InvalidOperationException($"Approval workflow {workflow.Id} not found");
+        }
+
+        // Update entity properties
+        entity.Status = workflow.Status.ToString();
+        entity.CompletedAt = workflow.CompletedAt;
+        entity.ApprovedBy = workflow.ApprovedBy;
+        entity.ApprovedAt = workflow.ApprovedAt;
+        entity.ApprovalComments = workflow.ApprovalComments;
+        entity.RejectedBy = workflow.RejectedBy;
+        entity.RejectedAt = workflow.RejectedAt;
+        entity.RejectionReason = workflow.RejectionReason;
+        entity.DecisionsJson = JsonSerializer.Serialize(workflow.Decisions);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
         
         _logger.LogInformation("Updated approval workflow {WorkflowId} with status {Status}", 
             workflow.Id, workflow.Status);
 
-        return Task.FromResult(workflow);
+        return workflow;
     }
 
     private Task<ResourceContext?> ExtractResourceContextAsync(McpToolCall toolCall)
@@ -271,13 +390,64 @@ public class AzurePolicyEngine : IAzurePolicyService
         return Task.FromResult<ResourceContext?>(null);
     }
 
-    private Task<List<PolicyViolation>> EvaluatePoliciesAsync(McpToolCall toolCall, ResourceContext resourceContext, CancellationToken cancellationToken)
+    private async Task<List<PolicyViolation>> EvaluatePoliciesAsync(McpToolCall toolCall, ResourceContext resourceContext, CancellationToken cancellationToken)
     {
         var violations = new List<PolicyViolation>();
 
-        // Simulate policy evaluation based on tool call and resource context
-        // In production, this would integrate with Azure Policy service
+        try
+        {
+            // Use real Azure Policy Insights API to check for policy compliance
+            if (!string.IsNullOrEmpty(resourceContext.ResourceId))
+            {
+                _logger.LogInformation("Evaluating Azure policies for resource: {ResourceId}", resourceContext.ResourceId);
+                
+                var policyEvaluations = await GetPolicyEvaluationsForResourceAsync(resourceContext.ResourceId, cancellationToken);
+                
+                // Convert non-compliant policy evaluations to violations
+                foreach (var evaluation in policyEvaluations.Where(e => e.ComplianceState == Core.Models.PolicyComplianceState.NonCompliant))
+                {
+                    var severity = DetermineSeverityFromPolicyEffect(evaluation.PolicyEffect);
+                    
+                    violations.Add(new PolicyViolation
+                    {
+                        PolicyName = ExtractPolicyName(evaluation.PolicyDefinitionId),
+                        PolicyId = evaluation.PolicyDefinitionId,
+                        Severity = severity,
+                        Description = $"Resource violates policy: {ExtractPolicyName(evaluation.PolicyDefinitionId)}",
+                        RecommendedAction = GetRecommendedActionForPolicy(evaluation.PolicyEffect, evaluation.PolicyDefinitionId)
+                    });
+                    
+                    _logger.LogWarning("Policy violation detected: {PolicyId} - {Effect}", 
+                        evaluation.PolicyDefinitionId, evaluation.PolicyEffect);
+                }
+                
+                _logger.LogInformation("Found {Count} policy violations for resource {ResourceId}", 
+                    violations.Count, resourceContext.ResourceId);
+            }
+            else
+            {
+                _logger.LogWarning("No resource ID provided - using fallback policy checks");
+                
+                // Fallback to basic policy checks for operations without a specific resource ID
+                violations.AddRange(EvaluateFallbackPolicies(toolCall, resourceContext));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error evaluating Azure policies for resource: {ResourceId}", resourceContext.ResourceId);
+            
+            // Fallback to basic policy checks on error
+            violations.AddRange(EvaluateFallbackPolicies(toolCall, resourceContext));
+        }
+
+        return violations;
+    }
+
+    private List<PolicyViolation> EvaluateFallbackPolicies(McpToolCall toolCall, ResourceContext resourceContext)
+    {
+        var violations = new List<PolicyViolation>();
         
+        // Basic policy checks when Azure Policy API is unavailable or resource doesn't exist yet
         if (toolCall.Name.Contains("delete", StringComparison.OrdinalIgnoreCase))
         {
             violations.Add(new PolicyViolation
@@ -301,8 +471,35 @@ public class AzurePolicyEngine : IAzurePolicyService
                 RecommendedAction = "Ensure encryption and access controls are properly configured"
             });
         }
+        
+        return violations;
+    }
 
-        return Task.FromResult(violations);
+    private PolicyViolationSeverity DetermineSeverityFromPolicyEffect(string policyEffect)
+    {
+        return policyEffect?.ToLowerInvariant() switch
+        {
+            "deny" => PolicyViolationSeverity.Critical,
+            "deployifnotexists" => PolicyViolationSeverity.High,
+            "modify" => PolicyViolationSeverity.Medium,
+            "audit" => PolicyViolationSeverity.Low,
+            "auditifnotexists" => PolicyViolationSeverity.Low,
+            _ => PolicyViolationSeverity.Medium
+        };
+    }
+
+    private string GetRecommendedActionForPolicy(string policyEffect, string policyId)
+    {
+        var policyName = ExtractPolicyName(policyId);
+        
+        return policyEffect?.ToLowerInvariant() switch
+        {
+            "deny" => $"This resource violates the '{policyName}' policy. The operation will be blocked by Azure. Review policy requirements and adjust resource configuration.",
+            "deployifnotexists" => $"The '{policyName}' policy requires additional resources to be deployed. Review policy definition and ensure required resources are created.",
+            "modify" => $"The '{policyName}' policy will automatically modify this resource. Review the changes that will be applied.",
+            "audit" => $"This resource violates the '{policyName}' audit policy. The operation is allowed but will be logged for compliance review.",
+            _ => $"Review the '{policyName}' policy requirements and ensure resource compliance."
+        };
     }
 
     private Task<List<ComplianceViolation>> EvaluateComplianceAsync(McpToolCall toolCall, McpToolResult result, ResourceContext resourceContext, CancellationToken cancellationToken)
@@ -402,6 +599,131 @@ public class AzurePolicyEngine : IAzurePolicyService
             }
         }
         return "Unknown";
+    }
+
+    private string ExtractPolicyName(string policyDefinitionId)
+    {
+        // Extract policy name from policy definition ID
+        // Format: /providers/Microsoft.Authorization/policyDefinitions/{name}
+        // or /subscriptions/{sub}/providers/Microsoft.Authorization/policyDefinitions/{name}
+        if (string.IsNullOrEmpty(policyDefinitionId))
+        {
+            return "Unknown Policy";
+        }
+
+        var parts = policyDefinitionId.Split('/');
+        if (parts.Length > 0)
+        {
+            // Get the last part which is typically the policy name
+            var name = parts[^1];
+            
+            // Clean up common Azure naming patterns
+            return name
+                .Replace("-", " ")
+                .Replace("_", " ")
+                .Trim();
+        }
+        
+        return policyDefinitionId;
+    }
+
+    private ApprovalWorkflowEntity MapToEntity(ApprovalWorkflow workflow)
+    {
+        return new ApprovalWorkflowEntity
+        {
+            Id = workflow.Id,
+            ToolCallId = workflow.ToolCallId,
+            Status = workflow.Status.ToString(),
+            CreatedAt = workflow.CreatedAt,
+            CompletedAt = workflow.CompletedAt,
+            Justification = workflow.Justification,
+            Priority = workflow.Priority,
+            ResourceType = workflow.ResourceType,
+            ResourceName = workflow.ResourceName,
+            ResourceGroupName = workflow.ResourceGroupName,
+            Location = workflow.Location,
+            Environment = workflow.Environment,
+            RequestedBy = workflow.RequestedBy,
+            RequestedAt = workflow.RequestedAt,
+            ExpiresAt = workflow.ExpiresAt,
+            Reason = workflow.Reason,
+            ApprovedBy = workflow.ApprovedBy,
+            ApprovedAt = workflow.ApprovedAt,
+            ApprovalComments = workflow.ApprovalComments,
+            RejectedBy = workflow.RejectedBy,
+            RejectedAt = workflow.RejectedAt,
+            RejectionReason = workflow.RejectionReason,
+            RequiredApproversJson = JsonSerializer.Serialize(workflow.RequiredApprovers),
+            PolicyViolationsJson = JsonSerializer.Serialize(workflow.PolicyViolations),
+            OriginalToolCallJson = JsonSerializer.Serialize(workflow.OriginalToolCall),
+            DecisionsJson = JsonSerializer.Serialize(workflow.Decisions),
+            RequestPayload = workflow.RequestPayload
+        };
+    }
+
+    private ApprovalWorkflow MapFromEntity(ApprovalWorkflowEntity entity)
+    {
+        return new ApprovalWorkflow
+        {
+            Id = entity.Id,
+            ToolCallId = entity.ToolCallId,
+            Status = Enum.Parse<ApprovalStatus>(entity.Status),
+            CreatedAt = entity.CreatedAt,
+            CompletedAt = entity.CompletedAt,
+            Justification = entity.Justification,
+            Priority = entity.Priority,
+            ResourceType = entity.ResourceType,
+            ResourceName = entity.ResourceName,
+            ResourceGroupName = entity.ResourceGroupName,
+            Location = entity.Location,
+            Environment = entity.Environment,
+            RequestedBy = entity.RequestedBy,
+            RequestedAt = entity.RequestedAt,
+            ExpiresAt = entity.ExpiresAt,
+            Reason = entity.Reason,
+            ApprovedBy = entity.ApprovedBy,
+            ApprovedAt = entity.ApprovedAt,
+            ApprovalComments = entity.ApprovalComments,
+            RejectedBy = entity.RejectedBy,
+            RejectedAt = entity.RejectedAt,
+            RejectionReason = entity.RejectionReason,
+            RequiredApprovers = JsonSerializer.Deserialize<List<string>>(entity.RequiredApproversJson) ?? new List<string>(),
+            PolicyViolations = JsonSerializer.Deserialize<List<string>>(entity.PolicyViolationsJson) ?? new List<string>(),
+            OriginalToolCall = JsonSerializer.Deserialize<McpToolCall>(entity.OriginalToolCallJson) ?? new McpToolCall { Name = "", Arguments = new Dictionary<string, object?>() },
+            Decisions = JsonSerializer.Deserialize<List<ApprovalDecision>>(entity.DecisionsJson) ?? new List<ApprovalDecision>(),
+            RequestPayload = entity.RequestPayload
+        };
+    }
+
+    // Helper classes for Azure Policy Insights REST API deserialization
+    private class PolicyStatesResponse
+    {
+        [JsonPropertyName("value")]
+        public List<PolicyStateData>? Value { get; set; }
+    }
+
+    private class PolicyStateData
+    {
+        [JsonPropertyName("policyDefinitionId")]
+        public string? PolicyDefinitionId { get; set; }
+
+        [JsonPropertyName("policyAssignmentId")]
+        public string? PolicyAssignmentId { get; set; }
+
+        [JsonPropertyName("complianceState")]
+        public string? ComplianceState { get; set; }
+
+        [JsonPropertyName("policyDefinitionAction")]
+        public string? PolicyDefinitionAction { get; set; }
+
+        [JsonPropertyName("timestamp")]
+        public DateTime Timestamp { get; set; }
+
+        [JsonPropertyName("resourceId")]
+        public string? ResourceId { get; set; }
+
+        [JsonPropertyName("policyDefinitionName")]
+        public string? PolicyDefinitionName { get; set; }
     }
 }
 

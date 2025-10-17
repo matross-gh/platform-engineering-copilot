@@ -1,6 +1,8 @@
 # Platform Engineering Copilot - Comprehensive Prompt Guide
 
-> **Master the Art of AI-Powered Infrastructure Provisioning with Natural Language**
+**Last Updated:** January 17, 2025
+
+> **AI-Powered Infrastructure Provisioning with Natural Language**
 
 ---
 
@@ -9,7 +11,7 @@
 1. [Introduction](#introduction)
 2. [Prompt Fundamentals](#prompt-fundamentals)
 3. [Chat Interface Prompts](#chat-interface-prompts)
-4. [VS Code Extension Prompts](#vs-code-extension-prompts)
+4. [REST API Prompts](#rest-api-prompts)
 5. [Admin Console Operations](#admin-console-operations)
 6. [Advanced Techniques](#advanced-techniques)
 7. [Best Practices](#best-practices)
@@ -19,21 +21,33 @@
 
 ## 🎯 Introduction
 
-The Platform Engineering Copilot uses natural language processing to understand your infrastructure needs and automatically generate production-ready templates. This guide teaches you how to write effective prompts to get the best results.
+The Platform Engineering Copilot uses natural language processing powered by Azure OpenAI (GPT-4o) and Microsoft Semantic Kernel to understand your infrastructure needs and execute real-time Azure operations. This guide teaches you how to write effective prompts to get the best results.
 
 ### Understanding the AI System
 
-The system uses three levels of intelligence:
+The system uses four levels of intelligence:
 
-1. **Intent Classification**: Determines what you want to do (provision, deploy, monitor, etc.)
+1. **Intent Classification**: Determines what you want to do (provision, compliance scan, cost analysis, etc.)
 2. **Parameter Extraction**: Extracts structured data from your conversational input
-3. **Context Awareness**: Remembers previous messages and maintains conversation state
+3. **Context Awareness**: Remembers previous messages and maintains conversation state across sessions
+4. **Policy Evaluation**: Real-time Azure Policy validation before deployment
+5. **Action Execution**: Direct integration with Azure Resource Manager APIs for real infrastructure operations
 
-### Three Primary Interfaces
+### Key Features
 
-1. **Chat App** (`http://localhost:3001`): Natural language onboarding and support
-2. **VS Code Extension**: `@platform` chat participant for infrastructure operations
-3. **Admin Console** (`http://localhost:3000`): Template management and approvals
+- **Real Azure Resource Management**: Direct Azure ARM API integration for infrastructure provisioning
+- **ATO Compliance Automation**: NIST 800-53 Rev 5 scanning with automated remediation recommendations
+- **Azure Policy Integration**: Real-time policy evaluation via Azure Policy Insights API
+- **Cost Intelligence**: Live cost analysis and optimization recommendations via Azure Cost Management API
+- **Approval Workflows**: Database-backed approval system for policy exceptions and infrastructure changes
+- **Persistent Storage**: All workflows and assessments stored in SQLite database for audit trails
+- **Intelligent Caching**: 5-minute cache for policy evaluations to optimize performance
+
+### Primary Interfaces
+
+1. **REST API** (`http://localhost:7001`): Direct HTTP API for programmatic access
+2. **Chat App** (`http://localhost:3000`): React-based conversational interface for onboarding
+3. **Admin Console** (`http://localhost:3001`): Template management and approval workflows
 
 ---
 
@@ -469,18 +483,21 @@ compliance for any framework that uses these controls.
 
 **Cost Analysis**:
 ```
-"Analyze Azure costs for last 3 months:
-- Subscription: Production subscription or SubnscriptionId
-- Breakdown: By resource group, resource type, location, tags
-- Trends: Show spending trends and anomalies
-- Forecasting: Predict next month's costs
-- Recommendations: Identify cost optimization opportunities
-- Budget alerts: Notify if spending >80% of monthly budget ($50K)"
+Show comprehensive cost analysis for subscription 453c2549-4cc5-464f-ba66-acad920823e8 for the last 3 months with breakdowns by resource group, type, location, and tags
 ```
+
+> **💡 Tip**: The cost analysis uses keyword detection. Avoid words like "budget" or "alert" in your main query if you want comprehensive analysis. Use those keywords only when specifically requesting budget monitoring.
+
+**Budget Monitoring** (use these keywords to get budget-specific view):
+```
+Show budget status and alerts for subscription 453c2549-4cc5-464f-ba66-acad920823e8
+```
+
 
 **Optimization Recommendations**:
 ```
 "Provide cost optimization recommendations for production environment:
+- subscription 453c2549-4cc5-464f-ba66-acad920823e8
 - Right-sizing: Identify oversized VMs and databases
 - Reserved instances: Analyze usage for RI/savings plan opportunities
 - Unused resources: Find idle resources (stopped VMs, unattached disks, 
@@ -509,7 +526,7 @@ The VS Code extension provides the `@platform` chat participant for infrastructu
 
 **Complex Multi-Resource Deployment**:
 ```
-@platform provision complete infrastructure for microservice "order-processor":
+provision complete infrastructure for microservice "order-processor":
 - Resource group: orders-prod-rg in East US 2
 - AKS cluster: 5 nodes, Standard_D4s_v3
 - Azure SQL: Business Critical, 4 vCores, geo-replication
@@ -525,7 +542,7 @@ The VS Code extension provides the `@platform` chat participant for infrastructu
 
 **Generate Bicep Template**:
 ```
-@platform generate Bicep template for serverless architecture:
+generate Bicep template for serverless architecture:
 - Container Apps environment with 3 microservices
 - Cosmos DB with SQL API
 - Service Bus for async messaging
@@ -536,7 +553,7 @@ The VS Code extension provides the `@platform` chat participant for infrastructu
 
 **Generate Terraform Template**:
 ```
-@platform create Terraform module for AWS EKS:
+create Terraform module for AWS EKS:
 - Cluster version: 1.27
 - Node groups: 2 (system nodes and application nodes)
 - Networking: VPC with public and private subnets
@@ -549,7 +566,7 @@ The VS Code extension provides the `@platform` chat participant for infrastructu
 
 **Container Security Scan**:
 ```
-@platform scan container image "myregistry.azurecr.io/webapp:v2.1.0" for:
+scan container image "myregistry.azurecr.io/webapp:v2.1.0" for:
 - Vulnerabilities: CVEs in base image and dependencies
 - Secrets: Hardcoded passwords, API keys, tokens
 - Best practices: Dockerfile optimization, non-root user, minimal layers
@@ -560,7 +577,7 @@ The VS Code extension provides the `@platform` chat participant for infrastructu
 
 **Code Security Scan**:
 ```
-@platform run security scan on current workspace:
+run security scan on current workspace:
 - SAST: Static analysis for code vulnerabilities (SQL injection, XSS, etc.)
 - Dependency scan: Known vulnerabilities in NuGet/npm packages
 - Secret detection: Scan for accidentally committed secrets
@@ -572,7 +589,7 @@ The VS Code extension provides the `@platform` chat participant for infrastructu
 
 **Deploy to Kubernetes**:
 ```
-@platform deploy application "payment-api" version v2.1.0 to production:
+deploy application "payment-api" version v2.1.0 to production:
 - Cluster: production-aks-eastus2
 - Namespace: payments
 - Strategy: Rolling update with 25% max surge, 0% max unavailable
@@ -586,7 +603,7 @@ The VS Code extension provides the `@platform` chat participant for infrastructu
 
 **Blue-Green Deployment**:
 ```
-@platform execute blue-green deployment for "customer-portal":
+execute blue-green deployment for "customer-portal":
 - Current version (green): v1.5.2 (receiving 100% traffic)
 - New version (blue): v1.6.0 (deploy but no traffic)
 - Validation: Run smoke tests, check error rate <1%
@@ -599,7 +616,7 @@ The VS Code extension provides the `@platform` chat participant for infrastructu
 
 **Create Dashboard**:
 ```
-@platform create monitoring dashboard for "e-commerce-platform":
+create monitoring dashboard for "e-commerce-platform":
 - Metrics:
   * Application: Request rate, error rate, response time (p50, p95, p99)
   * Infrastructure: CPU, memory, disk, network per service
@@ -613,7 +630,7 @@ The VS Code extension provides the `@platform` chat participant for infrastructu
 
 **Set Up Alerting**:
 ```
-@platform configure alerts for production environment:
+configure alerts for production environment:
 - Critical (PagerDuty):
   * Application error rate >5% for 5 minutes
   * Database DTU >90% for 10 minutes
@@ -718,6 +735,169 @@ Required actions before resubmission:
 Resubmit after: Remediation complete and validated
 ```
 
+### Azure Policy Evaluation & Governance
+
+**Understanding Policy-Aware Infrastructure**:
+
+The Platform Engineering Copilot now integrates with Azure Policy Insights API to provide real-time policy evaluation and approval workflows for infrastructure changes. This ensures compliance before deployment.
+
+**How It Works**:
+1. **Pre-Deployment Validation**: Before deploying infrastructure, the system evaluates proposed resources against active Azure Policies
+2. **Approval Workflows**: Policy violations trigger approval workflows that persist to database
+3. **Real-time Compliance**: Direct integration with Azure Policy Insights API (no mock data)
+4. **Severity-Based Decisions**: Critical violations block deployment; warnings allow conditional approval
+
+**Check Policy Compliance Before Deployment**:
+```
+check Azure policies for my proposed deployment:
+- Resource Group: "rg-ml-sbx-jrs"
+- Subscription: "453c2549-4cc5-464f-ba66-acad920823e8"
+- Location: "usgovvirginia"
+- Resources: App Service, Web Site
+- Show: All policy violations with severity and recommendations
+```
+
+**Important: Subscription Identification**
+- **Use Subscription ID (preferred)**: `"453c2549-4cc5-464f-ba66-acad920823e8"`
+- **Or Subscription Name**: `"production-sub"` (if it exists in your Azure environment)
+- **Error Handling**: If subscription is not found, you'll receive:
+  ```
+  ❌ Subscription with name 'production-sub' not found
+  
+  Please use one of these methods:
+  1. Find your subscription ID in Azure Portal → Subscriptions
+  2. Use Azure CLI: az account list --query "[].{name:name, id:id}" -o table
+  3. Check with admin if you don't have access to the subscription
+  ```
+
+**Evaluate Specific Resource Type**:
+```
+evaluate policies for Azure Kubernetes Service:
+- Location: "usgovvirginia"
+- Configuration:
+  * Node count: 5
+  * VM size: Standard_D4s_v3
+  * Network plugin: Azure CNI
+  * Network policy: Calico
+- Check against: All production policies
+- Report: Compliant/Non-compliant with reasons
+```
+
+**Request Approval for Policy Violations**:
+```
+I need approval to deploy storage account with these policy exceptions:
+- Violation: "Public network access disabled" policy
+- Justification: "Temporary public access needed for data migration from on-prem"
+- Duration: 7 days (March 1-7, 2025)
+- Mitigations:
+  * IP whitelist restricted to corporate VPN only
+  * All access logged to Log Analytics
+  * MFA required for all admin access
+- Rollback plan: Disable public access after migration complete
+```
+
+**Batch Policy Evaluation**:
+```
+@platform scan all resources in subscription "prod-sub" for policy compliance:
+- Framework: FedRAMP High baseline
+- Severity filter: Critical and High only
+- Output format: Grouped by policy definition
+- Show remediation commands for each violation
+```
+
+**Policy Workflow Status**:
+```
+@platform show status of my approval workflows:
+- Filter: Pending approvals
+- Submitted by: me
+- Last 30 days
+- Include: Policy violations, justifications, approver comments
+```
+
+**Auto-Remediate Policy Violations** (with caution):
+```
+@platform remediate non-compliant resources in "dev-rg":
+- Policy: "Require encryption at rest"
+- Resources: Storage accounts without encryption
+- Action: Enable default encryption with platform-managed keys
+- Dry run: Yes (show changes before applying)
+- Approval required: Yes
+- Notification: Email me when complete
+```
+
+**Policy Violation Severities**:
+- **Critical** (Deny effect): Blocks deployment immediately - requires exception approval
+- **High** (Audit with enforcement): Deployment allowed but requires justification
+- **Medium** (Audit): Logged for review, no blocking
+- **Low** (Informational): Best practice recommendations
+
+**Database-Backed Approval Workflows**:
+
+All approval workflows now persist to database (`ApprovalWorkflows` table) with:
+- **Persistent Storage**: Workflows survive application restarts
+- **Audit Trail**: Complete history of approvals, rejections, and justifications
+- **Query Performance**: 8 indexes for fast filtering by status, environment, resource type
+- **Concurrent Support**: Multiple users can request/approve workflows simultaneously
+
+**Example Approval Workflow Data**:
+```
+Workflow ID: "wf-2025-10-17-abc123"
+Status: Pending Approval
+Requested by: CDR Johnson
+Resource: Storage Account "datamigration-store"
+Policy Violation: "Require private endpoints only"
+Justification: "Temporary public access for 7-day migration window"
+Required Approvers: ["security-team@navy.mil", "compliance-lead@navy.mil"]
+Expires: 2025-10-24 (7 days)
+Priority: High
+Created: 2025-10-17 10:30 AM
+```
+
+**Query Your Workflows**:
+```
+@platform show my workflows:
+- Status: All (pending, approved, rejected)
+- Date range: Last 90 days
+- Sort by: Created date descending
+- Include: Policy violations, approver comments, current status
+```
+
+**Technical Integration Details**:
+
+The Azure Policy Engine now provides:
+- ✅ **Real Azure Policy API**: Direct calls to `management.azure.com/policyStates` 
+- ✅ **Bearer Token Auth**: Uses `DefaultAzureCredential` for secure authentication
+- ✅ **5-Minute Cache**: Performance optimization with in-memory caching
+- ✅ **Severity Mapping**: Automatic severity assignment based on policy effect (Deny→Critical, Audit→Low)
+- ✅ **Database Persistence**: All workflows stored in SQLite with EF Core
+- ✅ **Scoped Service Lifetime**: Proper DI registration for DbContext compatibility
+
+**Best Practices for Policy Approvals**:
+
+1. **Be Specific**: Clearly state the resource, policy, and business justification
+2. **Time-Bounded**: Always specify duration for exceptions (temporary access)
+3. **Mitigation Plan**: Explain what controls are in place during the exception
+4. **Rollback Ready**: Describe how to revert changes after the exception expires
+5. **Document Everything**: All workflows persist to database for compliance audits
+
+**Policy Evaluation Prompts**:
+```
+# Check single resource
+@platform check policies for VM "web-server-01" in "prod-rg"
+
+# Check resource group
+@platform evaluate all policies for resource group "staging-rg"
+
+# Check subscription
+@platform scan subscription "dev-sub" for policy violations
+
+# Check before deployment
+@platform will this deployment violate any policies?
+- Resources: [list resources]
+- Location: [region]
+- Configuration: [key settings]
+```
+
 ---
 
 ## 🎯 Advanced Techniques
@@ -791,8 +971,7 @@ Execute multiple operations in one prompt:
 
 ```
 "Perform the following operations:
-1. Create storage account 'data001' in rg-production
-2. Create storage account 'data002' in rg-dr
+1. Create storage account 'data002' in rg-dr in subscription 453c2549-4cc5-464f-ba66-acad920823e8
 3. Set up geo-replication between data001 and data002
 4. Apply lifecycle policy: hot→cool after 30 days, cool→archive after 90 days
 5. Enable soft delete with 30-day retention
@@ -916,6 +1095,83 @@ Express complex requirements with conditions:
 ---
 
 ## 🐛 Troubleshooting Prompts
+
+### Azure Subscription & Authentication Errors
+
+**Subscription Not Found**:
+```
+❌ Error: "Subscription with name 'production-sub' not found"
+
+✅ Solutions:
+1. Use subscription ID instead of name:
+   @platform check policies for subscription "453c2549-4cc5-464f-ba66-acad920823e8"
+
+2. List your subscriptions:
+   az account list --query "[].{name:name, id:id}" -o table
+
+3. Verify you have access:
+   az account show
+
+4. Check if logged in:
+   az login --use-device-code  # For Azure Government
+   az login  # For Azure Commercial
+```
+
+**Authentication Failures**:
+```
+❌ Error: "DefaultAzureCredential failed to retrieve token"
+
+✅ Solutions:
+1. Check Azure CLI login:
+   az account show
+   az login --use-device-code
+
+2. Verify correct cloud:
+   az cloud set --name AzureUSGovernment  # For Gov
+   az cloud set --name AzureCloud  # For Commercial
+
+3. Check permissions:
+   - Reader role required at minimum
+   - Policy Reader role for policy operations
+   - Contact Azure admin if access denied
+
+4. Verify service principal (if used):
+   - AZURE_TENANT_ID set correctly
+   - AZURE_CLIENT_ID set correctly
+   - AZURE_CLIENT_SECRET not expired
+```
+
+**Resource Group Not Found**:
+```
+❌ Error: "Resource group 'prod-rg' not found in subscription"
+
+✅ Solutions:
+1. List resource groups:
+   az group list --subscription "YOUR-SUB-ID" -o table
+
+2. Verify subscription context:
+   az account show
+   
+3. Use correct subscription:
+   @platform check policies for resource group "prod-rg" 
+   in subscription "453c2549-4cc5-464f-ba66-acad920823e8"
+
+4. Check permissions:
+   az role assignment list --scope "/subscriptions/YOUR-SUB-ID"
+```
+
+**Insufficient Permissions**:
+```
+❌ Error: "The client does not have authorization to perform action"
+
+✅ Required Azure Roles:
+- Policy Operations: "Resource Policy Contributor" or "Policy Insights Data Writer"
+- Read Operations: "Reader" role at subscription/resource group level
+- Compliance Scanning: "Reader" + "Security Reader"
+- Cost Analysis: "Cost Management Reader"
+
+Contact your Azure administrator to request appropriate roles.
+```
 
 ### Debugging Failed Deployments
 
@@ -1057,18 +1313,54 @@ Optimize costs for [SCOPE]:
 
 ## 📞 Getting Help
 
+### Common Error Messages & Solutions
+
+**Quick Error Reference**:
+
+| Error Message | Cause | Solution |
+|--------------|-------|----------|
+| `Subscription with name 'X' not found` | Invalid subscription name | Use subscription ID or verify name with `az account list` |
+| `DefaultAzureCredential failed` | Not authenticated | Run `az login` or `az login --use-device-code` |
+| `Resource group 'X' not found` | Invalid resource group | Verify with `az group list --subscription "ID"` |
+| `Client does not have authorization` | Insufficient permissions | Request Reader + Policy Reader roles from admin |
+| `Policy not found` | Policy doesn't exist in subscription | Check policy assignments with `az policy assignment list` |
+| `The resource type 'X' is not supported` | Unsupported resource type | Check Azure Policy supports this resource type |
+
+### Getting Additional Support
+
 If prompts aren't working as expected:
 
 1. **Check syntax**: Review examples in this guide
 2. **Add more context**: More details = better results
 3. **Use progressive disclosure**: Build up complexity gradually
 4. **Check logs**: View → Output → "Platform Engineering MCP"
-5. **File issue**: Include prompt and expected vs actual behavior
+5. **Verify Azure connectivity**: Run `az account show` to confirm authentication
+6. **Check permissions**: Ensure you have required Azure roles (Reader, Policy Reader, etc.)
+7. **File issue**: Include prompt, error message, and expected vs actual behavior
+
+### Debug Mode
+
+Enable detailed logging for troubleshooting:
+
+```
+@platform enable debug logging for next request
+
+@platform check policies for subscription "YOUR-SUB-ID" with verbose output
+```
+
+This will show:
+- API calls being made
+- Authentication details
+- Response payloads
+- Performance metrics
+- Error stack traces
 
 ---
 
 **Pro Tip**: The AI learns from feedback. If a prompt doesn't work well, try rephrasing with more specific details. The system improves with clearer inputs!
 
+**Azure Tip**: Always verify your Azure authentication and permissions before troubleshooting complex issues. Run `az account show` and `az role assignment list` to confirm your access.
+
 ---
 
-*Last Updated: October 9, 2025*
+*Last Updated: October 17, 2025*

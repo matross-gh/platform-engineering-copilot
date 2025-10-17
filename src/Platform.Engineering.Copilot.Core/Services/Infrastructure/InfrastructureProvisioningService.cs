@@ -122,9 +122,16 @@ public class InfrastructureProvisioningService : IInfrastructureProvisioningServ
 
         try
         {
-            // TODO: Implement actual listing via _azureResourceService
-            await Task.CompletedTask;
-            return new List<string>();
+            var resourceGroups = await _azureResourceService.ListResourceGroupsAsync(subscriptionId: null, cancellationToken);
+            var result = new List<string>();
+            
+            foreach (var rg in resourceGroups)
+            {
+                dynamic rgData = rg;
+                result.Add(rgData.name?.ToString() ?? "Unknown");
+            }
+            
+            return result;
         }
         catch (Exception ex)
         {
@@ -141,9 +148,18 @@ public class InfrastructureProvisioningService : IInfrastructureProvisioningServ
 
         try
         {
-            // TODO: Implement actual deletion via _azureResourceService
-            await Task.CompletedTask;
+            await _azureResourceService.DeleteResourceGroupAsync(
+                resourceGroupName, 
+                subscriptionId: null, 
+                cancellationToken);
+            
+            _logger.LogInformation("Successfully deleted resource group {ResourceGroupName}", resourceGroupName);
             return true;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))
+        {
+            _logger.LogWarning("Resource group {ResourceGroupName} not found", resourceGroupName);
+            return false;
         }
         catch (Exception ex)
         {
@@ -255,39 +271,294 @@ Parse this query:";
             intent.ResourceType, intent.ResourceName, intent.ResourceGroupName);
 
         var location = intent.Location ?? "eastus";
+        
+        try
+        {
+            // Ensure resource group exists
+            var resourceGroup = await _azureResourceService.GetResourceGroupAsync(
+                intent.ResourceGroupName, 
+                subscriptionId: null, 
+                cancellationToken);
+            
+            if (resourceGroup == null)
+            {
+                _logger.LogInformation("Resource group {ResourceGroup} does not exist, creating it", intent.ResourceGroupName);
+                resourceGroup = await _azureResourceService.CreateResourceGroupAsync(
+                    intent.ResourceGroupName,
+                    location,
+                    subscriptionId: null,
+                    tags: new Dictionary<string, string>
+                    {
+                        { "ManagedBy", "SupervisorPlatform" },
+                        { "CreatedAt", DateTime.UtcNow.ToString("yyyy-MM-dd") }
+                    },
+                    cancellationToken);
+            }
+
+            // Route to specialized resource creation methods
+            object result;
+            
+            switch (intent.ResourceType?.ToLowerInvariant())
+            {
+                case "storage-account":
+                    result = await CreateStorageAccountAsync(intent, location, cancellationToken);
+                    break;
+                    
+                case "keyvault":
+                case "key-vault":
+                    result = await CreateKeyVaultAsync(intent, location, cancellationToken);
+                    break;
+                    
+                case "vnet":
+                case "virtual-network":
+                    result = await CreateVirtualNetworkAsync(intent, location, cancellationToken);
+                    break;
+                    
+                case "blob-container":
+                    result = await CreateBlobContainerAsync(intent, location, cancellationToken);
+                    break;
+                    
+                default:
+                    // Generic resource creation
+                    result = await CreateGenericResourceAsync(intent, location, cancellationToken);
+                    break;
+            }
+
+            // Parse the result
+            dynamic resultData = result;
+            var providerType = GetProviderType(intent.ResourceType);
+            
+            // Safely extract properties with null checks
+            bool success = true;
+            string? resourceId = null;
+            string status = "Succeeded";
+            string? message = null;
+            
+            try
+            {
+                var resultType = result.GetType();
+                
+                // Try to get success property
+                var successProp = resultType.GetProperty("success");
+                if (successProp != null)
+                    success = (bool)(successProp.GetValue(result) ?? true);
+                
+                // Try to get resourceId property
+                var resourceIdProp = resultType.GetProperty("resourceId");
+                if (resourceIdProp != null)
+                    resourceId = resourceIdProp.GetValue(result)?.ToString();
+                
+                // Try storageAccountId as fallback
+                if (string.IsNullOrEmpty(resourceId))
+                {
+                    var storageIdProp = resultType.GetProperty("storageAccountId");
+                    if (storageIdProp != null)
+                        resourceId = storageIdProp.GetValue(result)?.ToString();
+                }
+                
+                // Try to get status property (may not exist)
+                var statusProp = resultType.GetProperty("status");
+                if (statusProp != null)
+                    status = statusProp.GetValue(result)?.ToString() ?? "Succeeded";
+                
+                // Try to get message property
+                var messageProp = resultType.GetProperty("message");
+                if (messageProp != null)
+                    message = messageProp.GetValue(result)?.ToString();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error parsing result properties, using defaults");
+            }
+            
+            return new InfrastructureProvisionResult
+            {
+                Success = success,
+                ResourceId = resourceId ?? $"/subscriptions/{{sub}}/resourceGroups/{intent.ResourceGroupName}/providers/{providerType}/{intent.ResourceName}",
+                ResourceName = intent.ResourceName,
+                ResourceType = providerType,
+                Status = status,
+                Message = message ?? $"✅ {GetFriendlyResourceType(intent.ResourceType)} '{intent.ResourceName}' provisioned in {location}",
+                Properties = ExtractPropertiesFromResult(result, location, intent.ResourceGroupName)
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to provision {ResourceType}: {ResourceName}", 
+                intent.ResourceType, intent.ResourceName);
+            
+            return new InfrastructureProvisionResult
+            {
+                Success = false,
+                ResourceName = intent.ResourceName,
+                ResourceType = GetProviderType(intent.ResourceType),
+                Status = "Failed",
+                ErrorDetails = ex.Message,
+                Message = $"❌ Failed to provision {GetFriendlyResourceType(intent.ResourceType)}: {ex.Message}"
+            };
+        }
+    }
+
+    private async Task<object> CreateStorageAccountAsync(
+        InfrastructureIntent intent,
+        string location,
+        CancellationToken cancellationToken)
+    {
+        var storageSettings = new Dictionary<string, object>
+        {
+            { "sku", intent.Parameters?.GetValueOrDefault("sku", "Standard_LRS") ?? "Standard_LRS" },
+            { "environment", intent.Parameters?.GetValueOrDefault("environment", "development") ?? "development" }
+        };
+
+        return await _azureResourceService.CreateStorageAccountAsync(
+            intent.ResourceName,
+            intent.ResourceGroupName,
+            location,
+            storageSettings,
+            subscriptionId: null,
+            cancellationToken);
+    }
+
+    private async Task<object> CreateKeyVaultAsync(
+        InfrastructureIntent intent,
+        string location,
+        CancellationToken cancellationToken)
+    {
+        var keyVaultSettings = new Dictionary<string, object>
+        {
+            { "sku", intent.Parameters?.GetValueOrDefault("sku", "standard") ?? "standard" },
+            { "enableSoftDelete", intent.Parameters?.GetValueOrDefault("enableSoftDelete", true) ?? true },
+            { "enablePurgeProtection", intent.Parameters?.GetValueOrDefault("enablePurgeProtection", true) ?? true },
+            { "environment", intent.Parameters?.GetValueOrDefault("environment", "development") ?? "development" }
+        };
+
+        return await _azureResourceService.CreateKeyVaultAsync(
+            intent.ResourceName,
+            intent.ResourceGroupName,
+            location,
+            keyVaultSettings,
+            subscriptionId: null,
+            cancellationToken);
+    }
+
+    private async Task<object> CreateVirtualNetworkAsync(
+        InfrastructureIntent intent,
+        string location,
+        CancellationToken cancellationToken)
+    {
+        // VNet creation would go through generic resource creation
+        var properties = new
+        {
+            addressSpace = new
+            {
+                addressPrefixes = new[] { intent.Parameters?.GetValueOrDefault("addressSpace", "10.0.0.0/16")?.ToString() ?? "10.0.0.0/16" }
+            }
+        };
+
+        return await _azureResourceService.CreateResourceAsync(
+            intent.ResourceGroupName,
+            "Microsoft.Network/virtualNetworks",
+            intent.ResourceName,
+            properties,
+            subscriptionId: null,
+            location,
+            tags: new Dictionary<string, string> { { "ManagedBy", "SupervisorPlatform" } },
+            cancellationToken);
+    }
+
+    private async Task<object> CreateBlobContainerAsync(
+        InfrastructureIntent intent,
+        string location,
+        CancellationToken cancellationToken)
+    {
+        var storageAccountName = intent.Parameters?.GetValueOrDefault("storageAccountName")?.ToString();
+        
+        if (string.IsNullOrEmpty(storageAccountName))
+        {
+            return new
+            {
+                success = false,
+                status = "Failed",
+                message = "Blob container creation requires 'storageAccountName' parameter"
+            };
+        }
+
+        var containerSettings = new Dictionary<string, object>
+        {
+            { "publicAccess", intent.Parameters?.GetValueOrDefault("publicAccess", "None") ?? "None" }
+        };
+
+        return await _azureResourceService.CreateBlobContainerAsync(
+            intent.ResourceName,
+            storageAccountName,
+            intent.ResourceGroupName,
+            containerSettings,
+            subscriptionId: null,
+            cancellationToken);
+    }
+
+    private async Task<object> CreateGenericResourceAsync(
+        InfrastructureIntent intent,
+        string location,
+        CancellationToken cancellationToken)
+    {
         var providerType = GetProviderType(intent.ResourceType);
-        var resourceId = $"/subscriptions/{{subscription}}/resourceGroups/{intent.ResourceGroupName}/providers/{providerType}/{intent.ResourceName}";
+        
+        return await _azureResourceService.CreateResourceAsync(
+            intent.ResourceGroupName,
+            providerType,
+            intent.ResourceName,
+            intent.Parameters ?? new Dictionary<string, object>(),
+            subscriptionId: null,
+            location,
+            tags: new Dictionary<string, string> { { "ManagedBy", "SupervisorPlatform" } },
+            cancellationToken);
+    }
 
-        // TODO: Implement actual Azure provisioning via _azureResourceService
-        // For now, return simulated success with detailed information
-
-        await Task.CompletedTask;
-
+    private Dictionary<string, string> ExtractPropertiesFromResult(object resultData, string location, string resourceGroup)
+    {
         var properties = new Dictionary<string, string>
         {
             { "location", location },
-            { "resourceGroup", intent.ResourceGroupName }
+            { "resourceGroup", resourceGroup }
         };
 
-        // Add parameters to properties for visibility
-        if (intent.Parameters != null)
+        // Try to extract common properties from the result using reflection
+        try
         {
-            foreach (var param in intent.Parameters)
+            var resultType = resultData.GetType();
+            
+            var skuProp = resultType.GetProperty("sku");
+            if (skuProp != null)
             {
-                properties[param.Key] = param.Value?.ToString() ?? "";
+                var skuValue = skuProp.GetValue(resultData);
+                if (skuValue != null)
+                    properties["sku"] = skuValue.ToString() ?? "";
+            }
+            
+            var accessTierProp = resultType.GetProperty("accessTier");
+            if (accessTierProp != null)
+            {
+                var accessTierValue = accessTierProp.GetValue(resultData);
+                if (accessTierValue != null)
+                    properties["accessTier"] = accessTierValue.ToString() ?? "";
+            }
+            
+            var httpsOnlyProp = resultType.GetProperty("httpsOnly");
+            if (httpsOnlyProp != null)
+            {
+                var httpsOnlyValue = httpsOnlyProp.GetValue(resultData);
+                if (httpsOnlyValue != null)
+                    properties["httpsOnly"] = httpsOnlyValue.ToString() ?? "";
             }
         }
-
-        return new InfrastructureProvisionResult
+        catch (Exception ex)
         {
-            Success = true,
-            ResourceId = resourceId,
-            ResourceName = intent.ResourceName,
-            ResourceType = providerType,
-            Status = "Succeeded",
-            Message = $"✅ {GetFriendlyResourceType(intent.ResourceType)} '{intent.ResourceName}' provisioned in {location}",
-            Properties = properties
-        };
+            // Ignore property extraction errors
+            _logger.LogDebug(ex, "Could not extract all properties from result");
+        }
+
+        return properties;
     }
 
     private string GetProviderType(string? resourceType)

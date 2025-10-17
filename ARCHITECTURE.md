@@ -1,7 +1,7 @@
 # Platform Engineering Copilot - Architecture Documentation
 
-**Last Updated:** October 9, 2025  
-**Version:** 2.0 (Post-Refactoring)  
+**Last Updated:** January 17, 2025  
+**Version:** 2.0 (Production Release)  
 **Namespace:** `Platform.Engineering.Copilot.*`
 
 ---
@@ -50,35 +50,35 @@ The Platform Engineering Copilot is an AI-powered infrastructure provisioning an
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         CLIENT LAYER                                 │
+│                         CLIENT LAYER                                │
 ├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
-│  │  Chat.App    │  │   Admin      │  │     MCP      │             │
-│  │   (React)    │  │   Client     │  │   Clients    │             │
-│  │   :3000      │  │   (React)    │  │              │             │
-│  │              │  │   :3001      │  │              │             │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘             │
+│                                                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │  Chat.App    │  │   Admin      │  │     MCP      │               │
+│  │   (React)    │  │   Client     │  │   Clients    │               │
+│  │   :3000      │  │   (React)    │  │              │               │
+│  │              │  │   :3001      │  │              │               │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘               │
 │         │                 │                  │                      │
 │         │                 │                  │                      │
 ├─────────┼─────────────────┼──────────────────┼──────────────────────┤
 │         │    API LAYER    │                  │                      │
 ├─────────┴─────────────────┴──────────────────┴──────────────────────┤
-│                                                                      │
-│  ┌──────▼──────────┐  ┌────────▼─────────┐  ┌────────▼─────────┐  │
-│  │   Chat.App      │  │   Admin.API      │  │   Mcp.Server     │  │
-│  │   Backend       │  │   Backend        │  │   (Console)      │  │
-│  │   (SignalR)     │  │   :7002          │  │                  │  │
-│  │   ASP.NET       │  │   ASP.NET        │  │                  │  │
-│  └──────┬──────────┘  └────────┬─────────┘  └────────┬─────────┘  │
+│                                                                     │
+│  ┌──────▼──────────┐  ┌────────▼─────────┐  ┌────────▼─────────┐    │
+│  │   Chat.App      │  │   Admin.API      │  │   Mcp.Server     │    │
+│  │   Backend       │  │   Backend        │  │   (Console)      │    │
+│  │   (SignalR)     │  │   :7002          │  │                  │    │
+│  │   ASP.NET       │  │   ASP.NET        │  │                  │    │
+│  └──────┬──────────┘  └────────┬─────────┘  └────────┬─────────┘    │
 │         │                      │                      │             │
 │         └──────────────────────┼──────────────────────┘             │
-│                                │                                     │
-│  ┌─────────────────────────────▼─────────────────────────────────┐ │
-│  │                        API                                     │ │
-│  │                   (Main REST API)                              │ │
-│  │                        :7001                                   │ │
-│  └─────────────────────────────┬─────────────────────────────────┘ │
+│                                │                                    │
+│  ┌─────────────────────────────▼─────────────────────────────────┐  │
+│  │                        API                                    │  │
+│  │                   (Main REST API)                             │  │
+│  │                        :7001                                  │  │
+│  └─────────────────────────────┬─────────────────────────────────┘  │
 │                                │                                     │
 ├────────────────────────────────┼─────────────────────────────────────┤
 │         BUSINESS LOGIC LAYER   │                                     │
@@ -111,13 +111,10 @@ The Platform Engineering Copilot is an AI-powered infrastructure provisioning an
 │  │  │  • Validation Services                                 │  │  │
 │  │  └────────────────────────────────────────────────────────┘  │  │
 │  │                                                               │  │
-│  └────────┬──────────────────────┬──────────────────────────────┘  │
-│           │                      │                                  │
-│  ┌────────▼─────────┐  ┌─────────▼──────────┐                     │
-│  │   Governance     │  │  DocumentProcessing │                     │
-│  │   (Policy &      │  │  (Form Recognizer,  │                     │
-│  │   Compliance)    │  │   AI Search)        │                     │
-│  └──────────────────┘  └─────────────────────┘                     │
+│  │  **Note**: Governance and Document Processing features are   │  │
+│  │  integrated within Core services, not separate projects      │  │
+│  │                                                               │  │
+│  └───────────────────────────────────────────────────────────────┘  │
 │                                                                      │
 ├──────────────────────────────────────────────────────────────────────┤
 │                      DATA ACCESS LAYER                               │
@@ -144,18 +141,16 @@ The Platform Engineering Copilot is an AI-powered infrastructure provisioning an
 
 ### Overview
 
-The platform consists of **10 main projects** organized into logical layers:
+The platform consists of **7 main projects** organized into logical layers:
 
 | Project | Type | Port | Purpose |
 |---------|------|------|---------|
+| **Platform.Engineering.Copilot.Data** | Library | - | EF Core, entities, migrations (NO DEPENDENCIES) |
 | **Platform.Engineering.Copilot.Core** | Library | - | Business logic, plugins, services |
-| **Platform.Engineering.Copilot.Data** | Console | - | EF Core, entities, migrations |
-| **Platform.Engineering.Copilot.Governance** | Library | - | Policy, compliance services |
-| **Platform.Engineering.Copilot.DocumentProcessing** | Library | - | Document AI, Form Recognizer |
 | **Platform.Engineering.Copilot.API** | Web API | 7001 | Main REST API |
-| **Platform.Engineering.Copilot.Chat.App** | Web + SPA | 3000 | Chat interface (React + ASP.NET) |
 | **Platform.Engineering.Copilot.Admin.API** | Web API | 7002 | Admin backend API |
-| **Platform.Engineering.Copilot.Admin.Client** | Web + SPA | 3001 | Admin console (React + ASP.NET) |
+| **Platform.Engineering.Copilot.Admin.Client** | Web + SPA | 3001 | Admin console (React SPA) |
+| **Platform.Engineering.Copilot.Chat** | Web + SPA | 3000 | Chat interface (React + ASP.NET) |
 | **Platform.Engineering.Copilot.Mcp** | Console | - | Model Context Protocol server |
 | **Platform.Engineering.Copilot.Tests.*** | Test | - | Unit & integration tests |
 
@@ -174,32 +169,30 @@ Level 0 (Foundation):
 Level 1 (Core Business Logic):
 ├── Core ──→ Data
 │
-Level 2 (Domain Extensions):
-├── Governance ──→ Core ──→ Data
-├── DocumentProcessing ──→ Core, Governance
-│
-Level 3 (Execution Layer):
+Level 2 (Execution Layer):
 ├── Mcp ──→ Core
 │
-Level 4 (API Layer):
-├── API ──→ Core, Data, Governance, DocumentProcessing
-├── Chat.App ──→ Core, Data, Governance
+Level 3 (API & Application Layer):
+├── API ──→ Core, Data
 ├── Admin.API ──→ Core, Data
+├── Chat ──→ Core, Data
+├── Admin.Client (NO PROJECT DEPENDENCIES - SPA only)
 
 ┌────────────────────────────────────────────────────────────────┐
 │                     DETAILED DEPENDENCIES                       │
 └────────────────────────────────────────────────────────────────┘
 
+Admin.Client
+  (NO PROJECT DEPENDENCIES)
+  └── Connects to Admin.API via HTTP
+
 Mcp
   └── Core
        └── Data
 
-Chat.App
+Chat
   ├── Core
-  ├── Data
-  └── Governance
-       └── Core
-            └── Data
+  └── Data
 
 Admin.API
   ├── Core
@@ -207,19 +200,7 @@ Admin.API
 
 API
   ├── Core
-  ├── Data
-  ├── Governance
-  └── DocumentProcessing
-       ├── Core
-       └── Governance
-
-DocumentProcessing
-  ├── Core
-  └── Governance
-
-Governance
-  └── Core
-       └── Data
+  └── Data
 
 Core
   └── Data
@@ -232,9 +213,10 @@ Data
 
 1. **Data Layer Isolation**: Data project has zero dependencies (proper data layer pattern)
 2. **No Circular Dependencies**: All dependencies flow downward in hierarchy
-3. **Core as Hub**: Core is the central library referenced by all higher layers
-4. **Governance Extension**: Governance extends Core with policy/compliance features
-5. **API Layer Independence**: Frontend APIs (Chat.App, Admin.API) don't depend on each other
+3. **Core as Hub**: Core is the central library referenced by all API and application layers
+4. **Clean Architecture**: APIs depend on Core and Data, not on each other
+5. **SPA Independence**: Admin.Client has no project dependencies (pure React SPA communicating via HTTP)
+6. **Minimal Dependencies**: Each project only references what it absolutely needs
 
 ---
 
@@ -367,46 +349,7 @@ public enum OnboardingStatus
 
 ---
 
-### 3. Platform.Engineering.Copilot.Governance
-
-**Purpose**: Azure policy management, compliance checking, and resource governance.
-
-**Key Services**:
-- Policy evaluation and enforcement
-- Resource compliance checking
-- Governance recommendations
-- Cost governance rules
-
-**Technologies**:
-- **Azure.ResourceManager.PolicyInsights** 1.2.0
-- **Microsoft.Azure.Management.ResourceGraph** 4.1.0
-- **Azure.ResourceManager.ResourceHealth** 1.1.0
-
-**Note**: Two services temporarily disabled (ResourceRightsizingService, AzureResourceHealthService) due to missing AzureOptions configuration.
-
----
-
-### 4. Platform.Engineering.Copilot.DocumentProcessing
-
-**Purpose**: AI-powered document intelligence, form recognition, and Azure AI Search integration.
-
-**Capabilities**:
-- PDF/Word/Excel document parsing
-- Form data extraction (Azure Form Recognizer)
-- AI-powered document search
-- Architectural diagram analysis
-
-**Technologies**:
-- **Azure.AI.FormRecognizer** 4.1.0
-- **Azure.AI.OpenAI** 2.1.0-beta.1
-- **Azure.Search.Documents** 11.6.0
-- **DocumentFormat.OpenXml** 3.2.0
-- **iTextSharp** 5.5.13.4
-- **Aspose.Words** 24.9.0 (Commercial license)
-
----
-
-### 5. Platform.Engineering.Copilot.API
+### 3. Platform.Engineering.Copilot.API
 
 **Purpose**: Main REST API for platform operations, infrastructure provisioning, and environment management.
 

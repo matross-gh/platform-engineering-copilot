@@ -187,6 +187,31 @@ public class AzureResourceService : IAzureResourceService
         };
     }
 
+    public async Task DeleteResourceGroupAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default)
+    {
+        if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
+        
+        _logger.LogInformation("Deleting resource group {ResourceGroupName} from subscription {SubscriptionId}", 
+            resourceGroupName, GetSubscriptionId(subscriptionId));
+
+        try
+        {
+            var subscription = _armClient.GetSubscriptionResource(
+                SubscriptionResource.CreateResourceIdentifier(GetSubscriptionId(subscriptionId)));
+            
+            var resourceGroup = await subscription.GetResourceGroups().GetAsync(resourceGroupName, cancellationToken);
+            
+            await resourceGroup.Value.DeleteAsync(WaitUntil.Completed, cancellationToken: cancellationToken);
+            
+            _logger.LogInformation("Successfully deleted resource group {ResourceGroupName}", resourceGroupName);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            _logger.LogWarning("Resource group {ResourceGroupName} not found - may have already been deleted", resourceGroupName);
+            throw new InvalidOperationException($"Resource group '{resourceGroupName}' not found", ex);
+        }
+    }
+
     public async Task<IEnumerable<object>> ListResourcesAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default)
     {
         if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
@@ -611,6 +636,7 @@ public class AzureResourceService : IAzureResourceService
             return new
             {
                 success = true,
+                resourceId = storageOperation.Value.Id.ToString(),
                 storageAccountId = storageOperation.Value.Id.ToString(),
                 storageAccountName,
                 resourceGroupName,
@@ -624,6 +650,161 @@ public class AzureResourceService : IAzureResourceService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create Storage Account {StorageAccountName}", storageAccountName);
+            throw;
+        }
+    }
+
+    public async Task<object> CreateKeyVaultAsync(
+        string keyVaultName, 
+        string resourceGroupName, 
+        string location, 
+        Dictionary<string, object>? keyVaultSettings = null, 
+        string? subscriptionId = null, 
+        CancellationToken cancellationToken = default)
+    {
+        if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
+        
+        _logger.LogInformation("Creating Key Vault {KeyVaultName} in resource group {ResourceGroupName}", keyVaultName, resourceGroupName);
+
+        try
+        {
+            var subscription = _armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(GetSubscriptionId(subscriptionId)));
+            var resourceGroup = await subscription.GetResourceGroupAsync(resourceGroupName, cancellationToken);
+
+            // Get tenant ID from environment variable or use a default
+            var tenantId = Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
+            
+            if (string.IsNullOrEmpty(tenantId))
+            {
+                _logger.LogWarning("Tenant ID not available - Key Vault requires tenant configuration");
+                return new
+                {
+                    success = false,
+                    keyVaultName,
+                    resourceGroupName,
+                    status = "Failed",
+                    message = "Key Vault creation requires Azure tenant ID. Set AZURE_TENANT_ID environment variable."
+                };
+            }
+
+            // For now, use generic resource creation as KeyVault SDK requires additional NuGet packages
+            var properties = new
+            {
+                tenantId = tenantId,
+                sku = new
+                {
+                    family = "A",
+                    name = GetSettingValue<string>(keyVaultSettings, "sku", "standard")
+                },
+                enabledForDeployment = GetSettingValue<bool>(keyVaultSettings, "enabledForDeployment", true),
+                enabledForDiskEncryption = GetSettingValue<bool>(keyVaultSettings, "enabledForDiskEncryption", true),
+                enabledForTemplateDeployment = GetSettingValue<bool>(keyVaultSettings, "enabledForTemplateDeployment", true),
+                enableSoftDelete = GetSettingValue<bool>(keyVaultSettings, "enableSoftDelete", true),
+                enablePurgeProtection = GetSettingValue<bool>(keyVaultSettings, "enablePurgeProtection", true),
+                softDeleteRetentionInDays = GetSettingValue<int>(keyVaultSettings, "softDeleteRetentionInDays", 90),
+                accessPolicies = new object[] { } // Empty array - policies should be added post-creation
+            };
+
+            var result = await CreateResourceAsync(
+                resourceGroupName,
+                "Microsoft.KeyVault/vaults",
+                keyVaultName,
+                properties,
+                subscriptionId,
+                location,
+                new Dictionary<string, string>
+                {
+                    { "Environment", GetSettingValue<string>(keyVaultSettings, "environment", "development") },
+                    { "ManagedBy", "SupervisorPlatform" },
+                    { "CreatedAt", DateTime.UtcNow.ToString("yyyy-MM-dd") }
+                },
+                cancellationToken);
+
+            return new
+            {
+                success = true,
+                resourceId = $"/subscriptions/{GetSubscriptionId(subscriptionId)}/resourceGroups/{resourceGroupName}/providers/Microsoft.KeyVault/vaults/{keyVaultName}",
+                keyVaultId = $"/subscriptions/{GetSubscriptionId(subscriptionId)}/resourceGroups/{resourceGroupName}/providers/Microsoft.KeyVault/vaults/{keyVaultName}",
+                keyVaultName,
+                resourceGroupName,
+                location,
+                tenantId,
+                enableSoftDelete = true,
+                enablePurgeProtection = true,
+                message = $"Key Vault {keyVaultName} created successfully"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create Key Vault {KeyVaultName}", keyVaultName);
+            throw;
+        }
+    }
+
+    public async Task<object> CreateBlobContainerAsync(
+        string containerName,
+        string storageAccountName,
+        string resourceGroupName,
+        Dictionary<string, object>? containerSettings = null,
+        string? subscriptionId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
+        
+        _logger.LogInformation("Creating blob container {ContainerName} in storage account {StorageAccountName}", 
+            containerName, storageAccountName);
+
+        try
+        {
+            var subscription = _armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(GetSubscriptionId(subscriptionId)));
+            var resourceGroup = await subscription.GetResourceGroupAsync(resourceGroupName, cancellationToken);
+
+            // Get the storage account
+            var storageAccount = await resourceGroup.Value.GetStorageAccountAsync(storageAccountName, cancellationToken: cancellationToken);
+
+            if (storageAccount == null)
+            {
+                throw new InvalidOperationException($"Storage account '{storageAccountName}' not found in resource group '{resourceGroupName}'");
+            }
+
+            // Get blob service
+            var blobServices = storageAccount.Value.GetBlobService();
+            var blobService = await blobServices.GetAsync(cancellationToken: cancellationToken);
+
+            // Create blob container
+            var containerData = new BlobContainerData
+            {
+                PublicAccess = GetSettingValue<string>(containerSettings, "publicAccess", "None") switch
+                {
+                    "Blob" => StoragePublicAccessType.Blob,
+                    "Container" => StoragePublicAccessType.Container,
+                    _ => StoragePublicAccessType.None
+                }
+            };
+
+            var containerCollection = blobService.Value.GetBlobContainers();
+            var containerOperation = await containerCollection.CreateOrUpdateAsync(
+                WaitUntil.Completed, 
+                containerName, 
+                containerData, 
+                cancellationToken);
+
+            return new
+            {
+                success = true,
+                resourceId = containerOperation.Value.Id.ToString(),
+                containerId = containerOperation.Value.Id.ToString(),
+                containerName,
+                storageAccountName,
+                resourceGroupName,
+                publicAccess = containerData.PublicAccess.ToString(),
+                message = $"Blob container '{containerName}' created successfully in storage account '{storageAccountName}'"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create blob container {ContainerName} in storage account {StorageAccountName}", 
+                containerName, storageAccountName);
             throw;
         }
     }

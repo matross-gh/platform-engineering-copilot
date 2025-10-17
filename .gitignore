@@ -7,30 +7,10 @@ out/
 *.suo
 *.cache
 *.docstates
-src/Platform.Engineering.Copilot.Tests/bin
-src/Platform.Engineering.Copilot.Tests/obj
-src/Platform.Engineering.Copilot.Core/bin
-src/Platform.Engineering.Copilot.Core/obj
-src/Platform.Engineering.Copilot.Extensions/bin
-src/Platform.Engineering.Copilot.Extensions/obj
-src/Platform.Engineering.Copilot.Gateway/bin
-src/Platform.Engineering.Copilot.Gateway/obj
-src/Platform.Engineering.Copilot.Governance/bin
-src/Platform.Engineering.Copilot.Governance/obj
-src/Platform.Engineering.Copilot.Host/obj
-src/Platform.Engineering.Copilot.Platform/bin
-src/Platform.Engineering.Copilot.Platform/obj
-src/Platform.Engineering.Copilot.Tests/obj
-src/Platform.Engineering.Copilot.Extensions/obj
-src/Platform.Engineering.Copilot.Core/bin
-src/Platform.Engineering.Copilot.Core/obj
-src/Platform.Engineering.Copilot.Extensions/bin
-src/Platform.Engineering.Copilot.Extensions/obj
-src/Platform.Engineering.Copilot.Gateway/bin
-src/Platform.Engineering.Copilot.Gateway/obj
-src/Platform.Engineering.Copilot.Governance/bin
-src/Platform.Engineering.Copilot.Governance/obj
+*/bin
+*/obj
 *.db
+*.db.*
 *.db-*
 
 # Build results

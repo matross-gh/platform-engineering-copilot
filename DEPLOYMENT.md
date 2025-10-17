@@ -1,5 +1,7 @@
 # Deployment Guide
 
+**Last Updated:** January 17, 2025
+
 This guide covers all deployment options for the Platform Engineering Copilot, including Docker, Kubernetes, and cloud deployments.
 
 ## 📋 Table of Contents
@@ -20,11 +22,12 @@ This guide covers all deployment options for the Platform Engineering Copilot, i
 The Docker setup includes the following services:
 
 - **Platform API**: ASP.NET Core Web API (Port 7001)
-- **Chat Service**: SignalR Chat Interface (Port 5000)
-- **SQL Server**: Microsoft SQL Server 2022 (Port 1433)
+- **Admin API**: Administrative backend API (Port 7002)
+- **Admin Console**: React-based admin UI (Port 3001)
+- **Chat App**: React-based chat interface (Port 3000)
+- **SQLite**: Embedded database (default) or SQL Server (optional)
 - **Redis**: Caching service (Port 6379) - Optional
-- **Nginx**: Reverse proxy and load balancer (Port 80) - Optional
-- **Adminer**: Database administration tool (Port 8081) - Development only
+- **Nginx**: Reverse proxy and load balancer (Port 80/443) - Optional
 
 ### Quick Docker Start
 
@@ -37,8 +40,8 @@ The Docker setup includes the following services:
 #### 1. Clone and Setup
 
 ```bash
-git clone https://github.com/jrspinella/platform-mcp-Platform.Engineering.Copilot.git
-cd platform-mcp-supervisor
+git clone https://github.com/azurenoops/platform-engineering-copilot.git
+cd platform-engineering-copilot
 
 # Copy environment template
 cp .env.example .env

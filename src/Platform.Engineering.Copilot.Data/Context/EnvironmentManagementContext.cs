@@ -46,6 +46,9 @@ public class EnvironmentManagementContext : DbContext
     // Navy Flankspeed Onboarding
     public DbSet<OnboardingRequest> OnboardingRequests { get; set; }
 
+    // Governance and Approval Workflows
+    public DbSet<ApprovalWorkflowEntity> ApprovalWorkflows { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -57,6 +60,7 @@ public class EnvironmentManagementContext : DbContext
         ConfigureMetricsAndCompliance(modelBuilder);
         ConfigureSemanticIntents(modelBuilder);
         ConfigureEnvironmentLifecycle(modelBuilder);
+        ConfigureApprovalWorkflows(modelBuilder);
         //ConfigureOnboardingRequests(modelBuilder);
 
         // Configure indexes for performance
@@ -225,6 +229,48 @@ public class EnvironmentManagementContext : DbContext
         });
     }
 
+    private static void ConfigureApprovalWorkflows(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ApprovalWorkflowEntity>(entity =>
+        {
+            // Indexes for common queries
+            entity.HasIndex(e => e.Status)
+                .HasDatabaseName("IX_ApprovalWorkflows_Status");
+
+            entity.HasIndex(e => new { e.Status, e.Priority, e.CreatedAt })
+                .HasDatabaseName("IX_ApprovalWorkflows_Status_Priority_CreatedAt");
+
+            entity.HasIndex(e => e.RequestedBy)
+                .HasDatabaseName("IX_ApprovalWorkflows_RequestedBy");
+
+            entity.HasIndex(e => e.ResourceType)
+                .HasDatabaseName("IX_ApprovalWorkflows_ResourceType");
+
+            entity.HasIndex(e => e.Environment)
+                .HasDatabaseName("IX_ApprovalWorkflows_Environment");
+
+            entity.HasIndex(e => e.ExpiresAt)
+                .HasDatabaseName("IX_ApprovalWorkflows_ExpiresAt");
+
+            entity.HasIndex(e => e.CreatedAt)
+                .HasDatabaseName("IX_ApprovalWorkflows_CreatedAt");
+
+            // Properties
+            entity.Property(e => e.Status)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("datetime('now')");
+
+            entity.Property(e => e.Priority)
+                .HasDefaultValue(1);
+
+            entity.Property(e => e.ExpiresAt)
+                .IsRequired();
+        });
+    }
+
     /* private static void ConfigureOnboardingRequests(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<OnboardingRequest>(entity =>
@@ -303,6 +349,11 @@ public class EnvironmentManagementContext : DbContext
         modelBuilder.Entity<EnvironmentCostTracking>()
             .HasIndex(e => new { e.Date, e.DailyCost })
             .HasDatabaseName("IX_EnvironmentCostTrackings_Date_Cost");
+
+        // Approval Workflows indexes
+        modelBuilder.Entity<ApprovalWorkflowEntity>()
+            .HasIndex(e => new { e.ResourceGroupName, e.Environment, e.Status })
+            .HasDatabaseName("IX_ApprovalWorkflows_ResourceGroup_Environment_Status");
     }
 
     public override int SaveChanges()
