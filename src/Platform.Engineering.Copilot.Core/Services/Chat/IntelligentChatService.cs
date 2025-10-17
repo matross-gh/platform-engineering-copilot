@@ -443,13 +443,29 @@ public class IntelligentChatService : IIntelligentChatService
             var suggestions = await GenerateProactiveSuggestionsAsync(
                 conversationId, context, cancellationToken);
 
+            // NEW: Analyze for missing information and generate follow-up questions
+            _logger.LogInformation("🔍 [STEP 7/7] Analyzing for missing information...");
+            var missingInfoAnalysis = await AnalyzeMissingInformationAsync(
+                result, toolExecuted, toolName, context, cancellationToken);
+            
+            if (missingInfoAnalysis.RequiresFollowUp)
+            {
+                _logger.LogInformation("✅ [STEP 7/7] Follow-up required: {Prompt}", 
+                    missingInfoAnalysis.FollowUpPrompt);
+            }
+            else
+            {
+                _logger.LogInformation("✅ [STEP 7/7] No follow-up needed");
+            }
+
             stopwatch.Stop();
 
             _logger.LogInformation(
-                "Processed message in {ElapsedMs}ms. Tool executed: {ToolExecuted}, Tool: {ToolName}", 
+                "Processed message in {ElapsedMs}ms. Tool executed: {ToolExecuted}, Tool: {ToolName}, Follow-up: {RequiresFollowUp}", 
                 stopwatch.ElapsedMilliseconds, 
                 toolExecuted,
-                toolName ?? "none");
+                toolName ?? "none",
+                missingInfoAnalysis.RequiresFollowUp);
 
             return new IntelligentChatResponse
             {
@@ -459,8 +475,10 @@ public class IntelligentChatService : IIntelligentChatService
                     IntentType = toolExecuted ? "tool_execution" : "conversational",
                     ToolName = toolName,
                     Confidence = 0.95, // SK has high confidence in its function selection
-                    RequiresFollowUp = false
+                    RequiresFollowUp = missingInfoAnalysis.RequiresFollowUp  // ← DYNAMIC
                 },
+                FollowUpPrompt = missingInfoAnalysis.FollowUpPrompt,  // ← NEW
+                MissingFields = missingInfoAnalysis.MissingFields,    // ← NEW
                 ConversationId = conversationId,
                 ToolExecuted = toolExecuted,
                 Suggestions = suggestions,
@@ -639,7 +657,33 @@ You have access to Semantic Kernel plugins that provide comprehensive platform c
 - When displaying compliance results, preserve all visual formatting from JSON responses
 - Be concise, technical, and security-conscious
 - Provide clear next steps and estimated timeframes
-- All functions are provided by Semantic Kernel plugins with automatic function calling");
+- All functions are provided by Semantic Kernel plugins with automatic function calling
+
+**PROACTIVE GUIDANCE REQUIREMENT:**
+When a user request lacks critical information needed to proceed:
+1. Acknowledge what they've provided so far
+2. Clearly state what information is still needed
+3. Explain WHY that information is needed for their request
+4. Provide examples or options when helpful
+5. Be friendly and professional
+
+Example Flow:
+User: 'I need to deploy a microservices app'
+You: 'I'll help you deploy a microservices application!
+
+📝 **What I understand:**
+- Deployment type: Microservices architecture
+
+❓ **What I need to know next:**
+Which cloud provider would you like to use?
+- Azure Government (for classified/government workloads with FedRAMP compliance)
+- Azure Commercial (for standard workloads)  
+- AWS
+- GCP
+
+This determines which compliance frameworks and security controls we'll need to apply.'
+
+DO NOT make assumptions about critical requirements. ALWAYS clarify before proceeding with infrastructure changes.");
 
         // Add recent conversation history (last 10 messages for context)
         foreach (var msg in context.MessageHistory.TakeLast(10))
@@ -923,6 +967,245 @@ You have access to Semantic Kernel plugins that provide comprehensive platform c
             IntentType = "conversational",
             Confidence = 0.5
         });
+    }
+
+    /// <summary>
+    /// Analyzes response for missing information and generates follow-up questions
+    /// </summary>
+    private async Task<MissingInformationAnalysis> AnalyzeMissingInformationAsync(
+        ChatMessageContent result,
+        bool toolExecuted,
+        string? toolName,
+        ConversationContext context,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Check if result contains validation errors or missing information indicators
+            var content = result.Content ?? string.Empty;
+            
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return new MissingInformationAnalysis { RequiresFollowUp = false };
+            }
+
+            // Patterns indicating missing information
+            var missingInfoPatterns = new[]
+            {
+                "SUBMISSION BLOCKED - Required Information Missing",
+                "required information is missing",
+                "missing information",
+                "need to know",
+                "please provide",
+                "I need",
+                "what's the",
+                "which"
+            };
+
+            var hasMissingInfo = missingInfoPatterns.Any(pattern => 
+                content.Contains(pattern, StringComparison.OrdinalIgnoreCase));
+
+            if (hasMissingInfo)
+            {
+                _logger.LogInformation("Detected missing information in response for plugin: {PluginName}", toolName);
+                
+                // Parse error message to extract missing fields
+                var missingFields = ExtractMissingFields(content);
+                
+                if (missingFields.Count > 0)
+                {
+                    _logger.LogInformation("Extracted {Count} missing fields: {Fields}", 
+                        missingFields.Count, string.Join(", ", missingFields));
+                    
+                    // Generate clarifying question based on plugin type and missing fields
+                    var question = await GenerateClarifyingQuestionAsync(
+                        toolName, 
+                        missingFields, 
+                        context, 
+                        cancellationToken);
+                    
+                    return new MissingInformationAnalysis
+                    {
+                        RequiresFollowUp = true,
+                        FollowUpPrompt = question,
+                        MissingFields = missingFields,
+                        PluginContext = toolName,
+                        Priority = 1 // Critical by default
+                    };
+                }
+            }
+            
+            return new MissingInformationAnalysis { RequiresFollowUp = false };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error analyzing missing information, continuing without follow-up");
+            return new MissingInformationAnalysis { RequiresFollowUp = false };
+        }
+    }
+
+    /// <summary>
+    /// Extracts missing field names from validation error messages
+    /// </summary>
+    private List<string> ExtractMissingFields(string responseContent)
+    {
+        var missingFields = new List<string>();
+        
+        try
+        {
+            // Parse patterns like:
+            // "❌ Mission Name is required"
+            // "❌ Email is required"
+            // "- Mission Name"
+            var regex = new System.Text.RegularExpressions.Regex(
+                @"❌\s+([^is\n]+?)\s+is\s+required|^\s*-\s+([^\n:]+?)(?:\s*:|\s*$)", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase | 
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            
+            var matches = regex.Matches(responseContent);
+            
+            foreach (System.Text.RegularExpressions.Match match in matches)
+            {
+                var fieldName = match.Groups[1].Success 
+                    ? match.Groups[1].Value.Trim() 
+                    : match.Groups[2].Value.Trim();
+                
+                if (!string.IsNullOrWhiteSpace(fieldName) && 
+                    fieldName.Length < 100) // Sanity check
+                {
+                    missingFields.Add(fieldName);
+                }
+            }
+
+            // Also look for questions in the response as indicators of missing info
+            if (missingFields.Count == 0)
+            {
+                // Look for common question patterns
+                var questionPatterns = new[]
+                {
+                    @"What(?:'s| is) (?:the |your )?([^\?\n]+?)\?",
+                    @"Which ([^\?\n]+?)\?",
+                    @"(?:Please )?(?:provide|specify|tell me) (?:the |your )?([^\?\n]+?)[\.\?]"
+                };
+
+                foreach (var pattern in questionPatterns)
+                {
+                    var questionRegex = new System.Text.RegularExpressions.Regex(
+                        pattern, 
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    
+                    var questionMatches = questionRegex.Matches(responseContent);
+                    foreach (System.Text.RegularExpressions.Match match in questionMatches)
+                    {
+                        if (match.Groups[1].Success)
+                        {
+                            var field = match.Groups[1].Value.Trim();
+                            if (!string.IsNullOrWhiteSpace(field) && field.Length < 100)
+                            {
+                                missingFields.Add(field);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error extracting missing fields from response");
+        }
+        
+        return missingFields.Distinct().Take(5).ToList(); // Limit to 5 most important
+    }
+
+    /// <summary>
+    /// Generates natural follow-up question using GPT-4o for any plugin
+    /// </summary>
+    private async Task<string> GenerateClarifyingQuestionAsync(
+        string? pluginName,
+        List<string> missingFields,
+        ConversationContext context,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Map plugin names to user-friendly context
+            var pluginContext = pluginName switch
+            {
+                "Onboarding" => "complete a mission onboarding request",
+                "Compliance" => "run a compliance assessment",
+                "Cost" => "analyze Azure costs",
+                "Infrastructure" => "provision infrastructure",
+                "Deployment" => "deploy resources",
+                "ResourceDiscovery" => "discover Azure resources",
+                _ => "complete your request"
+            };
+
+            // Use GPT-4o to generate natural follow-up question
+            var prompt = $@"You are helping a user {pluginContext}.
+The following information is missing: {string.Join(", ", missingFields)}
+
+Previous conversation context:
+{GetRecentContext(context)}
+
+Generate ONE specific, natural follow-up question to collect the MOST CRITICAL missing information.
+The question should:
+1. Ask for one specific piece of information (prioritize authentication/identity info first)
+2. Explain why it's needed
+3. Provide examples if helpful
+4. Be friendly and professional
+5. Use emojis sparingly (max 1-2)
+
+Important: Focus on the SINGLE most critical missing piece. Don't ask for everything at once.
+
+Question:";
+
+            if (_chatCompletion == null)
+            {
+                _logger.LogWarning("Chat completion service not available, using fallback question");
+                var firstField = missingFields.FirstOrDefault() ?? "additional information";
+                return $"To proceed, could you provide: {firstField}?";
+            }
+
+            var response = await _chatCompletion.GetChatMessageContentAsync(
+                prompt,
+                new OpenAIPromptExecutionSettings 
+                { 
+                    Temperature = 0.7, 
+                    MaxTokens = 200 
+                },
+                cancellationToken: cancellationToken);
+            
+            return response.Content ?? "What additional information would you like to provide?";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error generating clarifying question, using fallback");
+            
+            // Fallback to simple question
+            var firstField = missingFields.FirstOrDefault() ?? "additional information";
+            return $"To proceed, could you provide: {firstField}?";
+        }
+    }
+
+    /// <summary>
+    /// Gets recent conversation context for question generation
+    /// </summary>
+    private string GetRecentContext(ConversationContext context)
+    {
+        try
+        {
+            var recent = context.MessageHistory.TakeLast(5);
+            if (!recent.Any())
+            {
+                return "No previous context";
+            }
+
+            return string.Join("\n", recent.Select(m => $"{m.Role}: {m.Content?.Substring(0, Math.Min(m.Content.Length, 200))}..."));
+        }
+        catch
+        {
+            return "No previous context";
+        }
     }
 
 }

@@ -1,0 +1,90 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "com.azurenoops.platform-copilot",
+  "packageName": "com.azurenoops.platform-copilot",
+  "developer": {
+    "name": "Azure NoOps",
+    "websiteUrl": "https://azurenoops.org",
+    "privacyUrl": "https://azurenoops.org/privacy",
+    "termsOfUseUrl": "https://azurenoops.org/terms"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "Platform Copilot",
+    "full": "Platform Engineering Copilot for Azure"
+  },
+  "description": {
+    "short": "AI-powered Azure infrastructure management in Teams",
+    "full": "Provision Azure resources, run compliance assessments, estimate costs, and manage infrastructure using natural language directly in Microsoft Teams. Powered by Azure OpenAI and designed for DevOps teams working with Azure Government and Commercial clouds."
+  },
+  "accentColor": "#FFFFFF",
+  "bots": [],
+  "composeExtensions": [],
+  "declarativeCopilots": [
+    {
+      "id": "platformCopilot",
+      "name": "Platform Engineering Copilot",
+      "description": "Manage Azure infrastructure with AI-powered natural language commands",
+      "capabilities": [
+        {
+          "name": "WebSearch"
+        },
+        {
+          "name": "OneDriveAndSharePoint"
+        }
+      ],
+      "conversation_starters": [
+        {
+          "title": "Provision Infrastructure",
+          "text": "Create a storage account in my production resource group"
+        },
+        {
+          "title": "Run Compliance Scan",
+          "text": "Check my subscription for NIST 800-53 compliance"
+        },
+        {
+          "title": "List Resources",
+          "text": "Show me all resources in rg-prod"
+        },
+        {
+          "title": "Estimate Costs",
+          "text": "What would it cost to create an AKS cluster with 3 nodes?"
+        },
+        {
+          "title": "Deploy Application",
+          "text": "Deploy a web app to Azure App Service"
+        },
+        {
+          "title": "Check Security",
+          "text": "Scan my resources for security vulnerabilities"
+        }
+      ],
+      "instructions": "You are the Platform Engineering Copilot, an AI assistant specialized in Azure infrastructure management for DevOps and platform engineering teams. Your capabilities include:\n\n1. **Infrastructure Provisioning**: Create and configure Azure resources using natural language. Support both Azure Government and Commercial clouds.\n\n2. **Compliance Assessment**: Run NIST 800-53 ATO compliance scans and provide detailed reports with remediation guidance.\n\n3. **Cost Estimation**: Calculate cost estimates for Azure resources before deployment.\n\n4. **Resource Discovery**: List and search for Azure resources across subscriptions and resource groups.\n\n5. **Deployment Orchestration**: Deploy applications and infrastructure using IaC (Bicep, Terraform, ARM).\n\n**Guidelines**:\n- Always confirm destructive actions before executing\n- Use Azure Government regions (usgovvirginia, usgovarizona, usgovtexas) for classified workloads\n- Follow Azure naming conventions and best practices\n- Provide security recommendations and compliance guidance\n- Ask clarifying questions when requirements are ambiguous\n- Explain technical concepts in accessible language\n\n**Example Interactions**:\n- \"Create a storage account\" → Ask for name, resource group, region, redundancy\n- \"Run compliance scan\" → Ask for subscription ID or name\n- \"Deploy web app\" → Ask for app name, runtime, region, pricing tier\n\nBe proactive, helpful, and security-conscious in all interactions."
+    }
+  ],
+  "plugins": [
+    {
+      "pluginId": "platformCopilotAPI",
+      "file": "ai-plugin.json"
+    }
+  ],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": [
+    "platform-copilot-m365.azurewebsites.us",
+    "localhost:3978",
+    "*.ngrok.io",
+    "*.ngrok-free.app"
+  ],
+  "webApplicationInfo": {
+    "id": "YOUR_AAD_APP_ID",
+    "resource": "api://platform-copilot"
+  }
+}

@@ -43,6 +43,20 @@ The system uses four levels of intelligence:
 - **Persistent Storage**: All workflows and assessments stored in SQLite database for audit trails
 - **Intelligent Caching**: 5-minute cache for policy evaluations to optimize performance
 
+### Conversation Context & Memory
+
+**What's Persisted**:
+- ✅ **Message History**: All chat messages stored in SQLite database (Chat.App)
+- ✅ **Approval Workflows**: All policy exception requests and approvals persisted
+- ✅ **Onboarding Requests**: All service onboarding data stored for audit trail
+
+**What's Ephemeral** (In-Memory Only):
+- ⚠️ **AI Context Understanding**: The AI's semantic understanding of your conversation (extracted parameters, workflow state, inferred intent) is stored in-memory only
+- ⚠️ **Session State**: Lost on application restart or browser refresh
+- ⚠️ **Multi-Turn Dialogue Context**: Works within a session but not across sessions
+
+**Best Practice**: Complete related tasks in a single conversation session. If you need to pause and resume, provide full context in your next message rather than relying on the system to remember from a previous session.
+
 ### Primary Interfaces
 
 1. **REST API** (`http://localhost:7001`): Direct HTTP API for programmatic access
@@ -135,22 +149,30 @@ NIST 800-53 as the control catalog.
 
 #### Basic Onboarding
 
-**Simple Onboarding**:
+**Simple Onboarding Request**:
 ```
 "I need to onboard a new mission for NAVWAR"
 ```
 
-**System Response**:
+**System Response** (Acknowledges but doesn't ask questions):
 ```
-Great! I'll help you onboard a new mission. Let me gather some information:
+I'll help you onboard a new mission for NAVWAR. To create a complete onboarding request, I'll need:
 
-1. What's the mission name?
-2. What's your rank and service branch?
-3. What type of application are you deploying?
-4. Which cloud environment do you need (Commercial or Government)?
+- Mission name
+- Your rank and service branch
+- Contact email
+- Type of application/services needed
+- Cloud environment (Commercial or Government)
+- Classification level
+- Expected user count
+- Compliance requirements
+
+You can provide these details now, or I can create a draft and you can fill in details later.
 ```
 
-**Complete Onboarding in One Prompt**:
+**Reality**: The system does **NOT** ask follow-up questions interactively. It will tell you what's needed, but you must provide the information in your next message.
+
+**Better Approach - Complete Onboarding in One Prompt**:
 ```
 "I need to onboard a new mission called 'Tactical Edge Platform' for NAVWAR. 
 I'm Commander Sarah Johnson from the Navy. We need to deploy a microservices 
@@ -904,38 +926,58 @@ The Azure Policy Engine now provides:
 
 ### 1. Context Chaining
 
-Build complex requirements through conversation:
+Build complex requirements through conversation **within a single session**:
 
-**Turn 1**:
+> **⚠️ Current Limitations**: 
+> - Conversation context is maintained **in-memory only** during an active session
+> - The system does **NOT** proactively ask follow-up questions - you must provide all information
+> - The AI will work with whatever information you provide, inferring what it can
+> - For best results, provide complete details in your initial prompt or follow-up messages
+
+**How It Actually Works**:
+
+**Turn 1** (You provide partial info):
 ```
 "I need to deploy a microservices application"
 ```
 
-**Turn 2** (System asks):
+**System Response** (NO follow-up questions):
 ```
-"What cloud provider would you like to use?"
+"I can help you deploy a microservices application. I'll need more details to provide specific guidance.
+Please tell me:
+- Cloud provider (Azure, AWS, GCP)
+- Number of services
+- Infrastructure requirements
+
+Or I can provide general guidance based on best practices."
 ```
 
-**Turn 3** (You provide):
+**Turn 2** (You provide more details):
 ```
-"Azure Government for production, Azure Commercial for dev/staging"
-```
-
-**Turn 4** (System asks):
-```
-"How many microservices will you deploy?"
+"Azure Government for production, 5 services: API gateway, auth service, order service, payment service, notification service"
 ```
 
-**Turn 5** (You provide):
+**System Response**:
 ```
-"5 services: API gateway, auth service, order service, payment service, notification service"
+"I'll help you design a 5-service microservices architecture on Azure Government.
+[Generates architecture recommendations]"
 ```
 
-**System generates**: Complete multi-service architecture with all 5 services
+**Reality Check**:
+- ❌ **System does NOT ask**: "What cloud provider would you like to use?"
+- ❌ **System does NOT ask**: "How many microservices will you deploy?"
+- ✅ **System DOES**: Acknowledge what's missing and work with what you provided
+- ✅ **System DOES**: Remember previous messages in the conversation (last 10 messages)
+- ✅ **Context is maintained** for the duration of your session (stored in memory)
+- ❌ **Context is NOT persisted** to database (lost on app restart)
+
+**Best Practice**: Provide complete information upfront rather than expecting the system to guide you through a questionnaire.
 
 ### 2. Referencing Previous Context
 
-The system remembers conversation history:
+The system remembers conversation history **within the same session**:
+
+> **⚠️ Session-Based Memory**: Context is maintained in-memory during an active conversation. If you close your browser or the application restarts, context is lost. For best results, complete related tasks in a single conversation session.
 
 ```
 User: "Deploy web app to Azure"
@@ -951,6 +993,8 @@ User: "What's the monthly cost for everything we've configured?"
 System: "Estimated monthly cost: $1,850 (App Service $150, SQL Database $1,400, 
 Storage $100, Networking $200)"
 ```
+
+**Context Window**: The system uses the **last 10 messages** to build context for each response. For complex multi-step workflows, consider consolidating related requests into fewer, more detailed prompts rather than spreading them across many small messages.
 
 ### 3. Template Inheritance
 
@@ -1008,23 +1052,30 @@ Express complex requirements with conditions:
 
 ## ✅ Best Practices
 
-### 1. Start Broad, Then Narrow
+### 1. Provide Complete Information Upfront
 
-❌ **Bad** (Too vague):
+❌ **Bad** (Too vague, expecting system to ask questions):
 ```
 "Deploy my app"
 ```
 
-✅ **Good** (Progressive detail):
+**Reality**: The system will NOT ask clarifying questions. It will work with what you give it or provide generic guidance.
+
+✅ **Good** (Complete information in initial prompt):
 ```
-"I need to deploy a web application"
-→ System asks for details
-→ You provide: "It's a .NET 8 API"
-→ System asks for cloud
-→ You provide: "Azure Government"
-→ System asks for database
-→ You provide: "SQL Server with geo-replication"
+"I need to deploy a .NET 8 web API to Azure Government with SQL Server database 
+using geo-replication. This is for a classified mission with FedRAMP High compliance 
+requirements. Expected load: 10,000 concurrent users, 99.9% uptime SLA."
 ```
+
+✅ **Also Acceptable** (Progressive detail in follow-up messages):
+```
+Turn 1: "I need to deploy a web application"
+Turn 2: "It's a .NET 8 API for Azure Government with SQL Server and geo-replication"
+Turn 3: "Classification is SECRET, need FedRAMP High, 10K concurrent users"
+```
+
+**Key Point**: Don't expect the system to guide you through questions. Provide details proactively.
 
 ### 2. Include Classification Early
 

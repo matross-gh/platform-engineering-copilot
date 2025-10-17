@@ -56,6 +56,16 @@ public class IntelligentChatResponse
     public string? FollowUpPrompt { get; set; }
 
     /// <summary>
+    /// Structured list of missing fields (for UI rendering)
+    /// </summary>
+    public List<string> MissingFields { get; set; } = new();
+
+    /// <summary>
+    /// Suggested quick replies for follow-up (optional)
+    /// </summary>
+    public List<string> QuickReplies { get; set; } = new();
+
+    /// <summary>
     /// Metadata about the response
     /// </summary>
     public ResponseMetadata Metadata { get; set; } = new();

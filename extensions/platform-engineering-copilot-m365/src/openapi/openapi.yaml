@@ -1,0 +1,115 @@
+openapi: 3.0.1
+info:
+  title: Platform Engineering Copilot API
+  description: AI-powered Azure infrastructure provisioning and management for M365 Copilot integration
+  version: 1.0.0
+  contact:
+    name: Azure NoOps
+    email: support@azurenoops.org
+    url: https://azurenoops.org
+
+servers:
+  - url: https://platform-copilot-m365.azurewebsites.us
+    description: Production Server
+  - url: http://localhost:7001
+    description: Development Server
+
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check endpoint
+      description: Check if the service is running
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+
+  /api/messages:
+    post:
+      operationId: sendMessage
+      summary: Send message to Platform Copilot
+      description: Process natural language queries about Azure infrastructure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  description: User message
+                  example: "Create a storage account in my production resource group"
+                conversation:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                from:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+              required:
+                - text
+      responses:
+        '200':
+          description: Message processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  attachments:
+                    type: array
+                    items:
+                      type: object
+                  text:
+                    type: string
+
+components:
+  schemas:
+    IntelligentChatRequest:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Natural language query
+        conversationId:
+          type: string
+          description: Conversation ID for context
+        context:
+          type: object
+          description: Additional context
+      required:
+        - message
+
+    IntelligentChatResponse:
+      type: object
+      properties:
+        response:
+          type: string
+        intentType:
+          type: string
+        toolExecuted:
+          type: boolean
+        requiresFollowUp:
+          type: boolean
+        followUpPrompt:
+          type: string
+        missingFields:
+          type: array
+          items:
+            type: string
+        success:
+          type: boolean

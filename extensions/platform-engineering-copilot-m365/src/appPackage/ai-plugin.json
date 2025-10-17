@@ -1,0 +1,18 @@
+{
+  "schema_version": "v2",
+  "name_for_human": "Platform Engineering Copilot",
+  "name_for_model": "platform_copilot",
+  "description_for_human": "Manage Azure infrastructure using natural language in Microsoft Teams",
+  "description_for_model": "This plugin enables AI-powered Azure infrastructure management directly in Microsoft 365 Copilot. It provides capabilities for:\n\n1. **Infrastructure Provisioning**: Create Azure resources (storage accounts, VMs, AKS clusters, databases, etc.) using natural language descriptions. Generates Bicep/Terraform code and deploys resources.\n\n2. **Compliance Assessment**: Run NIST 800-53 ATO compliance scans across Azure subscriptions and resource groups. Identifies non-compliant resources and provides remediation guidance.\n\n3. **Cost Estimation**: Calculate monthly and annual cost estimates for Azure resources before deployment. Provides cost breakdowns and optimization recommendations.\n\n4. **Resource Discovery**: List and search for Azure resources with filtering capabilities. Query by resource group, type, tags, or subscription.\n\n5. **Deployment Orchestration**: Deploy applications using Azure DevOps pipelines, GitHub Actions, or direct deployment.\n\n6. **Security Scanning**: Check resources for security vulnerabilities and misconfigurations.\n\nThe plugin supports both Azure Government and Commercial clouds, follows Azure best practices, and integrates with existing DevOps workflows. It asks clarifying questions when user intent is ambiguous and provides detailed, actionable responses with adaptive cards.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://platform-copilot-m365.azurewebsites.us/openapi.json",
+    "has_user_authentication": false
+  },
+  "logo_url": "https://platform-copilot-m365.azurewebsites.us/logo.png",
+  "contact_email": "support@azurenoops.org",
+  "legal_info_url": "https://azurenoops.org/legal"
+}
