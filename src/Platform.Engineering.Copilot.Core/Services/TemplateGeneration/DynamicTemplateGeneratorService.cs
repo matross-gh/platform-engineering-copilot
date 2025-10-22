@@ -13,7 +13,7 @@ using Platform.Engineering.Copilot.Core.Services.Generators.Security;
 using Platform.Engineering.Copilot.Core.Services.Generators.Observability;
 using Platform.Engineering.Copilot.Core.Services.Generators.Repository;
 using Platform.Engineering.Copilot.Core.Services.Generators.Workflow;
-using Platform.Engineering.Copilot.Core.Services.Generators.Infrastructure;
+using Platform.Engineering.Copilot.Core.Services.Generators.Base;
 using Platform.Engineering.Copilot.Core.Services.Generators.ARM;
 using Platform.Engineering.Copilot.Core.Services.Generators.CloudFormation;
 
@@ -31,13 +31,17 @@ namespace Platform.Engineering.Copilot.Core.Services
     public class DynamicTemplateGeneratorService : IDynamicTemplateGenerator
     {
         private readonly ILogger<DynamicTemplateGeneratorService> _logger;
+        private readonly Platform.Engineering.Copilot.Core.Services.Validation.ConfigurationValidationService? _validationService;
         private readonly Dictionary<ProgrammingLanguage, IApplicationCodeGenerator> _codeGenerators;
         private readonly Dictionary<DatabaseType, IDatabaseTemplateGenerator> _databaseGenerators;
         private readonly Dictionary<InfrastructureFormat, IInfrastructureGenerator> _infraGenerators;
 
-        public DynamicTemplateGeneratorService(ILogger<DynamicTemplateGeneratorService> logger)
+        public DynamicTemplateGeneratorService(
+            ILogger<DynamicTemplateGeneratorService> logger,
+            Platform.Engineering.Copilot.Core.Services.Validation.ConfigurationValidationService? validationService = null)
         {
             _logger = logger;
+            _validationService = validationService;
             
             // Initialize code generators
             _codeGenerators = new Dictionary<ProgrammingLanguage, IApplicationCodeGenerator>
@@ -96,6 +100,47 @@ namespace Platform.Engineering.Copilot.Core.Services
             {
                 _logger.LogInformation("Generating template for service: {ServiceName} (Type: {TemplateType})", 
                     request.ServiceName, request.TemplateType ?? "unspecified");
+
+                // VALIDATE CONFIGURATION FIRST (if validation service is available)
+                if (_validationService != null)
+                {
+                    _logger.LogInformation("Validating configuration before template generation...");
+                    var validationResult = _validationService.ValidateRequest(request);
+
+                    if (!validationResult.IsValid)
+                    {
+                        _logger.LogWarning("Configuration validation failed with {ErrorCount} errors", validationResult.Errors.Count);
+                        
+                        return new TemplateGenerationResult
+                        {
+                            Success = false,
+                            ErrorMessage = $"Configuration validation failed: {string.Join("; ", validationResult.Errors.Select(e => e.Message))}",
+                            ValidationErrors = validationResult.Errors.Select(e => e.Message).ToList(),
+                            Files = new Dictionary<string, string>()
+                        };
+                    }
+
+                    // Log warnings even if validation passed
+                    if (validationResult.Warnings.Any())
+                    {
+                        _logger.LogInformation("Validation passed with {WarningCount} warnings: {Warnings}",
+                            validationResult.Warnings.Count,
+                            string.Join("; ", validationResult.Warnings.Select(w => w.Message)));
+                    }
+
+                    // Log recommendations
+                    if (validationResult.Recommendations.Any())
+                    {
+                        _logger.LogInformation("Validation recommendations: {Recommendations}",
+                            string.Join("; ", validationResult.Recommendations.Select(r => r.Message)));
+                    }
+
+                    _logger.LogInformation("✅ Configuration validated successfully in {ValidationTimeMs}ms", validationResult.ValidationTimeMs);
+                }
+                else
+                {
+                    _logger.LogWarning("⚠️  Validation service not available - proceeding without validation");
+                }
 
                 // Check if this is an infrastructure-only template
                 bool isInfrastructureTemplate = IsInfrastructureTemplate(request);

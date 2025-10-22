@@ -27,7 +27,7 @@ The Platform Engineering Copilot transforms cloud infrastructure management by p
 - **.NET 9.0 SDK** or later
 - **Docker & Docker Compose** (for containerized deployment)
 - **Azure Subscription** (Azure Government or Commercial)
-- **Azure CLI** (for authentication)
+- **Azure CLI** (for authentication) - **Required**
 - **Redis** (optional, for caching)
 
 ### 1. Clone and Build
@@ -40,16 +40,24 @@ dotnet build
 
 ### 2. Configure Azure Authentication
 
+The application uses **DefaultAzureCredential** - no hardcoded credentials needed!
+
 ```bash
+# For Azure Government
+az cloud set --name AzureUSGovernment
+az login
+export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
+
 # For Azure Commercial
+az cloud set --name AzureCloud
 az login
 
-# For Azure Government
-az login --environment AzureUSGovernment
-
-# Set your subscription
+# Set your default subscription (optional)
 az account set --subscription "YOUR-SUBSCRIPTION-ID"
 ```
+
+**📖 See [QUICKSTART-AUTHENTICATION.md](./QUICKSTART-AUTHENTICATION.md) for detailed setup**  
+**📖 See [AZURE-AUTHENTICATION.md](./AZURE-AUTHENTICATION.md) for comprehensive authentication guide**
 
 ### 3. Configure Application Settings
 
@@ -59,14 +67,15 @@ Edit `src/Platform.Engineering.Copilot.API/appsettings.Development.json`:
 {
   "Gateway": {
     "Azure": {
-      "SubscriptionId": "YOUR-SUBSCRIPTION-ID",
-      "Environment": "AzureUSGovernment",
-      "TenantId": "YOUR-TENANT-ID"
+      "UseManagedIdentity": false,
+      "CloudEnvironment": "AzureGovernment",
+      "Enabled": true
     },
     "AzureOpenAI": {
       "Endpoint": "https://YOUR-OPENAI-ENDPOINT.openai.azure.us/",
       "DeploymentName": "gpt-4o",
-      "ApiKey": "YOUR-API-KEY"
+      "ApiKey": "YOUR-API-KEY",
+      "UseManagedIdentity": false
     }
   },
   "ConnectionStrings": {
@@ -74,6 +83,8 @@ Edit `src/Platform.Engineering.Copilot.API/appsettings.Development.json`:
   }
 }
 ```
+
+**Note:** No Azure credentials needed in configuration - Azure CLI credentials are used automatically!
 
 ### 4. Run the API
 
@@ -585,6 +596,20 @@ See **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** for complete system desig
 - **Intent Classification** - Workflow routing
 
 ## 📚 Advanced Topics
+
+### Authentication & Security
+- **[Quick Start Authentication](./QUICKSTART-AUTHENTICATION.md)** - Get started with Azure authentication in 30 seconds
+- **[Azure Authentication Guide](./AZURE-AUTHENTICATION.md)** - Comprehensive authentication architecture and setup
+- **[Authentication Cheat Sheet](./CHEATSHEET-AUTHENTICATION.md)** - Quick reference for developers
+- **[Authentication Docs Summary](./AUTHENTICATION-DOCS.md)** - Navigation hub for all auth documentation
+
+### Long-Running Operations
+- **[Long-Running Tasks Architecture](./LONG-RUNNING-TASKS.md)** - Complete async job pattern design
+- **[Long-Running Tasks Summary](./LONG-RUNNING-TASKS-SUMMARY.md)** - Implementation guide and API usage
+- **[Long-Running Tasks Cheat Sheet](./CHEATSHEET-LONG-RUNNING-TASKS.md)** - Quick reference for async operations
+
+### Testing & Development
+- **[Natural Language Test Cases](./NATURAL-LANGUAGE-TEST-CASES.md)** - 50+ test scenarios for multi-agent system
 
 ### For Developers
 - **[Generic Onboarding Framework](./docs/GENERIC-ONBOARDING-FRAMEWORK.md)** - Build custom onboarding workflows

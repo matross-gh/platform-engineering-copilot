@@ -1,32 +1,33 @@
 version: "3.9"
 
 networks:
-  supervisor-network:
+  plaform-engineering-copilot-network:
     driver: bridge
 
 volumes:
   sqlserver-data:
-  supervisor-logs:
+  plaform-engineering-copilot-logs:
 
 services:
   # SQL Server Database
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: supervisor-sqlserver
+    container_name: plaform-engineering-copilot-sqlserver
     hostname: sqlserver
     restart: unless-stopped
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=SupervisorDB123!
+      - SA_PASSWORD=plaform-engineering-copilotDB123!
       - MSSQL_PID=Developer
     ports:
       - "1433:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
+      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     networks:
-      - supervisor-network
+      - plaform-engineering-copilot-network
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P SupervisorDB123! -Q 'SELECT 1' || exit 1"]
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P plaform-engineering-copilotDB123! -C -Q 'SELECT 1' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -36,10 +37,9 @@ services:
   platform-api:
     build:
       context: .
-      dockerfile: Dockerfile.api
-      target: runtime
-    image: supervisor-platform-api:latest
-    container_name: supervisor-platform-api
+      dockerfile: src/Platform.Engineering.Copilot.API/Dockerfile
+    image: plaform-engineering-copilot-api:latest
+    container_name: plaform-engineering-copilot-api
     hostname: platform-api
     restart: unless-stopped
     depends_on:
@@ -47,24 +47,73 @@ services:
         condition: service_healthy
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://0.0.0.0:5000
-      - ASPNETCORE_HTTP_PORTS=5000
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=SupervisorPlatformDb;User=sa;Password=SupervisorDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true
-      - ConnectionStrings__SqlServerConnection=Server=sqlserver,1433;Database=SupervisorPlatformDb;User=sa;Password=SupervisorDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true
+      - ASPNETCORE_URLS=http://0.0.0.0:7001
+      - ASPNETCORE_HTTP_PORTS=7001
+      # Database Configuration
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=plaform-engineering-copilotDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
+      - ConnectionStrings__SqlServerConnection=Server=sqlserver,1433;Database=plaform-engineering-copilotDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
       - DatabaseProvider=SqlServer
-      - Gateway__AzureSubscriptionId=${AZURE_SUBSCRIPTION_ID:-}
-      - Gateway__AzureClientId=${AZURE_CLIENT_ID:-}
-      - Gateway__AzureClientSecret=${AZURE_CLIENT_SECRET:-}
-      - Gateway__AzureTenantId=${AZURE_TENANT_ID:-}
-      - Gateway__GitHubToken=${GITHUB_TOKEN:-}
+      # Gateway - Azure Configuration
+      - Gateway__Azure__SubscriptionId=${AZURE_SUBSCRIPTION_ID:-453c2549-4cc5-464f-ba66-acad920823e8}
+      - Gateway__Azure__ClientId=${AZURE_CLIENT_ID:-}
+      - Gateway__Azure__ClientSecret=${AZURE_CLIENT_SECRET:-}
+      - Gateway__Azure__TenantId=${AZURE_TENANT_ID:-5310815f-d7b8-4c10-9879-9eccf368d822}
+      - Gateway__Azure__CloudEnvironment=${AZURE_CLOUD_ENVIRONMENT:-AzureGovernment}
+      - Gateway__Azure__UseManagedIdentity=${AZURE_USE_MANAGED_IDENTITY:-false}
+      - Gateway__Azure__Enabled=${AZURE_ENABLED:-true}
+      # Gateway - Azure OpenAI Configuration
+      - Gateway__AzureOpenAI__ApiKey=${AZURE_OPENAI_API_KEY:-}
+      - Gateway__AzureOpenAI__Endpoint=${AZURE_OPENAI_ENDPOINT:-https://mcp-ai.openai.azure.us/}
+      - Gateway__AzureOpenAI__DeploymentName=${AZURE_OPENAI_DEPLOYMENT:-gpt-4o}
+      - Gateway__AzureOpenAI__ChatDeploymentName=${AZURE_OPENAI_CHAT_DEPLOYMENT:-gpt-4o}
+      - Gateway__AzureOpenAI__EmbeddingDeploymentName=${AZURE_OPENAI_EMBEDDING_DEPLOYMENT:-text-embedding-ada-002}
+      - Gateway__AzureOpenAI__UseManagedIdentity=${AZURE_OPENAI_USE_MANAGED_IDENTITY:-false}
+      # Gateway - GitHub Configuration
+      - Gateway__GitHub__AccessToken=${GITHUB_TOKEN:-}
+      - Gateway__GitHub__ApiBaseUrl=${GITHUB_API_BASE_URL:-https://api.github.com}
+      - Gateway__GitHub__DefaultOwner=${GITHUB_DEFAULT_OWNER:-}
+      - Gateway__GitHub__Enabled=${GITHUB_ENABLED:-true}
+      # Gateway - Timeouts
+      - Gateway__ConnectionTimeoutSeconds=${GATEWAY_CONNECTION_TIMEOUT:-60}
+      - Gateway__RequestTimeoutSeconds=${GATEWAY_REQUEST_TIMEOUT:-300}
+      # NIST Controls Configuration
+      - NistControls__BaseUrl=${NIST_CONTROLS_BASE_URL:-https://raw.githubusercontent.com/usnistgov/oscal-content/main/nist.gov/SP800-53/rev5/json}
+      - NistControls__TimeoutSeconds=${NIST_CONTROLS_TIMEOUT:-60}
+      - NistControls__CacheDurationHours=${NIST_CONTROLS_CACHE_DURATION:-24}
+      - NistControls__MaxRetryAttempts=${NIST_CONTROLS_MAX_RETRIES:-3}
+      - NistControls__RetryDelaySeconds=${NIST_CONTROLS_RETRY_DELAY:-2}
+      - NistControls__EnableOfflineFallback=${NIST_CONTROLS_OFFLINE_FALLBACK:-true}
+      - NistControls__EnableDetailedLogging=${NIST_CONTROLS_DETAILED_LOGGING:-false}
+      # Email Notifications Configuration
+      - EmailNotifications__ConnectionString=${EMAIL_CONNECTION_STRING:-}
+      - EmailNotifications__SenderEmail=${EMAIL_SENDER_EMAIL:-noreply@flankspeed.navy.mil}
+      - EmailNotifications__SenderName=${EMAIL_SENDER_NAME:-Navy Flankspeed Platform}
+      - EmailNotifications__NNWCTeamEmail=${EMAIL_NNWC_TEAM:-nnwc-ops@navy.mil}
+      - EmailNotifications__EnableNotifications=${EMAIL_ENABLE_NOTIFICATIONS:-true}
+      - EmailNotifications__MockMode=${EMAIL_MOCK_MODE:-false}
+      - EmailNotifications__AzurePortalBaseUrl=${EMAIL_AZURE_PORTAL_URL:-https://portal.azure.us}
+      - EmailNotifications__SupportTicketUrl=${EMAIL_SUPPORT_TICKET_URL:-https://support.navy.mil/create-ticket}
+      - EmailNotifications__IncludeDetailedErrors=${EMAIL_INCLUDE_DETAILED_ERRORS:-true}
+      # Slack Notifications Configuration
+      - SlackNotifications__WebhookUrl=${SLACK_WEBHOOK_URL:-}
+      - SlackNotifications__EnableNotifications=${SLACK_ENABLE_NOTIFICATIONS:-true}
+      - SlackNotifications__MockMode=${SLACK_MOCK_MODE:-false}
+      - SlackNotifications__ChannelName=${SLACK_CHANNEL_NAME:-#flankspeed-ops}
+      - SlackNotifications__BotUsername=${SLACK_BOT_USERNAME:-Flankspeed Platform}
+      - SlackNotifications__BotIconEmoji=${SLACK_BOT_ICON_EMOJI:-:anchor:}
+      - SlackNotifications__MentionChannelOnFailure=${SLACK_MENTION_ON_FAILURE:-true}
+      - SlackNotifications__AzurePortalBaseUrl=${SLACK_AZURE_PORTAL_URL:-https://portal.azure.us}
+      # Teams Notifications Configuration
+      - Teams__WebhookUrl=${TEAMS_WEBHOOK_URL:-}
+      - Teams__EnableNotifications=${TEAMS_ENABLE_NOTIFICATIONS:-false
     ports:
-      - "5000:5000"
+      - "7001:7001"
     volumes:
-      - supervisor-logs:/app/logs
+      - plaform-engineering-copilot-logs:/app/logs
     networks:
-      - supervisor-network
+      - plaform-engineering-copilot-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:7001/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -73,11 +122,10 @@ services:
   # Platform Chat Service
   platform-chat:
     build:
-      context: ./src/Platform.Engineering.Copilot.Chat
-      dockerfile: Dockerfile
-      target: runtime
-    image: supervisor-platform-chat:latest
-    container_name: supervisor-platform-chat
+      context: .
+      dockerfile: src/Platform.Engineering.Copilot.Chat/Dockerfile
+    image: plaform-engineering-copilot-platform-chat:latest
+    container_name: plaform-engineering-copilot-platform-chat
     hostname: platform-chat
     restart: unless-stopped
     depends_on:
@@ -87,22 +135,84 @@ services:
         condition: service_healthy
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://0.0.0.0:3000
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=SupervisorPlatform;User Id=sa;Password=SupervisorDB123!;TrustServerCertificate=true;Encrypt=false;MultipleActiveResultSets=true
-      - PlatformServices__ApiBaseUrl=http://platform-api:7000
-      - OpenAI__ApiKey=${OPENAI_API_KEY}
-      - OpenAI__Endpoint=${OPENAI_ENDPOINT}
-      - OpenAI__Model=${OPENAI_MODEL:-gpt-4}
+      - ASPNETCORE_URLS=http://0.0.0.0:5001
+      - ASPNETCORE_HTTP_PORTS=5001
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=plaform-engineering-copilotPlatformChatDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
+      - PlatformApi__BaseUrl=http://platform-api:7001
       - Logging__LogLevel__Default=Information
       - Logging__LogLevel__Microsoft=Warning
     ports:
-      - "3000:3000"
+      - "5001:5001"
     volumes:
-      - supervisor-logs:/app/logs
+      - plaform-engineering-copilot-logs:/app/logs
     networks:
-      - supervisor-network
+      - plaform-engineering-copilot-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Admin API Service
+  admin-api:
+    build:
+      context: .
+      dockerfile: src/Platform.Engineering.Copilot.Admin.API/Dockerfile
+    image: plaform-engineering-copilot-admin-api:latest
+    container_name: plaform-engineering-copilot-admin-api
+    hostname: admin-api
+    restart: unless-stopped
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:5002
+      - ASPNETCORE_HTTP_PORTS=5002
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=plaform-engineering-copilotAdminDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft=Warning
+    ports:
+      - "5002:5002"
+    volumes:
+      - plaform-engineering-copilot-logs:/app/logs
+    networks:
+      - plaform-engineering-copilot-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Admin Client Service
+  admin-client:
+    build:
+      context: .
+      dockerfile: src/Platform.Engineering.Copilot.Admin.Client/Dockerfile
+    image: plaform-engineering-copilot-admin-client:latest
+    container_name: plaform-engineering-copilot-admin-client
+    hostname: admin-client
+    restart: unless-stopped
+    depends_on:
+      admin-api:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:5003
+      - ASPNETCORE_HTTP_PORTS=5003
+      - AdminApi__BaseUrl=http://admin-api:5002
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft=Warning
+    ports:
+      - "5003:5003"
+    volumes:
+      - plaform-engineering-copilot-logs:/app/logs
+    networks:
+      - plaform-engineering-copilot-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5003/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -111,7 +221,7 @@ services:
   # Optional: Reverse Proxy (Nginx)
   nginx:
     image: nginx:alpine
-    container_name: supervisor-nginx
+    container_name: plaform-engineering-copilot-nginx
     hostname: nginx
     restart: unless-stopped
     depends_on:
@@ -122,16 +232,16 @@ services:
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - supervisor-logs:/var/log/nginx
+      - plaform-engineering-copilot-logs:/var/log/nginx
     networks:
-      - supervisor-network
+      - plaform-engineering-copilot-network
     profiles:
       - proxy
 
   # Optional: Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: supervisor-redis
+    container_name: plaform-engineering-copilot-redis
     hostname: redis
     restart: unless-stopped
     ports:
@@ -139,7 +249,7 @@ services:
     volumes:
       - ./redis.conf:/etc/redis/redis.conf:ro
     networks:
-      - supervisor-network
+      - plaform-engineering-copilot-network
     profiles:
       - cache
     command: redis-server /etc/redis/redis.conf

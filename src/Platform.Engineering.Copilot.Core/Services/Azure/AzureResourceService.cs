@@ -490,10 +490,14 @@ public class AzureResourceService : IAzureResourceService
             var aksCollection = resourceGroup.Value.GetContainerServiceManagedClusters();
             var aksOperation = await aksCollection.CreateOrUpdateAsync(WaitUntil.Started, clusterName, aksData, cancellationToken);
 
+            // Construct the cluster resource ID manually (operation not yet complete)
+            var subId = GetSubscriptionId(subscriptionId);
+            var clusterId = $"/subscriptions/{subId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerService/managedClusters/{clusterName}";
+
             return new
             {
                 success = true,
-                clusterId = aksOperation.Value.Id.ToString(),
+                clusterId = clusterId,
                 clusterName,
                 resourceGroupName,
                 location,
@@ -1357,8 +1361,19 @@ public class AzureResourceService : IAzureResourceService
             var subscription = _armClient.GetSubscriptionResource(
                 SubscriptionResource.CreateResourceIdentifier(subscriptionId));
             
-            var resourceGroup = await subscription.GetResourceGroupAsync(resourceGroupName);
-            if (resourceGroup?.Value == null)
+            Response<ResourceGroupResource>? resourceGroupResponse;
+            try
+            {
+                resourceGroupResponse = await subscription.GetResourceGroupAsync(resourceGroupName);
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+                _logger.LogDebug("Resource group '{ResourceGroup}' not found in subscription {SubscriptionId} (this is expected for planning/guidance queries)", 
+                    resourceGroupName, subscriptionId);
+                return new List<AzureResource>();
+            }
+            
+            if (resourceGroupResponse?.Value == null)
             {
                 _logger.LogWarning("Resource group {ResourceGroup} not found in subscription {SubscriptionId}", 
                     resourceGroupName, subscriptionId);
@@ -1368,7 +1383,7 @@ public class AzureResourceService : IAzureResourceService
             var resources = new List<AzureResource>();
             
             // List all resources in the resource group using GenericResources
-            await foreach (var genericResource in resourceGroup.Value.GetGenericResourcesAsync())
+            await foreach (var genericResource in resourceGroupResponse.Value.GetGenericResourcesAsync())
             {
                 try
                 {

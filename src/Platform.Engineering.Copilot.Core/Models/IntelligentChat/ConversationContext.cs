@@ -74,6 +74,11 @@ public class ConversationContext
     /// Whether conversation is still active
     /// </summary>
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Previous agent responses (for multi-agent coordination)
+    /// </summary>
+    public List<Platform.Engineering.Copilot.Core.Models.Agents.AgentResponse> PreviousResults { get; set; } = new();
 }
 
 /// <summary>

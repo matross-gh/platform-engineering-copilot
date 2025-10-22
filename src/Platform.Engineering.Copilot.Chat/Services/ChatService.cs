@@ -387,7 +387,7 @@ public class ChatService : IChatService
         {
             using var httpClient = _httpClientFactory.CreateClient();
             httpClient.BaseAddress = new Uri(_apiBaseUrl);
-            httpClient.Timeout = TimeSpan.FromSeconds(60); // Longer timeout for AI processing
+            httpClient.Timeout = TimeSpan.FromSeconds(180); // Extended timeout for AI processing with function calls
 
             var request = new
             {

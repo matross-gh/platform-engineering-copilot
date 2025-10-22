@@ -64,6 +64,7 @@ class Program
             // Configure HTTP client for Platform.API communication
             builder.Services.AddHttpClient<PlatformApiClient>(client =>
             {
+                // Platform API
                 var apiBaseUrl = builder.Configuration["PlatformApi:BaseUrl"] ?? "http://localhost:7001";
                 client.BaseAddress = new Uri(apiBaseUrl);
                 client.DefaultRequestHeaders.Add("User-Agent", "Platform-MCP-Server/1.0");

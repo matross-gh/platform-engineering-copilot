@@ -4,31 +4,27 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.ChatCompletion;
 using Platform.Engineering.Copilot.Core.Interfaces;
 
 namespace Platform.Engineering.Copilot.Core.Services.Infrastructure;
 
 /// <summary>
-/// AI-powered infrastructure provisioning service using natural language queries
-/// Uses Semantic Kernel to parse natural language queries into structured provisioning requests
-/// Example: "Create a storage account named mydata in eastus with Standard_LRS SKU"
+/// Infrastructure provisioning service for Azure resources
+/// Handles actual resource provisioning through Azure Resource Manager
+/// Note: The InfrastructureAgent handles AI-powered query parsing
+/// This service focuses on executing the provisioning with validated parameters
 /// </summary>
 public class InfrastructureProvisioningService : IInfrastructureProvisioningService
 {
     private readonly ILogger<InfrastructureProvisioningService> _logger;
     private readonly IAzureResourceService _azureResourceService;
-    private readonly Kernel _kernel;
 
     public InfrastructureProvisioningService(
         ILogger<InfrastructureProvisioningService> logger,
-        IAzureResourceService azureResourceService,
-        Kernel kernel)
+        IAzureResourceService azureResourceService)
     {
         _logger = logger;
         _azureResourceService = azureResourceService;
-        _kernel = kernel;
     }
 
     public async Task<InfrastructureProvisionResult> ProvisionInfrastructureAsync(
@@ -39,8 +35,9 @@ public class InfrastructureProvisioningService : IInfrastructureProvisioningServ
 
         try
         {
-            // Step 1: Parse the natural language query using AI
-            var intent = await ParseQueryAsync(query, cancellationToken);
+            // Simple pattern-based parsing (AI parsing happens in InfrastructureAgent)
+            // This is a fallback for direct API calls
+            var intent = ParseQuerySimple(query);
 
             if (!intent.Success)
             {
@@ -53,7 +50,7 @@ public class InfrastructureProvisioningService : IInfrastructureProvisioningServ
                 };
             }
 
-            // Step 2: Route to appropriate provisioning method
+            // Route to appropriate provisioning method
             return await ProvisionResourceAsync(intent, cancellationToken);
         }
         catch (Exception ex)
@@ -77,7 +74,7 @@ public class InfrastructureProvisioningService : IInfrastructureProvisioningServ
 
         try
         {
-            var intent = await ParseQueryAsync(query, cancellationToken);
+            var intent = ParseQuerySimple(query);
 
             // Simple cost estimation based on resource type
             var monthlyCost = intent.ResourceType?.ToLowerInvariant() switch
@@ -168,93 +165,94 @@ public class InfrastructureProvisioningService : IInfrastructureProvisioningServ
         }
     }
 
-    #region AI Query Parsing
+    #region Simple Query Parsing
 
-    private async Task<InfrastructureIntent> ParseQueryAsync(
-        string query,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Simple pattern-based query parser (not AI-powered)
+    /// Note: The InfrastructureAgent already does AI parsing, this is a fallback
+    /// </summary>
+    private InfrastructureIntent ParseQuerySimple(string query)
     {
-        _logger.LogDebug("Parsing query with AI: {Query}", query);
+        _logger.LogDebug("Parsing query with pattern matching: {Query}", query);
 
         try
         {
-            var chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
-
-            var systemPrompt = @"You are an Azure infrastructure query parser. Parse user queries and return JSON with these fields:
-- resourceType: storage-account|vnet|subnet|keyvault|nsg|managed-identity|log-analytics|app-insights|load-balancer|blob-container|file-share
-- resourceGroupName: string (generate if not mentioned, pattern: rg-{purpose})
-- resourceName: string (required)
-- location: eastus|westus2|usgovvirginia|centralus (default: eastus if not specified)
-- parameters: object with resource-specific settings (sku, addressSpace, quotaInGb, etc.)
-
-**Examples:**
-
-Query: ""Create storage account named mydata in eastus""
-Response: {""resourceType"":""storage-account"",""resourceGroupName"":""rg-mydata"",""resourceName"":""mydata"",""location"":""eastus"",""parameters"":{""sku"":""Standard_LRS"",""enableHttpsOnly"":true}}
-
-Query: ""Provision VNet with address space 10.0.0.0/16 in usgovvirginia""
-Response: {""resourceType"":""vnet"",""resourceGroupName"":""rg-network"",""resourceName"":""vnet-main"",""location"":""usgovvirginia"",""parameters"":{""addressSpace"":""10.0.0.0/16""}}
-
-Query: ""Set up Key Vault named secrets-vault with soft delete""
-Response: {""resourceType"":""keyvault"",""resourceGroupName"":""rg-security"",""resourceName"":""secrets-vault"",""location"":""eastus"",""parameters"":{""enableSoftDelete"":true,""enablePurgeProtection"":true}}
-
-Query: ""Create blob container named data in storage account mystorageacct""
-Response: {""resourceType"":""blob-container"",""resourceGroupName"":""rg-storage"",""resourceName"":""data"",""location"":""eastus"",""parameters"":{""storageAccountName"":""mystorageacct"",""publicAccess"":""None""}}
-
-**Rules:**
-1. Always generate resourceGroupName if not mentioned (pattern: rg-{purpose})
-2. Always generate resourceName if not mentioned (pattern: {type}-{purpose})
-3. Default location to ""eastus"" if not specified
-4. Infer reasonable defaults for parameters
-5. For blob containers and file shares, extract storageAccountName from query
-6. Return ONLY valid JSON, no markdown code blocks
-
-Parse this query:";
-
-            var chatHistory = new ChatHistory(systemPrompt);
-            chatHistory.AddUserMessage(query);
-
-            var response = await chatCompletion.GetChatMessageContentAsync(
-                chatHistory,
-                kernel: _kernel,
-                cancellationToken: cancellationToken);
-
-            var jsonResponse = response.Content?.Trim() ?? "{}";
+            var lowerQuery = query.ToLowerInvariant();
             
-            // Remove markdown code blocks if present
-            jsonResponse = Regex.Replace(jsonResponse, @"^```json\s*|\s*```$", "", RegexOptions.Multiline).Trim();
+            // Extract resource type
+            string? resourceType = null;
+            if (lowerQuery.Contains("storage account") || lowerQuery.Contains("storage-account"))
+                resourceType = "storage-account";
+            else if (lowerQuery.Contains("key vault") || lowerQuery.Contains("keyvault"))
+                resourceType = "keyvault";
+            else if (lowerQuery.Contains("vnet") || lowerQuery.Contains("virtual network"))
+                resourceType = "vnet";
+            else if (lowerQuery.Contains("blob container"))
+                resourceType = "blob-container";
+            else if (lowerQuery.Contains("nsg") || lowerQuery.Contains("network security"))
+                resourceType = "nsg";
+            else if (lowerQuery.Contains("managed identity"))
+                resourceType = "managed-identity";
+            else if (lowerQuery.Contains("log analytics"))
+                resourceType = "log-analytics";
+            else if (lowerQuery.Contains("app insights") || lowerQuery.Contains("application insights"))
+                resourceType = "app-insights";
 
-            _logger.LogDebug("AI response: {Json}", jsonResponse);
-
-            // Parse the JSON response into InfrastructureIntent
-            var intent = System.Text.Json.JsonSerializer.Deserialize<InfrastructureIntent>(jsonResponse,
-                new System.Text.Json.JsonSerializerOptions 
-                { 
-                    PropertyNameCaseInsensitive = true 
-                });
-
-            if (intent == null)
+            if (string.IsNullOrEmpty(resourceType))
             {
-                return new InfrastructureIntent 
-                { 
-                    Success = false, 
-                    ErrorMessage = "Failed to parse AI response" 
+                return new InfrastructureIntent
+                {
+                    Success = false,
+                    ErrorMessage = "Could not determine resource type from query"
                 };
             }
 
-            intent.Success = true;
-            _logger.LogDebug("Parsed intent: Type={Type}, Name={Name}, RG={RG}, Location={Location}", 
-                intent.ResourceType, intent.ResourceName, intent.ResourceGroupName, intent.Location);
-            
-            return intent;
+            // Extract resource name (look for "named X" or "name X")
+            var nameMatch = Regex.Match(query, @"named?\s+([a-zA-Z0-9\-]+)", RegexOptions.IgnoreCase);
+            var resourceName = nameMatch.Success ? nameMatch.Groups[1].Value : $"{resourceType}-default";
+
+            // Extract location
+            var location = "eastus"; // default
+            if (lowerQuery.Contains("usgovvirginia") || lowerQuery.Contains("us gov virginia"))
+                location = "usgovvirginia";
+            else if (lowerQuery.Contains("westus2") || lowerQuery.Contains("west us 2"))
+                location = "westus2";
+            else if (lowerQuery.Contains("centralus") || lowerQuery.Contains("central us"))
+                location = "centralus";
+            else if (lowerQuery.Contains("eastus"))
+                location = "eastus";
+
+            // Extract SKU if mentioned
+            string? sku = null;
+            if (lowerQuery.Contains("standard_lrs"))
+                sku = "Standard_LRS";
+            else if (lowerQuery.Contains("premium_lrs"))
+                sku = "Premium_LRS";
+            else if (lowerQuery.Contains("standard"))
+                sku = "standard";
+
+            // Build parameters
+            var parameters = new Dictionary<string, object>();
+            if (!string.IsNullOrEmpty(sku))
+                parameters["sku"] = sku;
+
+            return new InfrastructureIntent
+            {
+                Success = true,
+                ResourceType = resourceType,
+                ResourceName = resourceName,
+                ResourceGroupName = $"rg-{resourceName}",
+                Location = location,
+                Parameters = parameters
+            };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error parsing query with AI");
-            return new InfrastructureIntent 
-            { 
-                Success = false, 
-                ErrorMessage = $"AI parsing error: {ex.Message}" 
+            _logger.LogError(ex, "Error parsing query");
+            return new InfrastructureIntent
+            {
+                Success = false,
+                ErrorMessage = $"Parsing error: {ex.Message}"
             };
         }
     }

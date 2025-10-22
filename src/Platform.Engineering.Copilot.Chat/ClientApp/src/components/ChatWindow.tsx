@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Paperclip, Bot, User, Zap, CheckCircle, Clock, TrendingUp, Lightbulb } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { ChatMessage, Conversation, MessageRole, ProactiveSuggestion } from '../types/chat';
 import { useChat } from '../contexts/ChatContext';
 
@@ -145,7 +146,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <div className={`text-sm leading-relaxed ${message.role === MessageRole.User ? 'text-white' : 'text-gray-800'} markdown-content`}>
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeHighlight]}
                   components={{
                     h1: ({children}) => <h1 className="text-xl font-bold mb-3 mt-4">{children}</h1>,
                     h2: ({children}) => <h2 className="text-lg font-bold mb-2 mt-3">{children}</h2>,
@@ -155,23 +155,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     ul: ({children}) => <ul className="list-disc list-inside mb-2 ml-4">{children}</ul>,
                     ol: ({children}) => <ol className="list-decimal list-inside mb-2 ml-4">{children}</ol>,
                     li: ({children}) => <li className="mb-1">{children}</li>,
-                    code: ({className, children, ...props}) => {
-                      const isInline = !className;
-                      return isInline ? (
-                        <code className="bg-gray-100 px-1 py-0.5 rounded text-xs font-mono text-gray-800" {...props}>
-                          {children}
-                        </code>
+                    code(props) {
+                      const {children, className, ...rest} = props;
+                      const match = /language-(\w+)/.exec(className || '');
+                      return match ? (
+                        <SyntaxHighlighter
+                          style={vscDarkPlus as any}
+                          language={match[1]}
+                          PreTag="div"
+                        >
+                          {String(children).replace(/\n$/, '')}
+                        </SyntaxHighlighter>
                       ) : (
-                        <code className={`${className} !text-gray-100`} {...props}>
+                        <code className="bg-gray-100 px-1 py-0.5 rounded text-xs font-mono text-gray-800" {...rest}>
                           {children}
                         </code>
                       );
                     },
-                    pre: ({children}) => (
-                      <pre className="bg-gray-900 p-3 rounded-md overflow-x-auto mb-3 text-xs !text-gray-100 [&_*]:!text-gray-100 [&_*]:!text-opacity-100 [&_code]:!text-gray-100 [&_table]:!text-gray-100 [&_th]:!text-gray-100 [&_td]:!text-gray-100" style={{color: '#f3f4f6'}}>
-                        {children}
-                      </pre>
-                    ),
+                    pre: ({children}) => <div className="mb-3">{children}</div>,
                     blockquote: ({children}) => (
                       <blockquote className="border-l-4 border-blue-500 pl-4 italic mb-2">
                         {children}

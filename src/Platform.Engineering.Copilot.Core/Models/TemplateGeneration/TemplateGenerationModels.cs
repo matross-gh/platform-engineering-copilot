@@ -76,6 +76,11 @@ namespace Platform.Engineering.Copilot.Core.Models
         public bool IncludeStorage { get; set; }
         public bool IncludeLoadBalancer { get; set; }
         
+        // Core Infrastructure Identifiers
+        public string? SubscriptionId { get; set; }
+        public string? ClusterName { get; set; }
+        public string? ResourceGroupName { get; set; }
+        
         // === AZURE ZERO TRUST PARAMETERS (AKS, App Service, Container Apps, Container Instances) ===
         
         // AKS/Bicep Shared Parameters
@@ -97,11 +102,22 @@ namespace Platform.Engineering.Copilot.Core.Models
         public bool? EnableManagedIdentity { get; set; }
         public bool? EnableClientCertificate { get; set; }
         public string? ClientCertMode { get; set; }
+        public string? AppServicePlanSku { get; set; } // B1, B2, B3, S1, S2, S3, P1v3, P2v3, P3v3
+        public bool? AlwaysOn { get; set; }
         
         // Container Apps Parameters
         public bool? EnablePrivateEndpointCA { get; set; }
         public bool? EnableManagedIdentityCA { get; set; }
         public bool? EnableIPRestrictionsCA { get; set; }
+        public string? ContainerImage { get; set; }
+        public int? ContainerPort { get; set; }
+        public int? MinReplicas { get; set; }
+        public int? MaxReplicas { get; set; }
+        public string? CpuCores { get; set; } // e.g., "0.5", "1.0"
+        public string? MemorySize { get; set; } // e.g., "1Gi", "2Gi"
+        public bool? EnableDapr { get; set; }
+        public bool? ExternalIngress { get; set; }
+        public bool? AllowInsecure { get; set; }
         
         // AKS Terraform-Specific (additional parameters)
         public bool? EnablePrivateClusterTF { get; set; }
@@ -128,6 +144,37 @@ namespace Platform.Engineering.Copilot.Core.Models
         public string? MaintenanceWindow { get; set; }
         public bool? EnableMaintenanceWindow { get; set; }
         public string? NodePoolSubnetId { get; set; }
+        
+        // AKS Cluster Configuration
+        public string? KubernetesVersion { get; set; } = "1.30";
+        public int NodeCount { get; set; } = 3;
+        public string? VmSize { get; set; } = "Standard_D4s_v3";
+        public string? Environment { get; set; } = "dev"; // dev, staging, prod
+        public string? NodeSize { get; set; } // Alias for VmSize for backward compatibility
+        public bool EnableAutoScaling { get; set; } = false;
+        
+        // AKS Node Pool Configuration
+        public int MinNodeCount { get; set; } = 2;
+        public int MaxNodeCount { get; set; } = 10;
+        public int UserMinNodeCount { get; set; } = 1;
+        public int UserMaxNodeCount { get; set; } = 20;
+        public int MaxPodsPerNode { get; set; } = 110;
+        public string OsSku { get; set; } = "AzureLinux"; // "Ubuntu", "AzureLinux"
+        
+        // AKS Network Configuration  
+        public string ServiceCidr { get; set; } = "10.2.0.0/16";
+        public string DnsServiceIP { get; set; } = "10.2.0.10";
+        public string NetworkPlugin { get; set; } = "azure"; // "azure", "kubenet"
+        public string LoadBalancerSku { get; set; } = "standard";
+        public string OutboundType { get; set; } = "loadBalancer";
+        
+        // AKS SKU Configuration
+        public string AksSkuTier { get; set; } = "Standard"; // "Free", "Standard", "Premium"
+        public string SupportPlan { get; set; } = "KubernetesOfficial"; // "KubernetesOfficial", "AKSLongTermSupport"
+        
+        // Auto-upgrade Configuration
+        public string UpgradeChannel { get; set; } = "stable"; // "none", "patch", "stable", "rapid", "node-image"
+        public string NodeOsUpgradeChannel { get; set; } = "NodeImage"; // "None", "Unmanaged", "SecurityPatch", "NodeImage"
         
         // Resource Tags
         public Dictionary<string, string>? Tags { get; set; }
@@ -281,6 +328,7 @@ namespace Platform.Engineering.Copilot.Core.Models
     /// </summary>
     public class SecuritySpec
     {
+        // General Security Settings
         public bool NetworkPolicies { get; set; }
         public bool PodSecurityPolicies { get; set; }
         public bool ServiceAccount { get; set; } = true;
@@ -288,6 +336,48 @@ namespace Platform.Engineering.Copilot.Core.Models
         public bool TLS { get; set; } = true;
         public bool SecretsManagement { get; set; } = true;
         public List<string> ComplianceStandards { get; set; } = new();
+        
+        // AKS-Specific Security Settings
+        public bool EnablePrivateCluster { get; set; } = true;
+        public bool EnableWorkloadIdentity { get; set; } = true;
+        public bool EnableAzurePolicy { get; set; } = true;
+        public bool EnableImageCleaner { get; set; } = true;
+        public bool EnableDefender { get; set; } = true;
+        public bool EnableKeyVault { get; set; } = true;
+        public bool DisableLocalAccounts { get; set; } = true;
+        public bool EnablePrivateEndpoint { get; set; } = true;
+        public List<string> AuthorizedIPRanges { get; set; } = new();
+        public string? DiskEncryptionSetId { get; set; }
+        
+        // Key Vault Configuration
+        public bool EnableKeyVaultSecretsProvider { get; set; } = true;
+        public bool EnableSecretRotation { get; set; } = true;
+        public string SecretRotationPollInterval { get; set; } = "2m";
+        public bool EnablePurgeProtection { get; set; } = true;
+        public bool EnableForDeployment { get; set; } = true;
+        public bool EnableForDiskEncryption { get; set; } = true;
+        public bool EnableForTemplateDeployment { get; set; } = true;
+        
+        // TLS/SSL Configuration
+        public string? TLSVersion { get; set; } = "1.2";
+        
+        // Firewall Configuration
+        public bool EnableFirewall { get; set; } = true;
+        
+        // Network Security
+        public bool EnableNetworkPolicy { get; set; } = true;
+        public string NetworkPolicyProvider { get; set; } = "azure"; // "azure", "calico", "cilium"
+        public string? NetworkPolicy { get; set; } // For backward compatibility
+        
+        // Identity and Access
+        public bool? EnableManagedIdentity { get; set; }
+        public bool? EnableAADIntegration { get; set; }
+        public bool? EnableAzureRBAC { get; set; }
+        public bool? EnableSecretStore { get; set; }
+        
+        // App Service / Container Apps Specific
+        public bool? HttpsOnly { get; set; }
+        public bool? AllowInsecure { get; set; }
     }
 
     /// <summary>
@@ -301,6 +391,11 @@ namespace Platform.Engineering.Copilot.Core.Models
         public bool CloudWatch { get; set; }
         public bool StructuredLogging { get; set; } = true;
         public bool DistributedTracing { get; set; }
+        
+        // Azure-specific monitoring
+        public bool? EnableContainerInsights { get; set; }
+        public bool? EnablePrometheus { get; set; } // For Azure Monitor Workspace
+        public bool? EnableDiagnostics { get; set; }
     }
 
     public class ResourceRequirements
@@ -416,12 +511,25 @@ namespace Platform.Engineering.Copilot.Core.Models
         
         // Serverless
         Lambda,             // AWS Lambda
+        Functions,          // Azure Functions
         
         // Traditional Infrastructure
-        VirtualMachine,     // Traditional VMs
+        VirtualMachine,     // Traditional VMs (singular)
+        VirtualMachines,    // Traditional VMs (plural - for consistency)
+        Fargate,            // AWS Fargate (serverless containers)
         
         // Network-Only Infrastructure
         Network,            // Pure network infrastructure (VNet, Subnets, NSG, Peering) without compute
+        Networking,         // Network infrastructure (alternative naming)
+        
+        // Storage Infrastructure
+        Storage,            // Storage accounts, blobs, file shares
+        
+        // Database Infrastructure
+        Database,           // Managed database services
+        
+        // Security Infrastructure
+        Security,           // Key Vault, secrets management, certificate management
         
         // Legacy/Generic
         Kubernetes          // Generic Kubernetes (kept for backward compatibility)
@@ -437,5 +545,6 @@ namespace Platform.Engineering.Copilot.Core.Models
         public List<string> GeneratedComponents { get; set; } = new();
         public string Summary { get; set; } = string.Empty;
         public string? ErrorMessage { get; set; }
+        public List<string> ValidationErrors { get; set; } = new();
     }
 }

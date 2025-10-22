@@ -69,6 +69,19 @@ public class ConfigurationValidationService
                     platformName,
                     string.Join(", ", _validators.Keys));
                 
+                // For infrastructure-only resources (Storage, Database, Network, Security), skip validation
+                if (platformName == "Infrastructure")
+                {
+                    _logger.LogInformation("Infrastructure-only resource detected. Skipping compute-specific validation.");
+                    return new ValidationResult
+                    {
+                        IsValid = true,
+                        Platform = "Infrastructure",
+                        ValidationTimeMs = stopwatch.ElapsedMilliseconds,
+                        Warnings = new List<ValidationWarning>()
+                    };
+                }
+                
                 return new ValidationResult
                 {
                     IsValid = true, // Allow unknown platforms (they'll use fallback generators)
@@ -159,6 +172,11 @@ public class ConfigurationValidationService
             ComputePlatform.Lambda => "Lambda",
             ComputePlatform.CloudRun => "CloudRun",
             ComputePlatform.VirtualMachine => GetVMPlatform(request.Infrastructure.Provider),
+            // Infrastructure-only resources don't need compute-specific validation
+            ComputePlatform.Storage => "Infrastructure",
+            ComputePlatform.Database => "Infrastructure",
+            ComputePlatform.Networking => "Infrastructure",
+            ComputePlatform.Security => "Infrastructure",
             _ => null
         };
     }

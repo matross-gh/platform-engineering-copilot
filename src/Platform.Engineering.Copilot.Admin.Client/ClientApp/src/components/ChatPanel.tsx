@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import './ChatPanel.css';
 import adminApi from '../services/adminApi';
 
@@ -128,7 +131,31 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose }) => {
         {messages.map((message) => (
           <div key={message.id} className={`message ${message.sender}`}>
             <div className="message-content">
-              <div className="message-text">{message.text}</div>
+              <div className="message-text">
+                <ReactMarkdown
+                  components={{
+                    code(props) {
+                      const {children, className, node, ...rest} = props;
+                      const match = /language-(\w+)/.exec(className || '');
+                      return match ? (
+                        <SyntaxHighlighter
+                          style={vscDarkPlus as any}
+                          language={match[1]}
+                          PreTag="div"
+                        >
+                          {String(children).replace(/\n$/, '')}
+                        </SyntaxHighlighter>
+                      ) : (
+                        <code className={className} {...rest}>
+                          {children}
+                        </code>
+                      );
+                    }
+                  }}
+                >
+                  {message.text}
+                </ReactMarkdown>
+              </div>
               <div className="message-time">
                 {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>

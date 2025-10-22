@@ -8,6 +8,7 @@ using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Services.Deployment;
 using Platform.Engineering.Copilot.Core.Services.Cache;
 using Platform.Engineering.Copilot.Core.Services.Compliance;
+using Platform.Engineering.Copilot.Core.Services.Jobs;
 using Platform.Engineering.Copilot.Core.Plugins;
 using Platform.Engineering.Copilot.Core.Services.Infrastructure;
 using Platform.Engineering.Copilot.Core.Services.Onboarding;
@@ -16,6 +17,11 @@ using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Core.Services.Azure.Cost;
 using Platform.Engineering.Copilot.Core.Services.Azure.ResourceHealth;
 using Platform.Engineering.Copilot.Core.Services.Azure.Security;
+using Platform.Engineering.Copilot.Core.Services.Agents;
+using Platform.Engineering.Copilot.Core.Interfaces.Agents;
+using Platform.Engineering.Copilot.Core.Services.Validation;
+using Platform.Engineering.Copilot.Core.Services.Validation.Validators;
+using Platform.Engineering.Copilot.Core.Interfaces.Validation;
 
 namespace Platform.Engineering.Copilot.Core.Extensions;
 
@@ -89,17 +95,9 @@ public static class ServiceCollectionExtensions
         
         // NOTE: Plugins are NOT registered in Kernel factory to avoid circular dependencies.
         // Instead, IntelligentChatService will register plugins when needed using its own serviceProvider.
-        
-        // NOTE: The following legacy services are marked as [Obsolete] and not registered:
-        // - IIntentClassifier / IntentClassifier (replaced by SK auto-calling in IntelligentChatService)
-        // - IParameterExtractor / ParameterExtractor (replaced by SK auto-calling)
-        // - ISemanticQueryProcessor / SemanticQueryProcessor (replaced by IntelligentChatService)
-        // - IToolSchemaRegistry / ToolSchemaRegistry (not actively used, removed)
-        // These services are kept in the codebase for reference but should not be used.
-        
-        services.AddScoped<ISemanticKernelService, SemanticKernelService>();
-        
-        // Register IntelligentChatService (uses SK auto-calling instead of manual routing)
+        // NOTE: IntelligentChatService now delegates to OrchestratorAgent only
+
+        // Register IntelligentChatService (pure multi-agent - delegates to OrchestratorAgent)
         services.AddScoped<IIntelligentChatService, IntelligentChatService>();
         
         // Register Azure resource service (stub implementation for DI resolution)
@@ -134,21 +132,37 @@ public static class ServiceCollectionExtensions
         // Register dynamic template generator
         services.AddScoped<IDynamicTemplateGenerator, DynamicTemplateGeneratorService>();
         
+        // Register configuration validation service and validators
+        services.AddScoped<ConfigurationValidationService>();
+        services.AddScoped<IConfigurationValidator, Platform.Engineering.Copilot.Core.Services.Validation.Validators.AKSConfigValidator>();
+        services.AddScoped<IConfigurationValidator, Platform.Engineering.Copilot.Core.Services.Validation.Validators.EKSConfigValidator>();
+        services.AddScoped<IConfigurationValidator, Platform.Engineering.Copilot.Core.Services.Validation.Validators.GKEConfigValidator>();
+        services.AddScoped<IConfigurationValidator, Platform.Engineering.Copilot.Core.Services.Validation.Validators.ECSConfigValidator>();
+        services.AddScoped<IConfigurationValidator, ContainerAppsConfigValidator>();
+        services.AddScoped<IConfigurationValidator, AppServiceConfigValidator>();
+        services.AddScoped<IConfigurationValidator, Platform.Engineering.Copilot.Core.Services.Validation.Validators.LambdaConfigValidator>();
+        services.AddScoped<IConfigurationValidator, Platform.Engineering.Copilot.Core.Services.Validation.Validators.CloudRunConfigValidator>();
+        services.AddScoped<IConfigurationValidator, Platform.Engineering.Copilot.Core.Services.Validation.Validators.VMConfigValidator>();
+        
         // Register template generation enhancements
         services.AddScoped<Platform.Engineering.Copilot.Core.Services.TemplateGeneration.IComplianceAwareTemplateEnhancer, 
             Platform.Engineering.Copilot.Core.Services.TemplateGeneration.ComplianceAwareTemplateEnhancer>();
         services.AddScoped<Platform.Engineering.Copilot.Core.Services.Infrastructure.INetworkTopologyDesignService, 
             Platform.Engineering.Copilot.Core.Services.Infrastructure.NetworkTopologyDesignService>();
+        services.AddScoped<Platform.Engineering.Copilot.Core.Services.Infrastructure.IPredictiveScalingEngine,
+            Platform.Engineering.Copilot.Core.Services.Infrastructure.PredictiveScalingEngine>();
         services.AddScoped<IAzureSecurityConfigurationService, AzureSecurityConfigurationService>();
+        
+        // Register Azure Policy Service (required by ComplianceAwareTemplateEnhancer)
+        services.AddScoped<IAzurePolicyService, AzurePolicyEngine>();
         
         // Register infrastructure provisioning service (AI-powered, requires Kernel)
         services.AddScoped<IInfrastructureProvisioningService>(serviceProvider =>
         {
             var logger = serviceProvider.GetRequiredService<ILogger<InfrastructureProvisioningService>>();
             var azureResourceService = serviceProvider.GetRequiredService<IAzureResourceService>();
-            var kernel = serviceProvider.GetRequiredService<Kernel>();
             
-            return new InfrastructureProvisioningService(logger, azureResourceService, kernel);
+            return new InfrastructureProvisioningService(logger, azureResourceService);
         });
 
         // Register compliance service (AI-powered, requires Kernel)
@@ -159,6 +173,45 @@ public static class ServiceCollectionExtensions
             
             return new ComplianceService(logger, kernel);
         });
+
+        // ========================================
+        // MULTI-AGENT SYSTEM REGISTRATION
+        // ========================================
+        
+        // Register plugins (required by specialized agents)
+        services.AddScoped<CompliancePlugin>();
+        services.AddScoped<CostManagementPlugin>();
+        services.AddScoped<EnvironmentManagementPlugin>();
+        services.AddScoped<ResourceDiscoveryPlugin>();
+        services.AddScoped<OnboardingPlugin>();
+        // Note: InfrastructurePlugin and DeploymentPlugin are already registered by IntelligentChatService
+        
+        // Register SharedMemory as singleton (shared across all agents for context)
+        services.AddSingleton<SharedMemory>();
+
+        // Register all specialized agents as ISpecializedAgent
+        // Each agent is registered as a singleton since they are stateless (state is in SharedMemory)
+        services.AddSingleton<ISpecializedAgent, InfrastructureAgent>();
+        services.AddSingleton<ISpecializedAgent, ComplianceAgent>();
+        services.AddSingleton<ISpecializedAgent, CostManagementAgent>();
+        services.AddSingleton<ISpecializedAgent, EnvironmentAgent>();
+        services.AddSingleton<ISpecializedAgent, DiscoveryAgent>();
+        services.AddSingleton<ISpecializedAgent, OnboardingAgent>();
+
+        // Register execution plan validator
+        services.AddSingleton<ExecutionPlanValidator>();
+
+        // Register OrchestratorAgent (coordinates all specialized agents)
+        services.AddSingleton<OrchestratorAgent>();
+
+        // Register SemanticKernelService (creates kernels for agents)
+        services.AddScoped<ISemanticKernelService, SemanticKernelService>();
+        
+        // Register Background Job Service for long-running operations
+        services.AddSingleton<IBackgroundJobService, BackgroundJobService>();
+        
+        // Register Job Cleanup Background Service
+        services.AddHostedService<JobCleanupBackgroundService>();
 
         return services;
     }

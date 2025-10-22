@@ -150,6 +150,54 @@ public class CompliancePlugin : BaseSupervisorPlugin
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
 
+            // 🔥 CRITICAL: If resource group specified, verify it exists and has resources before scanning
+            if (!string.IsNullOrWhiteSpace(resourceGroupName))
+            {
+                try
+                {
+                    var rgResources = await _azureResourceService.ListAllResourcesAsync(
+                        subscriptionId, resourceGroupName);
+                    
+                    if (rgResources == null || rgResources.Count == 0)
+                    {
+                        _logger.LogWarning(
+                            "⚠️ Resource group '{ResourceGroup}' has no resources in subscription {SubscriptionId}. " +
+                            "Skipping compliance assessment. This typically means deployment has not completed yet.",
+                            resourceGroupName, subscriptionId);
+                        
+                        return JsonSerializer.Serialize(new
+                        {
+                            success = false,
+                            error = $"Resource group '{resourceGroupName}' has no resources to assess. " +
+                                   "The deployment may not have completed yet, or the resource group may be empty.",
+                            hint = "Wait for the Environment Agent to complete deployment before running compliance assessment.",
+                            resourceGroupName,
+                            subscriptionId,
+                            resourceCount = 0
+                        }, new JsonSerializerOptions { WriteIndented = true });
+                    }
+                    
+                    _logger.LogInformation(
+                        "✅ Resource group '{ResourceGroup}' contains {Count} resources - proceeding with compliance assessment",
+                        resourceGroupName, rgResources.Count);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, 
+                        "⚠️ Could not verify resources in resource group '{ResourceGroup}'. Error: {Error}",
+                        resourceGroupName, ex.Message);
+                    
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = $"Could not access resource group '{resourceGroupName}': {ex.Message}",
+                        hint = "Verify the resource group exists and you have access to it.",
+                        resourceGroupName,
+                        subscriptionId
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+            }
+
             // Create progress reporter for logging
             var progressReporter = new Progress<AssessmentProgress>(progress =>
             {

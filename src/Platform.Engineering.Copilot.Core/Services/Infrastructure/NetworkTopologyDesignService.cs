@@ -117,32 +117,20 @@ public class NetworkTopologyDesignService : INetworkTopologyDesignService
             });
         }
 
-        // Create application tier subnets
+        // Create application tier subnets with dynamic naming based on tier count
+        var tierConfigs = GetTierConfigurations(tierCount);
+        
         for (int i = 0; i < tierCount; i++)
         {
-            var tierName = i switch
-            {
-                0 => "ApplicationTier",
-                1 => "DataTier",
-                2 => "GatewayTier",
-                _ => $"Tier{i + 1}"
-            };
-
-            var purpose = i switch
-            {
-                0 => SubnetPurpose.Application,
-                1 => SubnetPurpose.Database,
-                2 => SubnetPurpose.ApplicationGateway,
-                _ => SubnetPurpose.Other
-            };
+            var tierConfig = tierConfigs[i];
 
             subnets.Add(new SubnetConfiguration
             {
-                Name = $"{tierName}Subnet",
+                Name = $"{tierConfig.Name}Subnet",
                 AddressPrefix = CalculateSubnetCIDR(baseAddress, subnetPrefixLength, subnetIndex++),
-                Purpose = purpose,
+                Purpose = tierConfig.Purpose,
                 EnableServiceEndpoints = true,
-                ServiceEndpoints = GetServiceEndpointsForTier(purpose)
+                ServiceEndpoints = GetServiceEndpointsForTier(tierConfig.Purpose)
             });
         }
 
@@ -231,6 +219,68 @@ public class NetworkTopologyDesignService : INetworkTopologyDesignService
     }
 
     #region Helper Methods
+
+    /// <summary>
+    /// Get dynamic tier configurations based on the number of tiers requested
+    /// Intelligently names and assigns purposes based on common architectural patterns
+    /// </summary>
+    private List<TierConfiguration> GetTierConfigurations(int tierCount)
+    {
+        var configs = new List<TierConfiguration>();
+
+        // Define tier configurations based on count
+        switch (tierCount)
+        {
+            case 1:
+                // Single tier - everything in one
+                configs.Add(new TierConfiguration("Application", SubnetPurpose.Application));
+                break;
+
+            case 2:
+                // Classic 2-tier: Web + Data
+                configs.Add(new TierConfiguration("Web", SubnetPurpose.Application));
+                configs.Add(new TierConfiguration("Data", SubnetPurpose.Database));
+                break;
+
+            case 3:
+                // Classic 3-tier: Web + App + Data
+                configs.Add(new TierConfiguration("Web", SubnetPurpose.Application));
+                configs.Add(new TierConfiguration("Application", SubnetPurpose.Application));
+                configs.Add(new TierConfiguration("Data", SubnetPurpose.Database));
+                break;
+
+            case 4:
+                // 4-tier: DMZ + Web + App + Data
+                configs.Add(new TierConfiguration("DMZ", SubnetPurpose.ApplicationGateway));
+                configs.Add(new TierConfiguration("Web", SubnetPurpose.Application));
+                configs.Add(new TierConfiguration("Application", SubnetPurpose.Application));
+                configs.Add(new TierConfiguration("Data", SubnetPurpose.Database));
+                break;
+
+            case 5:
+                // 5-tier: DMZ + Web + App + Business + Data
+                configs.Add(new TierConfiguration("DMZ", SubnetPurpose.ApplicationGateway));
+                configs.Add(new TierConfiguration("Web", SubnetPurpose.Application));
+                configs.Add(new TierConfiguration("Application", SubnetPurpose.Application));
+                configs.Add(new TierConfiguration("Business", SubnetPurpose.Application));
+                configs.Add(new TierConfiguration("Data", SubnetPurpose.Database));
+                break;
+
+            default:
+                // For 6+ tiers, use generic naming with first being DMZ, last being Data
+                configs.Add(new TierConfiguration("DMZ", SubnetPurpose.ApplicationGateway));
+                
+                for (int i = 1; i < tierCount - 1; i++)
+                {
+                    configs.Add(new TierConfiguration($"AppTier{i}", SubnetPurpose.Application));
+                }
+                
+                configs.Add(new TierConfiguration("Data", SubnetPurpose.Database));
+                break;
+        }
+
+        return configs;
+    }
 
     private (IPAddress baseAddress, int prefixLength) ParseCIDR(string cidr)
     {
@@ -357,3 +407,8 @@ public enum SubnetAllocationStrategy
     /// </summary>
     Custom
 }
+
+/// <summary>
+/// Configuration for a network tier with name and purpose
+/// </summary>
+internal record TierConfiguration(string Name, SubnetPurpose Purpose);

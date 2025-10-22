@@ -650,7 +650,7 @@ public class ResourceDiscoveryPlugin : BaseSupervisorPlugin
                         displayName = subData.displayName?.ToString(),
                         state = subData.state?.ToString(),
                         subscriptionPolicies = TryGetProperty(subData, "subscriptionPolicies"),
-                        authorizationSource = subData.authorizationSource?.ToString(),
+                        authorizationSource = TryGetProperty(subData, "authorizationSource")?.ToString(),
                         managedByTenants = TryGetProperty(subData, "managedByTenants")
                     };
                 }),
@@ -761,12 +761,13 @@ public class ResourceDiscoveryPlugin : BaseSupervisorPlugin
             var eventsList = healthEvents.ToList();
 
             // Categorize events
+            // Note: The health events have fields directly, not nested under 'properties'
             var bySeverity = eventsList
-                .GroupBy(e => ((dynamic)e).properties?.impactType?.ToString() ?? "Unknown")
+                .GroupBy(e => ((dynamic)e).reasonType?.ToString() ?? "Unknown")  // Use reasonType instead of impactType
                 .Select(g => new { severity = g.Key, count = g.Count() });
 
             var byStatus = eventsList
-                .GroupBy(e => ((dynamic)e).properties?.status?.ToString() ?? "Unknown")
+                .GroupBy(e => ((dynamic)e).availabilityState?.ToString() ?? "Unknown")  // Use availabilityState instead of status
                 .Select(g => new { status = g.Key, count = g.Count() });
 
             return JsonSerializer.Serialize(new
@@ -777,7 +778,7 @@ public class ResourceDiscoveryPlugin : BaseSupervisorPlugin
                 {
                     totalEvents = eventsList.Count,
                     activeEvents = eventsList.Count(e => 
-                        ((dynamic)e).properties?.status?.ToString()?.Equals("Active", StringComparison.OrdinalIgnoreCase) == true)
+                        ((dynamic)e).serviceImpacting == true)  // Use serviceImpacting field directly
                 },
                 breakdown = new
                 {
@@ -790,14 +791,15 @@ public class ResourceDiscoveryPlugin : BaseSupervisorPlugin
                     
                     return new
                     {
-                        eventId = eventData.id?.ToString(),
-                        name = eventData.name?.ToString(),
-                        type = eventData.type?.ToString(),
-                        impactType = TryGetNestedProperty(eventData, "properties", "impactType"),
-                        status = TryGetNestedProperty(eventData, "properties", "status"),
-                        title = TryGetNestedProperty(eventData, "properties", "title"),
-                        summary = TryGetNestedProperty(eventData, "properties", "summary"),
-                        impactStartTime = TryGetNestedProperty(eventData, "properties", "impactStartTime")
+                        resourceId = eventData.resourceId?.ToString(),
+                        resourceName = eventData.resourceName?.ToString(),
+                        resourceType = eventData.resourceType?.ToString(),
+                        reasonType = eventData.reasonType?.ToString(),
+                        availabilityState = eventData.availabilityState?.ToString(),
+                        summary = eventData.summary?.ToString(),
+                        detailedStatus = eventData.detailedStatus?.ToString(),
+                        occurredDateTime = eventData.occurredDateTime?.ToString(),
+                        serviceImpacting = eventData.serviceImpacting
                     };
                 }),
                 nextSteps = new[]
