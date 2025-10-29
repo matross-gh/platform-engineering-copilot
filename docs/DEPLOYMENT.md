@@ -1,17 +1,18 @@
 # Deployment Guide
 
-**Last Updated:** January 17, 2025
+**Last Updated:** October 29, 2025
 
-This guide covers all deployment options for the Platform Engineering Copilot, including Docker, Kubernetes, and cloud deployments.
+This guide covers all deployment options for the Platform Engineering Copilot MCP Server and associated services, including Docker, Kubernetes, and cloud deployments.
 
 ## 📋 Table of Contents
 
 1. [Docker Deployment](#docker-deployment)
 2. [Kubernetes Deployment](#kubernetes-deployment)
 3. [Azure Deployment](#azure-deployment)
-4. [Production Configuration](#production-configuration)
-5. [Monitoring & Observability](#monitoring--observability)
-6. [Security Considerations](#security-considerations)
+4. [AI Client Integration](#ai-client-integration)
+5. [Production Configuration](#production-configuration)
+6. [Monitoring & Observability](#monitoring--observability)
+7. [Security Considerations](#security-considerations)
 
 ---
 
@@ -19,23 +20,30 @@ This guide covers all deployment options for the Platform Engineering Copilot, i
 
 ### Architecture Overview
 
-The Docker setup includes the following services:
+The Docker setup includes multiple configuration options:
 
-- **Platform API**: ASP.NET Core Web API (Port 7001)
-- **Admin API**: Administrative backend API (Port 7002)
-- **Admin Console**: React-based admin UI (Port 3001)
-- **Chat App**: React-based chat interface (Port 3000)
-- **SQLite**: Embedded database (default) or SQL Server (optional)
+**Essentials Configuration (MCP Server Only)**:
+- **MCP Server**: Multi-Agent Orchestrator (Port 5100)
+- **SQL Server**: Database backend (Port 1433)
+
+**Full Configuration (All Services)**:
+- **MCP Server**: Multi-Agent Orchestrator (Port 5100)
+- **Platform Chat**: Web chat interface (Port 5001)
+- **Admin API**: Administrative backend (Port 5002)
+- **Admin Client**: Admin web console (Port 5003)
+- **SQL Server**: Database (Port 1433)
+- **Nginx**: Reverse proxy (Port 80/443) - Optional
 - **Redis**: Caching service (Port 6379) - Optional
-- **Nginx**: Reverse proxy and load balancer (Port 80/443) - Optional
 
 ### Quick Docker Start
 
 #### Prerequisites
 
-- Docker Desktop installed and running
+- Docker Desktop installed and running (or Docker + Docker Compose on Linux)
 - Git (to clone the repository)
-- At least 4GB RAM available for Docker
+- At least 8GB RAM available for Docker
+- Azure subscription (for Azure resources)
+- Azure CLI (for authentication)
 
 #### 1. Clone and Setup
 
@@ -49,39 +57,62 @@ cp .env.example .env
 
 #### 2. Configure Environment
 
-Edit `.env` file:
+Edit `.env` file with your Azure credentials:
 
 ```bash
 # Azure Configuration
 AZURE_SUBSCRIPTION_ID=your-subscription-id
 AZURE_TENANT_ID=your-tenant-id
-AZURE_ENVIRONMENT=AzureUSGovernment
+AZURE_CLOUD_ENVIRONMENT=AzureGovernment  # or AzureCloud
+AZURE_USE_MANAGED_IDENTITY=false
+AZURE_ENABLED=true
+
+# Azure OpenAI Configuration
+AZURE_OPENAI_API_KEY=your-api-key
+AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.us/
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-ada-002
 
 # Database
-SA_PASSWORD=YourStrong@Passw0rd
-CONNECTION_STRING=Server=sqlserver,1433;Database=PlatformSupervisor;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+SA_PASSWORD=YourStrong@Passw0rd123!
 
-# Application URLs
-API_BASE_URL=http://localhost:7001
-CHAT_BASE_URL=http://localhost:5000
-
-# Optional: Azure OpenAI
-AZURE_OPENAI_ENDPOINT=your-openai-endpoint
-AZURE_OPENAI_API_KEY=your-api-key
+# NIST Controls (Optional)
+NIST_CONTROLS_BASE_URL=https://raw.githubusercontent.com/usnistgov/oscal-content/main/nist.gov/SP800-53/rev5/json
 ```
+
+**📖 See [DOCKER.md](../DOCKER.md) for complete environment variable reference**
 
 #### 3. Start Services
 
+**Option 1: MCP Server Only (Recommended for AI Client Development)**
 ```bash
-# Development environment
+# Start essentials
+docker-compose -f docker-compose.essentials.yml up -d
+
+# With development hot reload
+docker-compose -f docker-compose.essentials.yml -f docker-compose.dev.yml up -d
+
+# With production settings
+docker-compose -f docker-compose.essentials.yml -f docker-compose.prod.yml up -d
+```
+
+**Option 2: All Services (Complete Platform)**
+```bash
+# Start all services
 docker-compose up -d
 
-# Production environment  
-docker-compose -f docker-compose.prod.yml up -d
+# Development with hot reload
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
-# Development with live reload
-docker-compose -f docker-compose.dev.yml up -d
+# Production with scaling
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# Production with reverse proxy
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile proxy up -d
 ```
+
+**📖 See [DOCKER-COMPOSE-GUIDE.md](../DOCKER-COMPOSE-GUIDE.md) for all configuration options**
 
 #### 4. Verify Deployment
 
@@ -90,12 +121,16 @@ docker-compose -f docker-compose.dev.yml up -d
 docker-compose ps
 
 # View logs
-docker-compose logs -f platform-api
-docker-compose logs -f chat-service
+docker-compose logs -f platform-mcp
+docker-compose logs -f sqlserver
 
-# Test endpoints
-curl http://localhost:7001/health
-curl http://localhost:5000/health
+# Test MCP Server health
+curl http://localhost:5100/health
+
+# Test all services (if running full platform)
+curl http://localhost:5001/health  # Chat
+curl http://localhost:5002/health  # Admin API
+curl http://localhost:5003/health  # Admin Client
 ```
 
 ### Docker Compose Configurations

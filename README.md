@@ -8,15 +8,30 @@ An enterprise-grade platform engineering solution that combines AI-powered natur
 
 ## 🌟 Overview
 
-The Platform Engineering Copilot transforms cloud infrastructure management by providing:
+The Platform Engineering Copilot transforms cloud infrastructure management through its MCP (Model Context Protocol) Server architecture:
 
-- **🤖 AI-Powered Infrastructure Provisioning**: Natural language queries to Azure Resource Manager with real-time resource creation
-- **🛡️ ATO Compliance Automation**: NIST 800-53 Rev 5 compliance scanning with automated remediation recommendations
+- **🤖 Multi-Agent Orchestration**: 6 specialized AI agents working together for comprehensive infrastructure management
+- **🛡️ ATO Compliance Automation**: NIST 800-53 Rev 5 compliance scanning with automated gap analysis and remediation
 - **💰 Cost Intelligence**: Real-time cost analysis, budget tracking, and optimization recommendations
-- **🔐 Policy-Aware Deployments**: Azure Policy integration with approval workflows for policy exceptions
-- **📊 Real-Time Chat Interface**: SignalR-based conversational AI for infrastructure operations
-- **🎯 Multi-Cloud Templates**: Generate production-ready Terraform, Bicep, and Kubernetes manifests
-- **🔧 MCP Server Integration**: Model Context Protocol server for AI agent extensibility
+- **🔐 Security & Policy Enforcement**: Azure Policy integration with security scanning and vulnerability assessment
+- **📊 Real-Time Chat Interface**: Web-based conversational AI for infrastructure operations
+- **🎯 Infrastructure as Code**: Generate production-ready Terraform, Bicep, and Kubernetes manifests
+- **🔧 MCP Server Integration**: Dual-mode operation (HTTP + stdio) for AI clients and web applications
+
+### MCP Server Architecture
+
+The platform is built on a **Model Context Protocol (MCP) Server** that orchestrates 6 specialized agents:
+
+1. **Infrastructure Agent**: Azure resource provisioning, management, and infrastructure as code generation
+2. **Cost Optimization Agent**: Cost analysis, budget management, and savings recommendations
+3. **Compliance Agent**: RMF/NIST 800-53 compliance assessment and gap analysis
+4. **Security Agent**: Security scanning, vulnerability assessment, and threat detection
+5. **Document Agent**: ATO documentation generation and compliance artifact management
+6. **ATO Preparation Agent**: End-to-end ATO package orchestration and submission
+
+**Dual-Mode Operation**:
+- **HTTP Mode**: REST API for web applications (Chat interface on port 5100)
+- **stdio Mode**: Direct integration with AI tools (GitHub Copilot, Claude Desktop)
 
 ---
 
@@ -25,10 +40,11 @@ The Platform Engineering Copilot transforms cloud infrastructure management by p
 ### Prerequisites
 
 - **.NET 9.0 SDK** or later
-- **Docker & Docker Compose** (for containerized deployment)
+- **Docker & Docker Compose** (recommended for deployment)
 - **Azure Subscription** (Azure Government or Commercial)
 - **Azure CLI** (for authentication) - **Required**
-- **Redis** (optional, for caching)
+- **Azure OpenAI** (gpt-4o deployment recommended)
+- **SQL Server** (or Docker container)
 
 ### 1. Clone and Build
 
@@ -59,51 +75,91 @@ az account set --subscription "YOUR-SUBSCRIPTION-ID"
 **📖 See [QUICKSTART-AUTHENTICATION.md](./QUICKSTART-AUTHENTICATION.md) for detailed setup**  
 **📖 See [AZURE-AUTHENTICATION.md](./AZURE-AUTHENTICATION.md) for comprehensive authentication guide**
 
-### 3. Configure Application Settings
+### 3. Configure Environment Variables
 
-Edit `src/Platform.Engineering.Copilot.API/appsettings.Development.json`:
-
-```json
-{
-  "Gateway": {
-    "Azure": {
-      "UseManagedIdentity": false,
-      "CloudEnvironment": "AzureGovernment",
-      "Enabled": true
-    },
-    "AzureOpenAI": {
-      "Endpoint": "https://YOUR-OPENAI-ENDPOINT.openai.azure.us/",
-      "DeploymentName": "gpt-4o",
-      "ApiKey": "YOUR-API-KEY",
-      "UseManagedIdentity": false
-    }
-  },
-  "ConnectionStrings": {
-    "DefaultConnection": "Data Source=environment_management.db"
-  }
-}
-```
-
-**Note:** No Azure credentials needed in configuration - Azure CLI credentials are used automatically!
-
-### 4. Run the API
+Create a `.env` file in the project root:
 
 ```bash
-cd src/Platform.Engineering.Copilot.API
-dotnet run  # http://localhost:7001
+cp .env.example .env
 ```
 
-### 5. Try Natural Language Queries
+Edit `.env` with your Azure credentials:
+
+```env
+# Azure Configuration
+AZURE_SUBSCRIPTION_ID=your-subscription-id
+AZURE_TENANT_ID=your-tenant-id
+AZURE_CLOUD_ENVIRONMENT=AzureGovernment  # or AzureCloud
+AZURE_USE_MANAGED_IDENTITY=false
+AZURE_ENABLED=true
+
+# Azure OpenAI Configuration
+AZURE_OPENAI_API_KEY=your-api-key
+AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.us/
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-ada-002
+
+# Database
+SA_PASSWORD=YourStrongPassword123!
+```
+
+**📖 See [DOCKER.md](./DOCKER.md) for complete environment variable documentation**
+
+### 4. Start with Docker Compose
+
+**Option 1: MCP Server Only (Recommended for AI Client Development)**
+```bash
+docker-compose -f docker-compose.essentials.yml up -d
+```
+
+This starts:
+- MCP Server (port 5100)
+- SQL Server (port 1433)
+
+**Option 2: All Services (Complete Platform)**
+```bash
+docker-compose up -d
+```
+
+This starts:
+- MCP Server (port 5100)
+- Platform Chat (port 5001) - Web chat interface
+- Admin API (port 5002) - Admin backend
+- Admin Client (port 5003) - Admin web console
+- SQL Server (port 1433)
+
+**📖 See [DOCKER-COMPOSE-GUIDE.md](./DOCKER-COMPOSE-GUIDE.md) for all deployment options**
+
+### 5. Verify Services
+
+```bash
+# Check MCP Server health
+curl http://localhost:5100/health
+
+# Check all services (if using full deployment)
+docker-compose ps
+```
+
+### 6. Try Natural Language Queries
+
+**Using the Web Chat Interface** (if running all services):
+```bash
+open http://localhost:5001
+```
 
 **Using REST API**:
 ```bash
-curl -X POST http://localhost:7001/api/chat/intelligent-query \
+curl -X POST http://localhost:5100/api/chat/message \
   -H "Content-Type: application/json" \
   -d '{
-    "conversationId": "test-123",
+    "sessionId": "test-session",
     "message": "Create storage account data001 in rg-dr in usgovvirginia"
   }'
 ```
+
+**Using AI Clients** (GitHub Copilot, Claude Desktop):
+See [GITHUB-COPILOT-INTEGRATION.md](./docs/GITHUB-COPILOT-INTEGRATION.md) and [M365-COPILOT-INTEGRATION.md](./docs/M365-COPILOT-INTEGRATION.md)
 
 **Example Queries**:
 ```
@@ -118,18 +174,51 @@ curl -X POST http://localhost:7001/api/chat/intelligent-query \
 
 ## 🎯 Key Features
 
-### 🤖 AI-Powered Infrastructure Operations
+### 🤖 Multi-Agent Orchestration (MCP Server)
 
-**Real Azure Resource Management**:
-- Direct integration with Azure Resource Manager APIs
-- Create, list, and manage Azure resources via natural language
-- Automatic resource group creation with managed tags
-- Support for Storage Accounts, Virtual Networks, Key Vaults, and more
+**6 Specialized AI Agents**:
 
-**Intelligent Intent Classification**:
-- Semantic Kernel-powered query understanding
-- 7 specialized plugins: Infrastructure, Compliance, Cost Management, Deployment, Environment Management, Resource Discovery, Onboarding
-- Context-aware conversations with memory across sessions
+1. **Infrastructure Agent**
+   - Azure resource provisioning and management
+   - Infrastructure as Code generation (Terraform, Bicep, Kubernetes)
+   - Resource discovery and inventory management
+   - Template validation and deployment
+
+2. **Cost Optimization Agent**
+   - Real-time cost analysis and breakdowns
+   - Budget management and forecasting
+   - Savings recommendations (right-sizing, reserved instances)
+   - Cost anomaly detection
+
+3. **Compliance Agent**
+   - NIST 800-53 Rev 5 compliance assessment
+   - FedRAMP High/Moderate/Low baseline validation
+   - Gap analysis and remediation plans
+   - Control family coverage (18 families, 1000+ controls)
+
+4. **Security Agent**
+   - Security scanning and vulnerability assessment
+   - Azure Policy integration and enforcement
+   - Threat detection and mitigation
+   - Security posture monitoring
+
+5. **Document Agent**
+   - ATO documentation generation
+   - Compliance artifact management
+   - Evidence collection and organization
+   - Document versioning and templates
+
+6. **ATO Preparation Agent**
+   - End-to-end ATO package orchestration
+   - Submission workflow management
+   - Stakeholder coordination
+   - Timeline and milestone tracking
+
+**Agent Coordination**:
+- Seamless handoffs between agents based on query intent
+- Shared context and session memory
+- Parallel execution for complex multi-step workflows
+- Unified natural language interface
 
 ### 🛡️ ATO Compliance & Governance
 
@@ -194,51 +283,52 @@ curl -X POST http://localhost:7001/api/chat/intelligent-query \
 
 ## 🏗️ Architecture
 
-### System Components
+### System Overview
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    CLIENT LAYER                         │
 ├─────────────────────────────────────────────────────────┤
-│  • Admin Console (React) - Port 3001                    │
-│  • Chat App (React + SignalR) - Port 3000               │
-│  • MCP Clients (AI Agents)                              │
+│  • Platform Chat (Web UI) - Port 5001                   │
+│  • Admin Console (Web UI) - Port 5003                   │
+│  • GitHub Copilot (stdio)                               │
+│  • Claude Desktop (stdio)                               │
+│  • Custom AI Clients (stdio/HTTP)                       │
 └─────────────────────────────────────────────────────────┘
-                       ↓ REST API / SignalR
+                       ↓ HTTP / stdio
 ┌─────────────────────────────────────────────────────────┐
-│                    API LAYER                            │
+│              MCP SERVER (Port 5100)                     │
 ├─────────────────────────────────────────────────────────┤
-│  • Platform.Engineering.Copilot.API (Port 7001)         │
-│  • Platform.Engineering.Copilot.Admin.API (Port 7002)   │
-│  • Platform.Engineering.Copilot.Mcp (Console)           │
+│  Platform.Engineering.Copilot.Mcp                       │
+│  ├── Dual-Mode Operation                                │
+│  │   ├── HTTP Mode (Web Apps)                           │
+│  │   └── stdio Mode (AI Clients)                        │
+│  └── Multi-Agent Orchestrator                           │
+│      ├── Infrastructure Agent                           │
+│      ├── Cost Optimization Agent                        │
+│      ├── Compliance Agent                               │
+│      ├── Security Agent                                 │
+│      ├── Document Agent                                 │
+│      └── ATO Preparation Agent                          │
 └─────────────────────────────────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────────┐
 │                 BUSINESS LOGIC LAYER                    │
 ├─────────────────────────────────────────────────────────┤
 │  Platform.Engineering.Copilot.Core                      │
-│  ├── Semantic Kernel Plugins (7)                        │
-│  │   ├── InfrastructurePlugin (AI-powered)              │
-│  │   ├── CompliancePlugin (AI-powered)                  │
-│  │   ├── CostManagementPlugin                           │
-│  │   ├── ResourceDiscoveryPlugin                        │
-│  │   ├── EnvironmentManagementPlugin                    │
-│  │   ├── DeploymentPlugin                               │
-│  │   └── OnboardingPlugin                               │
+│  ├── Semantic Kernel Integration                        │
+│  ├── Agent Plugins & Tools                              │
+│  │   ├── InfrastructurePlugin (Azure ARM)               │
+│  │   ├── CompliancePlugin (NIST 800-53)                 │
+│  │   ├── CostManagementPlugin (Cost Analysis)           │
+│  │   ├── SecurityPlugin (Policy & Scanning)             │
+│  │   └── DocumentPlugin (ATO Docs)                      │
 │  └── Domain Services                                    │
-│      ├── InfrastructureProvisioningService (Real API)   │
-│      ├── AtoComplianceEngine (NIST 800-53)              │
-│      ├── AzureCostManagementService                     │
-│      ├── AzurePolicyEngine (Policy Insights API)        │
-│      ├── IntelligentChatService (Semantic Kernel)       │
-│      └── [40+ services]                                 │
-└─────────────────────────────────────────────────────────┘
-                       ↓
-┌─────────────────────────────────────────────────────────┐
-│              DOMAIN EXTENSIONS                          │
-├─────────────────────────────────────────────────────────┤
-│  • Platform.Engineering.Copilot.Governance              │
-│  • Platform.Engineering.Copilot.DocumentProcessing      │
+│      ├── InfrastructureProvisioningService              │
+│      ├── RmfComplianceEngine (NIST 800-53)              │
+│      ├── CostOptimizationEngine                         │
+│      ├── SecurityScanningService                        │
+│      └── AtoDocumentationService                        │
 └─────────────────────────────────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────────┐
@@ -246,19 +336,18 @@ curl -X POST http://localhost:7001/api/chat/intelligent-query \
 ├─────────────────────────────────────────────────────────┤
 │  Platform.Engineering.Copilot.Data                      │
 │  • Entity Framework Core 9.0                            │
-│  • PlatformEngineeringCopilotContext (20+ DbSets)            │
-│  • Entities: OnboardingRequest, EnvironmentTemplate,    │
-│    ApprovalWorkflow, ComplianceAssessment               │
-│  • Supports: SQL Server, SQLite, In-Memory              │
+│  • McpContext, ChatContext, AdminContext                │
+│  • SQL Server 2022                                      │
+│  • Databases: McpDb, ChatDb, AdminDb                    │
 └─────────────────────────────────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────────┐
 │              EXTERNAL SERVICES                          │
 ├─────────────────────────────────────────────────────────┤
-│  • Azure Resource Manager (management.usgovcloudapi.net)│
+│  • Azure Resource Manager (Azure Government/Commercial) │
 │  • Azure Policy Insights API                            │
 │  • Azure Cost Management API                            │
-│  • Azure OpenAI (GPT-4o)                                │
+│  • Azure OpenAI (gpt-4o deployment)                     │
 │  • Azure Storage, Key Vault, SQL Database               │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -272,17 +361,46 @@ Level 0 (Foundation):
 Level 1 (Core Business Logic):
 └── Core ──→ Data
 
-Level 2 (Domain Extensions):
-├── Governance ──→ Core ──→ Data
-└── DocumentProcessing ──→ Core, Governance
+Level 2 (MCP Server):
+└── Mcp ──→ Core ──→ Data
 
-Level 3 (Execution Layer):
-└── Mcp ──→ Core
+Level 3 (Web Applications):
+├── Chat ──→ Core, Data (connects to MCP via HTTP)
+├── Admin.API ──→ Core, Data
+└── Admin.Client ──→ Admin.API (Web UI)
+```
 
-Level 4 (API Layer):
-├── API ──→ Core, Data, Governance, DocumentProcessing
-├── Chat.App ──→ Core, Data, Governance
-└── Admin.API ──→ Core, Data
+### MCP Server Dual-Mode Architecture
+
+```
+┌─────────────────────────────────────────┐
+│         MCP Server Process              │
+├─────────────────────────────────────────┤
+│                                         │
+│  ┌───────────────────────────────────┐ │
+│  │   HTTP Mode (Port 5100)           │ │
+│  │   - Web Chat Interface            │ │
+│  │   - REST API Endpoints            │ │
+│  │   - Health Checks                 │ │
+│  └───────────────────────────────────┘ │
+│                                         │
+│  ┌───────────────────────────────────┐ │
+│  │   stdio Mode                      │ │
+│  │   - GitHub Copilot Integration    │ │
+│  │   - Claude Desktop Integration    │ │
+│  │   - Custom AI Clients             │ │
+│  └───────────────────────────────────┘ │
+│                                         │
+│         Multi-Agent Core                │
+│  ┌─────────────────────────────────┐   │
+│  │ • Infrastructure Agent          │   │
+│  │ • Cost Optimization Agent       │   │
+│  │ • Compliance Agent              │   │
+│  │ • Security Agent                │   │
+│  │ • Document Agent                │   │
+│  │ • ATO Preparation Agent         │   │
+│  └─────────────────────────────────┘   │
+└─────────────────────────────────────────┘
 ```
 
 ---
@@ -290,14 +408,22 @@ Level 4 (API Layer):
 ## 📚 Documentation
 
 ### Getting Started
-- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Development setup, configuration, and local development guide (Updated: Jan 17, 2025)
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Docker, Kubernetes, and cloud deployment instructions (Updated: Jan 17, 2025)
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Detailed system architecture, components, and data flows (Updated: Jan 17, 2025)
-- **[PROMPT-GUIDE.md](./PROMPT-GUIDE.md)** - Comprehensive guide to writing effective natural language prompts (Updated: Jan 17, 2025)
+- **[QUICKSTART-AUTHENTICATION.md](./docs/QUICKSTART-AUTHENTICATION.md)** - Azure authentication quick start
+- **[AZURE-AUTHENTICATION.md](./docs/AZURE-AUTHENTICATION.md)** - Comprehensive authentication guide
+- **[DOCKER.md](./DOCKER.md)** - Docker configuration and deployment guide
+- **[DOCKER-COMPOSE-GUIDE.md](./DOCKER-COMPOSE-GUIDE.md)** - Docker Compose configuration reference
+- **[DEVELOPMENT.md](./docs/DEVELOPMENT.md)** - Development setup and workflows
 
-### Advanced Topics
-- **[M365 Copilot Integration](./docs/M365-COPILOT-INTEGRATION.md)** - Deploy as Microsoft 365 Copilot declarative agent
-- **[Documentation Update Summary](./DOCUMENTATION-UPDATE-SUMMARY.md)** - Recent documentation changes and verification checklist
+### Integration Guides
+- **[GITHUB-COPILOT-INTEGRATION.md](./docs/GITHUB-COPILOT-INTEGRATION.md)** - GitHub Copilot MCP server integration
+- **[M365-COPILOT-INTEGRATION.md](./docs/M365-COPILOT-INTEGRATION.md)** - Microsoft 365 Copilot declarative agent
+
+### Architecture & Design
+- **[ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Detailed system architecture and data flows
+- **[DEPLOYMENT.md](./docs/DEPLOYMENT.md)** - Cloud deployment instructions (Azure, Kubernetes)
+
+### Testing & Quality
+- **[NATURAL-LANGUAGE-TEST-CASES.md](./docs/NATURAL-LANGUAGE-TEST-CASES.md)** - Comprehensive test scenarios
 
 ---
 
@@ -342,62 +468,84 @@ Level 4 (API Layer):
 
 ## 🎯 Use Cases
 
-### 1. Infrastructure Provisioning
+### 1. Infrastructure Provisioning via Natural Language
 ```
 User: "Create storage account data001 in resource group rg-dr in usgovvirginia"
 
-System:
-✅ Validates subscription ID and authentication
+Infrastructure Agent:
+✅ Validates Azure subscription and authentication
 ✅ Checks if resource group exists (creates if needed)
-✅ Creates storage account with security settings:
+✅ Creates storage account with security defaults:
    - HTTPS-only traffic
    - TLS 1.2 minimum
+   - Encryption at rest enabled
    - Standard_LRS SKU
-✅ Returns resource ID and provisioning status
+✅ Returns resource ID and deployment status
 ```
 
-### 2. ATO Compliance Scanning
+### 2. Compliance Assessment & Gap Analysis
 ```
-User: "Run ATO compliance assessment for my subscription"
+User: "Run NIST 800-53 compliance assessment for my subscription"
 
-System:
-✅ Scans all 18 NIST 800-53 control families
+Compliance Agent:
+✅ Scans all 18 NIST 800-53 Rev 5 control families
 ✅ Evaluates 1000+ controls against Azure resources
+✅ Performs gap analysis identifying missing controls
 ✅ Generates compliance report with:
-   - Overall compliance score (e.g., 60.85%)
+   - Overall compliance score
    - Critical/High/Medium/Low findings
-   - Remediation recommendations
-   - Risk assessment
-✅ Stores assessment in database for audit trail
+   - Gap analysis with remediation roadmap
+   - Risk assessment and POAM generation
+✅ Stores assessment for audit trail
 ```
 
-### 3. Cost Analysis
+### 3. Cost Analysis & Optimization
 ```
-User: "Show cost analysis for subscription [id] for last 3 months"
+User: "Show cost overview for last 30 days with optimization recommendations"
 
-System:
-✅ Queries Azure Cost Management API
-✅ Retrieves cost data with breakdowns:
-   - By resource group
-   - By resource type
-   - By location
-   - By tags
-✅ Calculates trends and forecasts
-✅ Provides optimization recommendations
+Cost Optimization Agent:
+✅ Retrieves cost data from Azure Cost Management API
+✅ Provides cost dashboard with:
+   - Total monthly spend + month-over-month comparison
+   - Top 5 services by cost with percentage breakdown
+   - Daily cost trends
+   - Breakdown by service, resource group, location, tags
+✅ Analyzes usage patterns
+✅ Recommends cost optimizations:
+   - Right-sizing opportunities
+   - Reserved instance recommendations
+   - Idle resource identification
 ```
 
-### 4. Policy Evaluation
+### 4. Security Scanning & Policy Validation
 ```
-User: "Check Azure policies for storage account in usgovvirginia"
+User: "Scan my infrastructure for security vulnerabilities and policy violations"
 
-System:
+Security Agent:
 ✅ Calls Azure Policy Insights API
-✅ Evaluates active policies against proposed resource
-✅ Returns policy violations with:
-   - Severity (Critical/High/Medium/Low)
-   - Policy definition
+✅ Evaluates resources against active policies
+✅ Performs security scanning
+✅ Returns findings with:
+   - Severity levels (Critical/High/Medium/Low)
+   - Policy violations and definitions
+   - Security vulnerabilities
    - Remediation guidance
-✅ Triggers approval workflow if violations found
+✅ Triggers approval workflows for exceptions
+```
+
+### 5. ATO Documentation Generation
+```
+User: "Generate System Security Plan for my production environment"
+
+Document Agent + ATO Preparation Agent:
+✅ Collects environment configuration and evidence
+✅ Generates ATO documentation artifacts:
+   - System Security Plan (SSP)
+   - Security Assessment Report (SAR)
+   - Plan of Action & Milestones (POAM)
+   - Control Implementation Summary
+✅ Organizes evidence collection
+✅ Tracks ATO submission progress
 ```
 
 ---
@@ -405,101 +553,211 @@ System:
 ## 🔐 Security Features
 
 ### Authentication & Authorization
-- **Azure AD Integration**: Managed Identity and Service Principal support
-- **RBAC**: Role-based access control for API endpoints
-- **Key Vault Integration**: Secure secrets management
+- **Azure DefaultAzureCredential**: Managed Identity, Service Principal, Azure CLI, and interactive auth
+- **Azure Government Cloud Support**: Native support for Azure US Government
+- **RBAC**: Role-based access control for all operations
+- **Azure Key Vault Integration**: Secure secrets management
 
 ### Compliance & Governance
-- **NIST 800-53 Rev 5**: Complete control family implementation
-- **FedRAMP Baselines**: High, Moderate, and Low compliance levels
+- **NIST 800-53 Rev 5**: Complete control family implementation (18 families, 1000+ controls)
+- **FedRAMP Baselines**: High, Moderate, and Low compliance validation
+- **RMF Framework**: Full Risk Management Framework support
+- **Gap Analysis**: Automated compliance gap identification and remediation planning
 - **Azure Policy**: Real-time policy evaluation and enforcement
-- **Audit Logging**: Complete audit trail in database
+- **Audit Logging**: Complete audit trail with change tracking
 
-### Network Security
-- **Private Endpoints**: Support for Azure Private Link
-- **Zero Trust**: Network segmentation and micro-segmentation
-- **Encryption**: Data at rest and in transit
+### Data Security
+- **Encryption at Rest**: All database data encrypted
+- **Encryption in Transit**: TLS 1.2+ for all communications
+- **Secure Configuration**: Security defaults for all provisioned resources
+- **Secrets Management**: Azure Key Vault integration for all credentials
 
 ---
 
 ## 📊 Key Capabilities
 
-### Real-Time Infrastructure Operations
+### Infrastructure Management (Infrastructure Agent)
+✅ Create and manage Azure resources via natural language
 ✅ List resource groups across subscriptions  
-✅ Create storage accounts with security settings  
+✅ Create storage accounts with security defaults  
 ✅ Provision virtual networks with subnets  
-✅ Deploy Key Vaults with HSM support  
-✅ Manage blob containers  
-✅ Auto-create resource groups with tags  
+✅ Deploy Key Vaults with RBAC and policies
+✅ Generate Infrastructure as Code (Terraform, Bicep, Kubernetes)
+✅ Template validation and deployment  
+✅ Auto-create resource groups with managed tags  
 
-### ATO Compliance Automation
-✅ NIST 800-53 Rev 5 scanning (18 control families)  
-✅ FedRAMP High/Moderate/Low assessments  
-✅ Remediation plan generation  
+### Compliance & Governance (Compliance Agent)
+✅ NIST 800-53 Rev 5 scanning (18 control families, 1000+ controls)  
+✅ FedRAMP High/Moderate/Low baseline assessments  
+✅ **Gap Analysis**: Identify missing controls and compliance gaps
+✅ Remediation plan generation with prioritized actions
 ✅ POAM (Plan of Action & Milestones) creation  
 ✅ eMASS package generation  
 ✅ Risk assessment and scoring  
+✅ Control mapping and evidence collection
 
-### Cost Intelligence
-✅ Real-time cost analysis with breakdowns  
-✅ Budget tracking and alerts  
-✅ Cost forecasting and trend analysis  
-✅ Optimization recommendations  
-✅ Right-sizing suggestions  
+### Cost Optimization (Cost Optimization Agent)
+✅ **Cost Overview Dashboard**: Total spend, top services, daily trends
+✅ Real-time cost analysis with multi-dimensional breakdowns  
+✅ Budget tracking and forecasting  
+✅ Cost anomaly detection  
+✅ Right-sizing recommendations  
+✅ Reserved instance analysis
+✅ Idle resource identification
+✅ Cost allocation by tags, resource groups, and locations
+
+### Security & Policy (Security Agent)
+✅ Security vulnerability scanning
+✅ Azure Policy evaluation and enforcement
+✅ Threat detection and mitigation
+✅ Security posture assessment
+✅ Compliance violation identification
+✅ Policy exception workflows
+✅ Security best practices validation
+
+### Documentation & ATO (Document Agent + ATO Preparation Agent) - Still in Development
+✅ System Security Plan (SSP) generation
+✅ Security Assessment Report (SAR) creation
+✅ POAM documentation
+✅ Control Implementation Summary
+✅ Evidence collection and organization
+✅ ATO package orchestration
+✅ Submission workflow management
+✅ Stakeholder coordination
 ✅ Reserved instance analysis  
-
-### Policy Management
-✅ Azure Policy evaluation (real-time)  
-✅ Approval workflows for policy exceptions  
-✅ Database-backed workflow persistence  
-✅ Severity-based decision automation  
-✅ 5-minute intelligent caching  
 
 ---
 
 ## 🚀 Deployment Options
 
-### Local Development
+### Quick Start with Docker Compose
+
+**Option 1: MCP Server Only (Essentials)**
 ```bash
-dotnet run --project src/Platform.Engineering.Copilot.API
-```
-
-### Docker Compose
-
-**Multiple configurations available for different deployment scenarios:**
-
-```bash
-# MCP Server only (essentials)
+# Start MCP Server + SQL Server
 docker-compose -f docker-compose.essentials.yml up -d
 
-# All services (default)
-docker-compose up -d
+# Verify health
+curl http://localhost:5100/health
 
-# Development with hot reload
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-
-# Production with scaling
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Connect with AI clients (GitHub Copilot, Claude Desktop)
+# See GITHUB-COPILOT-INTEGRATION.md for configuration
 ```
 
-**📖 See [DOCKER-COMPOSE-GUIDE.md](./DOCKER-COMPOSE-GUIDE.md) for configuration details**  
+**Option 2: Full Platform (All Services)**
+```bash
+# Start all services
+docker-compose up -d
+
+# Access web interfaces
+open http://localhost:5001  # Chat Interface
+open http://localhost:5003  # Admin Console
+
+# Verify all services
+docker-compose ps
+```
+
+**Development Mode (Hot Reload)**
+```bash
+# MCP Server only with hot reload
+docker-compose -f docker-compose.essentials.yml -f docker-compose.dev.yml up -d
+
+# All services with hot reload
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```
+
+**Production Mode (Scaling + Resource Limits)**
+```bash
+# Production deployment with 2 replicas
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# With reverse proxy
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile proxy up -d
+```
+
+**📖 See [DOCKER-COMPOSE-GUIDE.md](./DOCKER-COMPOSE-GUIDE.md) for all configuration options**  
 **📖 See [DOCKER.md](./DOCKER.md) for comprehensive Docker documentation**
 
-### Kubernetes
+### Cloud Deployment
+
+**Azure Container Instances**
+```bash
+# See DEPLOYMENT.md for complete instructions
+az container create \
+  --resource-group rg-platform-copilot \
+  --name platform-mcp \
+  --image platform-engineering-copilot-mcp:latest \
+  --cpu 2 --memory 4 \
+  --ports 5100
+```
+
+**Azure Kubernetes Service (AKS)**
 ```bash
 kubectl apply -f infra/k8s/
 ```
 
-### Azure App Service
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for Azure deployment instructions.
+**Azure Container Apps**
+```bash
+# Recommended for production
+# See DEPLOYMENT.md for configuration
+```
+
+**📖 See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for complete Azure deployment guide**
+
+---
+
+## 🔌 Integration Options
+
+### GitHub Copilot Integration
+Connect the MCP Server to GitHub Copilot for AI-powered infrastructure operations directly in VS Code.
+
+**Configuration**: Add to `.github/copilot/config.json`
+```json
+{
+  "mcp": {
+    "servers": {
+      "platform-engineering-copilot": {
+        "command": "docker",
+        "args": ["exec", "-i", "plaform-engineering-copilot-mcp", 
+                 "dotnet", "run", "--project", "/app/Platform.Engineering.Copilot.Mcp.csproj"]
+      }
+    }
+  }
+}
+```
+
+**📖 See [GITHUB-COPILOT-INTEGRATION.md](./docs/GITHUB-COPILOT-INTEGRATION.md) for complete setup**
+
+### Claude Desktop Integration
+```json
+{
+  "mcpServers": {
+    "platform-engineering-copilot": {
+      "command": "docker",
+      "args": ["exec", "-i", "plaform-engineering-copilot-mcp", 
+               "dotnet", "run", "--project", "/app/Platform.Engineering.Copilot.Mcp.csproj"]
+    }
+  }
+}
+```
+
+### Web Chat Interface
+Built-in web chat interface connects to MCP Server via HTTP on port 5100.
+```bash
+# Start full platform
+docker-compose up -d
+
+# Access chat
+open http://localhost:5001
+```
 
 ---
 
 ## 🤝 Contributing
 
 Contributions welcome! Please:
-1. Read the [ARCHITECTURE.md](./ARCHITECTURE.md) guide
-2. Check existing [documentation](./DEVELOPMENT.md)
+1. Read the [ARCHITECTURE.md](./docs/ARCHITECTURE.md) guide
+2. Check existing [documentation](./docs/DEVELOPMENT.md)
 3. Submit pull requests with tests
 4. Follow existing code patterns
 
@@ -507,7 +765,7 @@ Contributions welcome! Please:
 
 ## 📄 License
 
-Copyright © 2025 Platform Engineering Team
+Copyright © 2025 Microsoft Federal
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
@@ -517,17 +775,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **[Azure Government Documentation](https://docs.microsoft.com/en-us/azure/azure-government/)**
 - **[NIST 800-53 Rev 5](https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final)**
+- **[RMF Framework](https://csrc.nist.gov/projects/risk-management/about-rmf)**
 - **[FedRAMP Compliance](https://www.fedramp.gov/)**
 - **[Microsoft Semantic Kernel](https://learn.microsoft.com/en-us/semantic-kernel/)**
 - **[Model Context Protocol](https://modelcontextprotocol.io/)**
+- **[Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/ai-services/openai/)**
 
 ---
 
 **Built with ❤️ for platform engineers working in secure government cloud environments**
 
-**Version**: 2.0  
-**Last Updated**: January 17, 2025  
-**Maintained by**: Platform Engineering Team
+**Version**: 0.1.23  
+**Last Updated**: October 29, 2025  
+**Maintained by**: Micrsoft Federal CSU Platform Engineering Team
 
 ---
 
@@ -535,61 +795,31 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For issues, questions, or contributions:
 - **GitHub Issues**: [Report bugs or request features](https://github.com/azurenoops/platform-engineering-copilot/issues)
-- **Documentation**: [Complete documentation index](./DEVELOPMENT.md)
-- **Architecture**: [System design guide](./ARCHITECTURE.md)
-| **GKE** | GCP | ✅ | ❌ | ✅ | Production |
-| **AKS** | Azure | ✅ | ✅ | ✅ | Production |
-| **ECS** | AWS | ✅ | ❌ | N/A | Production |
-| **Lambda** | AWS | ✅ | ❌ | N/A | Production |
-| **Cloud Run** | GCP | ✅ | ❌ | N/A | Production |
-| **Container Apps** | Azure | ❌ | ✅ | N/A | Production |
+- **Documentation**: [Complete documentation index](./docs/DEVELOPMENT.md)
+- **Architecture**: [System design guide](./docs/ARCHITECTURE.md)
+- **Docker Guide**: [Docker deployment options](./DOCKER-COMPOSE-GUIDE.md)
 
-### Admin Console Features
-- ✅ Template browsing with search/filter
-- ✅ Template CRUD operations
-- ✅ File viewer with syntax highlighting
-- ✅ Onboarding approval workflows
-- ✅ Network configuration (VNet/VPC setup)
-- ✅ Deployment progress tracking
+---
 
-## 🏗️ Architecture
+## ✨ What's New in 2.1
 
-See **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** for complete system design.
+### MCP Server Architecture
+- 🔧 **Model Context Protocol Server**: Dual-mode operation (HTTP + stdio)
+- 🤖 **Multi-Agent Orchestration**: 6 specialized AI agents
+- 🔌 **AI Client Integration**: GitHub Copilot and Claude Desktop support
+- 📦 **Flexible Deployment**: Essentials (MCP only) and Full platform options
 
-### High-Level Overview
+### Enhanced Features
+- 📊 **Gap Analysis**: Automated compliance gap identification in Compliance Agent
+- 💰 **Cost Overview Dashboard**: Comprehensive cost visibility in Cost Optimization Agent
+- 🛡️ **NIST 800-53 Rev 5**: Complete implementation with 18 control families
+- 🔐 **RMF Framework**: Full Risk Management Framework support
+- 📝 **ATO Documentation**: Automated SSP, SAR, and POAM generation
 
-```
-┌─────────────────────────────────────────────────────┐
-│  Admin Console (React) + Chat App (React)           │
-└─────────────────────────────────────────────────────┘
-                       ↓ REST API
-┌─────────────────────────────────────────────────────┐
-│  API Gateway (.NET 8)                               │
-│  • TemplateAdminController                          │
-│  • OnboardingController                             │
-│  • ChatController                                   │
-└─────────────────────────────────────────────────────┘
-                       ↓
-┌─────────────────────────────────────────────────────┐
-│  Service Layer                                      │
-│  • DynamicTemplateGenerator (35 files/template)     │
-│  • UnifiedInfrastructureOrchestrator (multi-cloud)  │
-│  • FlankspeedOnboardingService (workflows)          │
-│  • IntelligentChatService (AI routing)              │
-└─────────────────────────────────────────────────────┘
-                       ↓
-┌─────────────────────────────────────────────────────┐
-│  Generators (Bicep, Terraform, K8s, CI/CD, Docker)  │
-└─────────────────────────────────────────────────────┘
-                       ↓
-┌─────────────────────────────────────────────────────┐
-│  Cloud Providers (Azure, AWS, GCP)                  │
-└─────────────────────────────────────────────────────┘
-```
-## 🛠️ Technology Stack
-
-### Backend
-- **.NET 8** - API and core services
+### Deployment Improvements
+- 🐳 **Docker Compose Configurations**: Essentials vs Full platform options
+- 📖 **Enhanced Documentation**: New guides for Docker, deployment, and integration
+- 🚀 **Production Ready**: Scaling, resource limits, and health checks
 - **Entity Framework Core** - ORM
 - **SQLite** - Development database
 - **SignalR** - Real-time chat
@@ -651,12 +881,12 @@ Contributions welcome! Please:
 
 ## � License
 
-Copyright © 2025 Platform Engineering Team
+Copyright © 2025 Microsoft Federal
 
 ---
 
-**Maintained by**: Platform Engineering Team  
-**Last Updated**: October 6, 2025  
+**Maintained by**: Micrsoft Federal CSU Platform Engineering Team
+**Last Updated**: October 29, 2025  
 **Documentation**: [Complete Index](./docs/INDEX.md)
 
 ## 📄 License
@@ -700,7 +930,7 @@ Use natural language in VS Code Copilot Chat:
 - **Mission Owner Server (8081)**: Application deployment, ATO compliance, governance
 
 **VS Code Extension:**  
-- Chat participants: `@platform` and `@mission-owner`
+- Chat participants: `@platform`
 - 20+ commands for platform engineering operations
 - Multi-cloud Azure authentication + GitHub integration
 
