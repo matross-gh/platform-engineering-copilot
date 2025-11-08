@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Platform.Engineering.Copilot.Data.Context;
+using Platform.Engineering.Copilot.Core.Data.Context;
 using Microsoft.EntityFrameworkCore;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;

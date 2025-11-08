@@ -22,9 +22,9 @@ export class Config {
         this.config = vscode.workspace.getConfiguration('platform-copilot');
     }
 
-    // Platform API Configuration
+    // MCP HTTP configuration (legacy key names retained)
     public get apiUrl(): string {
-        return this.config.get<string>('apiUrl', 'http://localhost:7001');
+    return this.config.get<string>('apiUrl', 'http://localhost:5100');
     }
 
     public get apiKey(): string {

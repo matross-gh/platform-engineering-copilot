@@ -1,5 +1,6 @@
 #pragma warning disable SKEXP0010 // ResponseFormat is experimental
 
+using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
@@ -7,7 +8,6 @@ using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Platform.Engineering.Copilot.Core.Interfaces.Agents;
 using Platform.Engineering.Copilot.Core.Models.Agents;
 using Platform.Engineering.Copilot.Core.Models.IntelligentChat;
-using Platform.Engineering.Copilot.Core.Interfaces;
 using System.Text.Json;
 
 namespace Platform.Engineering.Copilot.Core.Services.Agents;
@@ -19,7 +19,7 @@ namespace Platform.Engineering.Copilot.Core.Services.Agents;
 public class OrchestratorAgent
 {
     private readonly Kernel _kernel;
-    private readonly IChatCompletionService _chatCompletion;
+    private readonly IChatCompletionService? _chatCompletion;
     private readonly Dictionary<AgentType, ISpecializedAgent> _agents;
     private readonly SharedMemory _sharedMemory;
     private readonly ExecutionPlanValidator _planValidator;
@@ -41,7 +41,18 @@ public class OrchestratorAgent
 
         // Create orchestrator's own kernel
         _kernel = semanticKernelService.CreateSpecializedKernel(AgentType.Orchestrator);
-        _chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
+        
+        // Try to get chat completion service - make it optional
+        try
+        {
+            _chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
+            _logger.LogInformation("✅ OrchestratorAgent initialized with AI chat completion service");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ OrchestratorAgent initialized without AI chat completion service. AI features will be limited.");
+            _chatCompletion = null;
+        }
 
         // Build agent registry
         _agents = agents.ToDictionary(a => a.AgentType, a => a);
@@ -78,6 +89,26 @@ public class OrchestratorAgent
 
         try
         {
+            // OPTIMIZATION: Direct answer from context for simple informational queries
+            var contextAnswer = TryAnswerFromContext(userMessage, context);
+            if (contextAnswer != null)
+            {
+                _logger.LogInformation("⚡ Context-based answer (no agent needed)");
+                var contextTime = (DateTime.UtcNow - startTime).TotalMilliseconds;
+                return new OrchestratedResponse
+                {
+                    FinalResponse = contextAnswer,
+                    PrimaryIntent = "informational",
+                    AgentsInvoked = new List<AgentType>(),
+                    ExecutionPattern = ExecutionPattern.Sequential,
+                    TotalAgentCalls = 0,
+                    ExecutionTimeMs = contextTime,
+                    Success = true,
+                    RequiresFollowUp = false,
+                    Metadata = new Dictionary<string, object>()
+                };
+            }
+
             // OPTIMIZATION: Fast-path for unambiguous single-agent requests (skip planning LLM call)
             // Only use when request clearly maps to ONE specific agent with no multi-agent coordination needed
             var fastPathAgent = DetectUnambiguousSingleAgentRequest(userMessage, context);
@@ -225,15 +256,26 @@ public class OrchestratorAgent
             ? "\n\nRecent conversation history:\n" + string.Join("\n", context.MessageHistory.TakeLast(5).Select(m => $"{m.Role}: {m.Content}"))
             : "";
 
+        // Include stored subscription ID if available
+        var contextualInfo = "";
+        if (context.WorkflowState.TryGetValue("lastSubscriptionId", out var lastSub) && lastSub != null)
+        {
+            contextualInfo = $"\n\nIMPORTANT Context: Last scanned subscription ID: {lastSub}";
+            if (context.WorkflowState.TryGetValue("lastScanTimestamp", out var timestamp) && timestamp is DateTime scanTime)
+            {
+                contextualInfo += $" (scanned {(DateTime.UtcNow - scanTime).TotalMinutes:F0} minutes ago)";
+            }
+        }
+
         // OPTIMIZATION: Simplified planning prompt (70% token reduction from 2000 to ~600 tokens)
         var planningPrompt = $@"Available agents: {string.Join(", ", _agents.Keys)}
-{conversationHistory}
+{conversationHistory}{contextualInfo}
 
 User: ""{userMessage}""
 
 Create JSON execution plan:
 {{
-  ""primaryIntent"": ""infrastructure|compliance|cost|environment|discovery|onboarding|mixed"",
+  ""primaryIntent"": ""infrastructure|compliance|cost|environment|discovery|ServiceCreation|mixed"",
   ""tasks"": [{{ ""agentType"": ""Infrastructure"", ""description"": ""task"", ""priority"": 1, ""isCritical"": true }}],
   ""executionPattern"": ""Sequential|Parallel|Collaborative"",
   ""estimatedTimeSeconds"": 30
@@ -252,6 +294,11 @@ Respond ONLY with JSON.";
 
         try
         {
+            if (_chatCompletion == null)
+            {
+                throw new InvalidOperationException("Chat completion service not available. AI features require proper configuration.");
+            }
+
             var chatHistory = new ChatHistory();
             chatHistory.AddSystemMessage("You are an expert at planning multi-agent execution strategies. Always respond with valid JSON.");
             chatHistory.AddUserMessage(planningPrompt);
@@ -509,6 +556,12 @@ Synthesized response:";
 
         try
         {
+            if (_chatCompletion == null)
+            {
+                _logger.LogWarning("Chat completion service not available, returning raw agent outputs");
+                return agentOutputs;
+            }
+
             var chatHistory = new ChatHistory();
             chatHistory.AddSystemMessage("You are an expert at synthesizing technical information into clear, actionable responses.");
             chatHistory.AddUserMessage(synthesisPrompt);
@@ -535,11 +588,12 @@ Synthesized response:";
     private string GetAgentDescription(AgentType agentType) => agentType switch
     {
         AgentType.Infrastructure => "Generate Infrastructure-as-Code templates (Bicep/Terraform), design network topology, analyze predictive scaling, optimize auto-scaling. Use for: creating NEW compliant infrastructure templates, designing networks, generating IaC code",
-        AgentType.Compliance => "Scan and assess EXISTING resources for compliance (NIST 800-53, FedRAMP, DoD IL5), run security assessments, generate eMASS ATO packages. Use for: checking current compliance status, auditing existing infrastructure, validating security controls",
+        AgentType.Compliance => "Scan and assess EXISTING resources for compliance (NIST 800-53, FedRAMP, DoD IL5), run security assessments, generate eMASS ATO packages, and perform automated remediation of compliance issues. Use for: checking current compliance status, auditing existing infrastructure, validating security controls, and fixing compliance violations",
         AgentType.CostManagement => "Analyze costs of existing resources, estimate costs for planned deployments, optimize spending, track budgets",
         AgentType.Environment => "Manage environment lifecycle, clone environments, track deployments",
         AgentType.Discovery => "Discover and inventory existing resources, monitor health status, scan subscriptions",
-        AgentType.Onboarding => "Onboard new missions and teams, gather requirements for new projects",
+        AgentType.ServiceCreation => "Onboard new missions and teams, gather requirements for new projects",
+        AgentType.Orchestrator => "Coordinate and plan execution across specialized agents for complex multi-step operations",
         _ => "General platform engineering tasks"
     };
 
@@ -579,7 +633,8 @@ Synthesized response:";
 
         if (lowerMessage.Contains("compliance") || lowerMessage.Contains("nist") ||
             lowerMessage.Contains("security") || lowerMessage.Contains("ato") ||
-            lowerMessage.Contains("emass"))
+            lowerMessage.Contains("emass") || lowerMessage.Contains("scan") ||
+            lowerMessage.Contains("assess") || lowerMessage.Contains("remediat"))
             return AgentType.Compliance;
 
         if (lowerMessage.Contains("cost") || lowerMessage.Contains("budget") ||
@@ -596,7 +651,7 @@ Synthesized response:";
 
         if (lowerMessage.Contains("onboard") || lowerMessage.Contains("mission") ||
             lowerMessage.Contains("setup"))
-            return AgentType.Onboarding;
+            return AgentType.ServiceCreation;
 
         // Default to infrastructure for resource-related queries
         return AgentType.Infrastructure;
@@ -627,7 +682,8 @@ Synthesized response:";
             "costmanagement" => AgentType.CostManagement,
             "environment" => AgentType.Environment,
             "discovery" => AgentType.Discovery,
-            "onboarding" => AgentType.Onboarding,
+            "servicecreation" => AgentType.ServiceCreation,
+            "orchestrator" => AgentType.Orchestrator,
             _ => AgentType.Infrastructure
         };
     }
@@ -709,8 +765,15 @@ Synthesized response:";
         {
             foreach (var kvp in response.Metadata)
             {
+                // Store both prefixed and non-prefixed versions for important context values
                 var key = $"{response.AgentType}_{kvp.Key}";
                 combinedMetadata[key] = kvp.Value;
+                
+                // Also store non-prefixed for important context keys that need to be accessed directly
+                if (kvp.Key == "subscriptionId" || kvp.Key == "resourceGroup" || kvp.Key == "environment")
+                {
+                    combinedMetadata[kvp.Key] = kvp.Value;
+                }
             }
         }
 
@@ -735,9 +798,6 @@ Synthesized response:";
         {
             if (response.AgentType == AgentType.Compliance && response.IsApproved == false)
                 return false;
-
-            if (response.AgentType == AgentType.CostManagement && response.IsWithinBudget == false)
-                return false;
         }
 
         return true;
@@ -761,12 +821,8 @@ Synthesized response:";
         {
             // Continue with the agent from previous interaction
             var previousMessage = context.MessageHistory[^2];
-            if (previousMessage.Content.Contains("infrastructure", StringComparison.OrdinalIgnoreCase))
-                return AgentType.Infrastructure;
             if (previousMessage.Content.Contains("compliance", StringComparison.OrdinalIgnoreCase))
                 return AgentType.Compliance;
-            if (previousMessage.Content.Contains("cost", StringComparison.OrdinalIgnoreCase))
-                return AgentType.CostManagement;
         }
         
         // Exclude multi-agent scenarios (these need orchestration)
@@ -781,57 +837,110 @@ Synthesized response:";
         if (requiresMultipleAgents)
             return null;
         
-        // COMPLIANCE AGENT - Unambiguous compliance scanning/assessment
-        if ((lowerMessage.Contains("check") || lowerMessage.Contains("scan") || lowerMessage.Contains("assess") || 
-             lowerMessage.Contains("audit") || lowerMessage.Contains("validate")) &&
-            (lowerMessage.Contains("compliance") || lowerMessage.Contains("nist") || lowerMessage.Contains("fedramp") ||
-             lowerMessage.Contains("security") || lowerMessage.Contains("ato")))
+        // COMPLIANCE AGENT - Distinguish between informational queries and actual assessments
+        var isComplianceRelated = lowerMessage.Contains("compliance") || lowerMessage.Contains("nist") || 
+                                  lowerMessage.Contains("fedramp") || lowerMessage.Contains("security") || 
+                                  lowerMessage.Contains("control");
+        
+        // ATO PREPARATION AGENT - Handles ATO package creation and orchestration
+        var isAtoPreparation = lowerMessage.Contains("ato package") || lowerMessage.Contains("ato preparation") ||
+                               lowerMessage.Contains("poa&m") || lowerMessage.Contains("poam") ||
+                               lowerMessage.Contains("plan of action") || lowerMessage.Contains("ato progress") ||
+                               lowerMessage.Contains("ato status") ||
+                               (lowerMessage.Contains("ato") && !lowerMessage.Contains("what is ato"));
+        
+        // DOCUMENT AGENT - Handles document generation, formatting, and management
+        var isDocumentGeneration = lowerMessage.Contains("generate document") || 
+                                   lowerMessage.Contains("create document") ||
+                                   lowerMessage.Contains("write narrative") || 
+                                   lowerMessage.Contains("control narrative") ||
+                                   lowerMessage.Contains("format document") || 
+                                   lowerMessage.Contains("export document") ||
+                                   lowerMessage.Contains("list documents") ||
+                                   lowerMessage.Contains("system security plan") || lowerMessage.Contains("ssp") ||
+                                   lowerMessage.Contains("security assessment report") || lowerMessage.Contains("sar") ||
+                                   (lowerMessage.Contains("generate") && (lowerMessage.Contains("ssp") || 
+                                    lowerMessage.Contains("sar") || lowerMessage.Contains("narrative")));
+        
+        if (isDocumentGeneration || isAtoPreparation)
         {
+            // Document generation and ATO preparation use Compliance agent
             return AgentType.Compliance;
         }
         
-        // INFRASTRUCTURE AGENT - Unambiguous template generation (NOT provisioning)
-        if ((lowerMessage.Contains("generate") || lowerMessage.Contains("create") || lowerMessage.Contains("deploy")) &&
-            (lowerMessage.Contains("template") || lowerMessage.Contains("bicep") || lowerMessage.Contains("terraform")) &&
-            !lowerMessage.Contains("provision"))
+        if (isComplianceRelated)
         {
-            return AgentType.Infrastructure;
-        }
-        
-        // COST MANAGEMENT AGENT - Unambiguous cost analysis
-        if ((lowerMessage.Contains("cost") || lowerMessage.Contains("price") || lowerMessage.Contains("budget") || 
-             lowerMessage.Contains("spend")) &&
-            (lowerMessage.Contains("estimate") || lowerMessage.Contains("analyze") || lowerMessage.Contains("optimize") ||
-             lowerMessage.Contains("how much")))
-        {
-            return AgentType.CostManagement;
-        }
-        
-        // DISCOVERY AGENT - Unambiguous resource discovery
-        if ((lowerMessage.Contains("list") || lowerMessage.Contains("find") || lowerMessage.Contains("show") || 
-             lowerMessage.Contains("discover") || lowerMessage.Contains("inventory")) &&
-            (lowerMessage.Contains("resource") || lowerMessage.Contains("vm") || lowerMessage.Contains("storage") ||
-             lowerMessage.Contains("subscription") || lowerMessage.Contains("cluster")))
-        {
-            return AgentType.Discovery;
-        }
-        
-        // ENVIRONMENT AGENT - Unambiguous environment operations
-        if ((lowerMessage.Contains("clone") || lowerMessage.Contains("copy") || lowerMessage.Contains("duplicate")) &&
-            lowerMessage.Contains("environment"))
-        {
-            return AgentType.Environment;
-        }
-        
-        // ONBOARDING AGENT - Unambiguous mission onboarding
-        if ((lowerMessage.Contains("onboard") || lowerMessage.Contains("setup mission") || 
-             lowerMessage.Contains("new mission")) &&
-            !lowerMessage.Contains("infrastructure"))
-        {
-            return AgentType.Onboarding;
+            // INFORMATIONAL QUERIES - Just asking about concepts (no assessment needed)
+            var isInformational = 
+                (lowerMessage.Contains("what is") || lowerMessage.Contains("what are") || 
+                 lowerMessage.Contains("tell me about") || lowerMessage.Contains("explain") ||
+                 lowerMessage.Contains("describe") || lowerMessage.Contains("details about") ||
+                 lowerMessage.Contains("information about") || lowerMessage.Contains("details for")) &&
+                !lowerMessage.Contains("subscription") && !lowerMessage.Contains("resource group");
+            
+            // ASSESSMENT/SCAN REQUESTS - Actually wants to scan/assess resources
+            var isAssessment = 
+                lowerMessage.Contains("check") || lowerMessage.Contains("scan") || 
+                lowerMessage.Contains("assess") || lowerMessage.Contains("audit") || 
+                lowerMessage.Contains("validate") || lowerMessage.Contains("run");
+            
+            // If it's informational OR an assessment request, route to Compliance agent
+            // The agent's system prompt will handle determining if it needs subscription info
+            if (isInformational || isAssessment)
+            {
+                return AgentType.Compliance;
+            }
         }
         
         // No clear single-agent match - use orchestrator for planning
+        return null;
+    }
+
+    /// <summary>
+    /// Try to answer simple informational questions directly from conversation context
+    /// without invoking any agents or making LLM calls.
+    /// Also detects when user is asking for informational content (vs actual assessment/scan).
+    /// </summary>
+    private string? TryAnswerFromContext(string userMessage, ConversationContext context)
+    {
+        var lowerMessage = userMessage.ToLowerInvariant();
+        
+        // Check for questions about recent scans/activity
+        var isAskingAboutRecent = 
+            (lowerMessage.Contains("what") || lowerMessage.Contains("which")) &&
+            (lowerMessage.Contains("subscription") || lowerMessage.Contains("resource")) &&
+            (lowerMessage.Contains("scan") || lowerMessage.Contains("just") || lowerMessage.Contains("last") || 
+             lowerMessage.Contains("recent") || lowerMessage.Contains("did i"));
+        
+        if (isAskingAboutRecent && context.WorkflowState.TryGetValue("lastSubscriptionId", out var lastSub) && lastSub != null)
+        {
+            var subscriptionId = lastSub.ToString();
+            var timeInfo = "";
+            
+            if (context.WorkflowState.TryGetValue("lastScanTimestamp", out var timestamp) && timestamp is DateTime scanTime)
+            {
+                var elapsed = DateTime.UtcNow - scanTime;
+                if (elapsed.TotalMinutes < 60)
+                {
+                    timeInfo = $" about {elapsed.TotalMinutes:F0} minutes ago";
+                }
+                else if (elapsed.TotalHours < 24)
+                {
+                    timeInfo = $" about {elapsed.TotalHours:F1} hours ago";
+                }
+                else
+                {
+                    timeInfo = $" on {scanTime:MMM dd 'at' h:mm tt} UTC";
+                }
+            }
+            
+            return $"You recently scanned Azure subscription: **{subscriptionId}**{timeInfo}.";
+        }
+        
+        // NOTE: Informational queries about compliance frameworks/controls should be handled by agents
+        // (they have the knowledge base), but we return null here to let orchestrator route them properly.
+        // The key is to NOT interpret these as assessment requests.
+        
         return null;
     }
 

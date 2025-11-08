@@ -7,16 +7,16 @@ builder.Services.AddSpaStaticFiles(configuration =>
     configuration.RootPath = "ClientApp/build";
 });
 
-// Configure Kestrel to listen on port 7003
+// Configure Kestrel to listen on port 5003
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(7003);
+    options.ListenAnyIP(5003);
 });
 
 // Add HttpClient for Admin API calls
 builder.Services.AddHttpClient("AdminAPI", client =>
 {
-    client.BaseAddress = new Uri("http://localhost:7002");
+    client.BaseAddress = new Uri("http://localhost:5002");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 

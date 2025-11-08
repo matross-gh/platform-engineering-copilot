@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Interfaces;
+using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.Azure;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -35,7 +37,7 @@ public class AzureResourceHealthService : IAzureResourceHealthService
             HealthyResources = 0,
             UnhealthyResources = 0,
             UnknownResources = 0,
-            LastUpdated = DateTime.UtcNow
+            Timestamp = DateTime.UtcNow
         };
     }
 
@@ -74,29 +76,12 @@ public class AzureResourceHealthService : IAzureResourceHealthService
         
         return new ResourceHealthDashboard
         {
-            SubscriptionId = subscriptionId,
-            Summary = new ResourceHealthSummaryInfo
-            {
-                TotalResources = healthSummary.TotalResources,
-                HealthyResources = healthSummary.HealthyResources,
-                UnhealthyResources = healthSummary.UnhealthyResources,
-                DegradedResources = healthSummary.DegradedResources,
-                UnknownResources = healthSummary.UnknownResources,
-                HealthPercentage = healthSummary.OverallHealthPercentage,
-                LastUpdated = healthSummary.LastUpdated,
-                OverallHealthStatus = healthSummary.OverallHealthPercentage >= 90 ? "Healthy" : "Degraded",
-                ActiveAlerts = new List<ResourceHealthAlert>(),
-                HealthTrends = new List<ResourceHealthTrend>()
-            },
-            CriticalResources = new List<ResourceHealthInfo>(),
-            RecentAlerts = new List<ResourceHealthAlert>(),
-            HealthTrends = new List<ResourceHealthTrend>(),
-            Recommendations = new List<ResourceHealthRecommendation>(),
-            ResourceTypeBreakdown = new Dictionary<string, int>(),
-            LocationBreakdown = new Dictionary<string, int>(),
-            OverallHealthScore = healthSummary.OverallHealthPercentage,
-            HealthScoreGrade = GetHealthGrade(healthSummary.OverallHealthPercentage),
-            GeneratedAt = DateTime.UtcNow
+            GeneratedAt = DateTime.UtcNow,
+            Summary = healthSummary,
+            ByResourceType = new Dictionary<string, ResourceHealthSummary>(),
+            ByLocation = new Dictionary<string, ResourceHealthSummary>(),
+            ActiveAlerts = new List<ResourceHealthAlert>(),
+            HealthTrend = new List<HealthTrendDataPoint>()
         };
     }
     

@@ -2,42 +2,76 @@
 
 **AI-Powered Azure Infrastructure Management directly in VS Code**
 
-This VS Code extension integrates Platform Engineering Copilot with GitHub Copilot Chat, enabling natural language interactions for Azure infrastructure provisioning, compliance scanning, cost analysis, and more.
+This VS Code extension integrates Platform Engineering Copilot's **Multi-Agent MCP Server** with GitHub Copilot Chat, enabling natural language interactions for Azure infrastructure provisioning, compliance scanning, cost analysis, environment management, and more.
+
+> **Latest Update (Oct 2025):** Fixed duplicate agent registration issue. Extension now fully supports all 7 specialized agents via the unified MCP server endpoint.
 
 ---
 
-## 🌟 Features
+## 🌟 Features - 7 Specialized Agents
 
-### 🏗️ **Infrastructure Management**
+### 🏗️ **Infrastructure Agent**
 - Provision Azure resources using natural language
-- Deploy Bicep and Terraform templates
-- List and manage resource groups
-- Real-time resource health monitoring
+- Deploy Bicep and Terraform templates with validation
+- Network topology design and implementation
+- Infrastructure-as-Code (IaC) template generation
+- Azure Resource Manager (ARM) template deployment
+- Real-time resource health monitoring and diagnostics
 
-### 🔒 **Compliance & Security**
-- NIST 800-53 compliance assessments
-- NIST 800-171 and ISO 27001 support
-- Automated remediation plans
-- eMASS package generation
-- Security hardening recommendations
+### 🔒 **Compliance Agent** 
+- **NIST 800-53** compliance assessments (Rev 4 & 5)
+- **NIST 800-171**, **ISO 27001**, **SOC 2**, **PCI-DSS** support
+- Automated remediation plan generation
+- **eMASS** package preparation and documentation
+- **ATO (Authority to Operate)** documentation generation
+- Security control mapping and gap analysis
+- Code scanning for security vulnerabilities
+- Policy-as-Code enforcement
 
-### 💰 **Cost Management**
-- Real-time cost estimation
-- Resource cost breakdowns
-- Optimization recommendations
-- Budget alerts and tracking
+### 💰 **Cost Management Agent**
+- Real-time Azure cost estimation
+- Resource-level cost breakdowns
+- Cost optimization recommendations
+- Budget forecasting and alerts
+- Azure Advisor cost insights integration
+- Reserved Instance and Savings Plan analysis
+- Cost allocation by tags and resource groups
 
-### 🚀 **Deployment Operations**
-- Bicep template validation and deployment
-- Terraform deployments
-- Deployment status tracking
-- Rollback capabilities
-
-### 🌐 **Environment Management**
-- Create and clone environments
+### 🌐 **Environment Agent**
+- Multi-environment lifecycle management (Dev/Test/Prod)
+- Environment cloning and templating
+- Blue-green deployment support
+- Environment scaling operations
+- Configuration drift detection
 - Environment health monitoring
-- Scaling operations
-- Resource discovery
+- Resource tagging and organization
+
+### 🔍 **Discovery Agent**
+- Azure resource inventory across subscriptions
+- Resource dependency mapping
+- Orphaned resource detection
+- Resource utilization analysis
+- Tag compliance checking
+- Resource group organization
+- Cross-subscription resource discovery
+
+### 🛠️ **Service Creation Agent**
+- Mission-based service architecture design
+- Microservice template generation
+- API and service scaffolding
+- Service mesh integration guidance
+- Container orchestration setup (AKS, ACA)
+- Service catalog management
+- DevOps pipeline generation
+
+### 📄 **Document Agent**
+- Technical documentation generation
+- Architecture diagram creation
+- Compliance documentation (SSP, SAR, SAP)
+- Runbook and playbook generation
+- Security documentation (STIG, SCAP)
+- Automated document analysis and extraction
+- Policy and procedure documentation
 
 ---
 
@@ -45,27 +79,35 @@ This VS Code extension integrates Platform Engineering Copilot with GitHub Copil
 
 1. **VS Code**: Version 1.90.0 or higher
 2. **GitHub Copilot**: Active subscription with Chat enabled
-3. **Platform Copilot API**: Running locally or remotely
-   - Default: `http://localhost:7001`
-   - Can be configured in settings
+3. **Platform MCP Server**: HTTP endpoint running (dual-mode: HTTP + stdio)
+   - Default: `http://localhost:5100`
+   - Configurable via extension settings
+   - Supports all 7 specialized agents via unified orchestration
+4. **Azure Credentials**: For actual Azure operations (optional for testing)
+   - Azure CLI authenticated (`az login`)
+   - Or Azure service principal with appropriate permissions
 
 ---
 
 ## 🚀 Installation
 
-### Option 1: Install from VSIX (Recommended)
+### Quick Install from VSIX (Recommended)
 
 ```bash
-# Download the latest .vsix file
-# Then in VS Code:
+# Download the latest .vsix file from releases
+# Install in VS Code:
 code --install-extension platform-copilot-github-1.0.0.vsix
+
+# Verify installation
+code --list-extensions | grep platform
 ```
 
-### Option 2: Build from Source
+### Build from Source
 
 ```bash
 # Clone the repository
-cd extensions/platform-engineering-copilot-github
+git clone https://github.com/azurenoops/platform-engineering-copilot.git
+cd platform-engineering-copilot/extensions/platform-engineering-copilot-github
 
 # Install dependencies
 npm install
@@ -73,11 +115,30 @@ npm install
 # Compile TypeScript
 npm run compile
 
-# Package extension
+# Package extension (creates .vsix file)
 npm run package
 
-# Install
+# Install the generated VSIX
 code --install-extension platform-copilot-github-1.0.0.vsix
+```
+
+### Start MCP Server
+
+Before using the extension, ensure the MCP server is running:
+
+```bash
+# From the repository root
+cd platform-engineering-copilot
+
+# Using Docker (Recommended)
+docker-compose -f docker-compose.essentials.yml up -d
+
+# Or run directly (requires .NET 9)
+dotnet run --project src/Platform.Engineering.Copilot.Mcp -- --http
+
+# Verify server is running
+curl http://localhost:5100/health
+# Expected: {"status":"healthy","mode":"dual (http+stdio)","server":"Platform Engineering Copilot MCP","version":"1.0.0"}
 ```
 
 ---
@@ -90,61 +151,85 @@ Press `Cmd+,` (Mac) or `Ctrl+,` (Windows/Linux) and search for "Platform Copilot
 
 ```json
 {
-  "platform-copilot.apiUrl": "http://localhost:7001",
+  "platform-copilot.apiUrl": "http://localhost:5100",
   "platform-copilot.apiKey": "",
   "platform-copilot.timeout": 60000,
   "platform-copilot.enableLogging": true
 }
 ```
 
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `apiUrl` | MCP server HTTP endpoint | `http://localhost:5100` |
+| `apiKey` | Optional API key for authentication | `""` (empty) |
+| `timeout` | Request timeout in milliseconds | `60000` (60 seconds) |
+| `enableLogging` | Enable debug logging to Output panel | `true` |
+
 ### Quick Configuration
 
-Run the command **Platform Copilot: Configure Platform API Connection**
+Run these commands from the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`):
 
-Or use the Command Palette (`Cmd+Shift+P`):
-- `Platform Copilot: Check Platform API Health`
-- `Platform Copilot: Configure Platform API Connection`
+- **Platform Copilot: Check Platform API Health** - Verify MCP server connectivity
+- **Platform Copilot: Configure Platform API Connection** - Interactive setup wizard
 
 ---
 
-## 💬 Usage
-
-### Using GitHub Copilot Chat
+## 💬 Usage - All 7 Agents
 
 Open GitHub Copilot Chat and use the `@platform` participant:
 
-#### **Provision Infrastructure**
+### 🏗️ Infrastructure Agent Examples
 
 ```
-@platform Create a storage account named mydata001 in resource group rg-dev
-```
-
-```
-@platform Provision an AKS cluster with 3 nodes in East US
+@platform Create a storage account named mydata001 in resource group rg-dev with geo-redundant replication
 ```
 
 ```
-@platform Deploy a virtual network with 2 subnets
+@platform Provision an AKS cluster with 3 nodes in East US using Standard_D4s_v3 VMs
 ```
 
-#### **Compliance Scanning**
+```
+@platform Deploy a virtual network with 3 subnets for web, app, and database tiers
+```
+
+```
+@platform Generate a Bicep template for a hub-spoke network topology
+```
+
+```
+@platform Design a network topology for a 3-tier web application with DMZ
+```
+
+### 🔒 Compliance Agent Examples
 
 ```
 @platform Run a NIST 800-53 compliance scan on subscription abc-123
 ```
 
 ```
-@platform Check compliance for resource group rg-production
+@platform Check compliance for resource group rg-production on subscription abc-123 against NIST 800-53
 ```
 
 ```
 @platform Generate an eMASS package for my production environment
 ```
 
-#### **Cost Analysis**
+```
+@platform Create an ATO documentation package with SSP, SAR, and SAP
+```
 
 ```
-@platform Estimate the cost of a Standard_D4s_v3 VM for 720 hours
+@platform Scan this code for security vulnerabilities and ATO compliance issues
+```
+
+```
+@platform Generate a remediation plan for failed compliance controls
+```
+
+### 💰 Cost Management Agent Examples
+
+```
+@platform Estimate the cost of a Standard_D4s_v3 VM running 24/7 for a month
 ```
 
 ```
@@ -152,13 +237,43 @@ Open GitHub Copilot Chat and use the `@platform` participant:
 ```
 
 ```
-@platform How much will it cost to run 5 AKS nodes for a month?
+@platform How much will it cost to run 5 AKS nodes for a month in East US?
 ```
 
-#### **Resource Discovery**
+```
+@platform Analyze my subscription for cost optimization opportunities
+```
 
 ```
-@platform List all resources in East US
+@platform Compare costs between Standard_D4s_v3 and Standard_E4s_v3 for my workload
+```
+
+### 🌐 Environment Agent Examples
+
+```
+@platform Clone the development environment to create a new staging environment
+```
+
+```
+@platform Scale up the production environment to handle 2x traffic
+```
+
+```
+@platform Create a new environment template based on rg-prod configuration
+```
+
+```
+@platform Check environment health for all dev environments
+```
+
+```
+@platform Perform a blue-green deployment for environment env-prod-001
+```
+
+### 🔍 Discovery Agent Examples
+
+```
+@platform List all resources in East US region
 ```
 
 ```
@@ -169,132 +284,417 @@ Open GitHub Copilot Chat and use the `@platform` participant:
 @platform What VMs are running in my subscription?
 ```
 
-#### **Deployments**
-
 ```
-@platform Deploy the Bicep template in ./infra/main.bicep
+@platform Find all orphaned resources with no tags
 ```
 
 ```
-@platform Check the status of deployment dep-12345
+@platform Discover dependencies for resource rg-app/appservice-001
 ```
 
 ```
-@platform Validate my Terraform configuration
+@platform Map all resources by cost center tag
+```
+
+### 🛠️ Service Creation Agent Examples
+
+```
+@platform Create a microservice architecture for an e-commerce platform
+```
+
+```
+@platform Generate a service template for a REST API with authentication
+```
+
+```
+@platform Design a mission-based service for real-time data processing
+```
+
+```
+@platform Set up a container-based service with AKS and Azure Container Registry
+```
+
+```
+@platform Create a DevOps pipeline for deploying a .NET microservice
+```
+
+### 📄 Document Agent Examples
+
+```
+@platform Generate architecture documentation for resource group rg-prod
+```
+
+```
+@platform Create a System Security Plan (SSP) for my Azure environment
+```
+
+```
+@platform Generate runbooks for incident response procedures
+```
+
+```
+@platform Extract security requirements from this compliance document
+```
+
+```
+@platform Create a deployment guide for this infrastructure template
 ```
 
 ---
 
 ## 🎯 Example Workflows
 
-### Scenario 1: Complete Infrastructure Provisioning
+### Scenario 1: Complete Infrastructure Provisioning (Infrastructure Agent)
 
 ```
-You: @platform I need to create a new development environment
+You: @platform I need to create a new development environment with AKS and monitoring
 
-Platform: I'll help you set up a development environment. Could you provide:
-1. Resource group name
-2. Location (e.g., East US, West US 2)
-3. Required services (e.g., AKS, Storage, SQL)
+Platform: 🏗️ Infrastructure Agent
 
-You: @platform Resource group: rg-dev-001, Location: East US, Services: AKS and Storage
+I'll help you set up a development environment. Let me create:
+
+1. Resource Group: rg-dev-001
+2. AKS Cluster: aks-dev-001
+   - Node count: 3
+   - VM size: Standard_D2s_v3
+   - Kubernetes version: 1.28
+3. Azure Monitor Workspace
+4. Container Insights enabled
+
+Would you like me to proceed with this configuration?
+
+You: @platform Yes, proceed with the deployment in East US
 
 Platform: ✅ Creating development environment...
 
-Created resources:
-- Resource Group: rg-dev-001
+**Created Resources:**
+- Resource Group: rg-dev-001 (East US)
 - AKS Cluster: aks-dev-001 (3 nodes, Standard_D2s_v3)
-- Storage Account: stdev001 (Standard_LRS)
+- Azure Monitor: monitor-dev-001
+- Log Analytics Workspace: law-dev-001
 
-Estimated monthly cost: $250.00
+**Estimated Monthly Cost:** $350.00
+
+**Next Steps:**
+1. Configure kubectl: `az aks get-credentials --resource-group rg-dev-001 --name aks-dev-001`
+2. Deploy your applications
+3. Set up CI/CD pipelines
 ```
 
-### Scenario 2: Compliance Assessment and Remediation
+### Scenario 2: Compliance Assessment and Remediation (Compliance Agent)
 
 ```
-You: @platform Run compliance scan on resource group rg-production
+You: @platform Run a comprehensive NIST 800-53 compliance scan on my production subscription
 
-Platform: 🔒 Running NIST 800-53 compliance assessment...
+Platform: 🔒 Compliance Agent
 
-Compliance Score: 78%
-- Passed: 156 controls
-- Failed: 34 controls
-- Warnings: 12 controls
+Running NIST 800-53 Rev 5 compliance assessment...
 
-Top issues:
-1. Missing encryption at rest (AC-2)
-2. No network security groups (SC-7)
-3. Diagnostic logs not enabled (AU-2)
+**Compliance Score: 78%**
 
-Would you like me to generate a remediation plan?
+✅ **Passed Controls:** 156 (High: 89, Moderate: 45, Low: 22)
+❌ **Failed Controls:** 34 (High: 8, Moderate: 18, Low: 8)
+⚠️  **Warnings:** 12 controls need review
 
-You: @platform Yes, create a remediation plan
+**Top Critical Issues:**
+1. **AC-2 (Account Management)** - Missing MFA on 12 accounts
+2. **SC-7 (Boundary Protection)** - No NSG on 5 subnets
+3. **AU-2 (Audit Events)** - Diagnostic logs not enabled on 8 resources
+4. **CM-7 (Least Functionality)** - Unused ports open on 3 VMs
+5. **IA-5 (Authenticator Management)** - Weak password policies detected
 
-Platform: ✅ Remediation plan created with 3 automated fixes.
-Estimated time: 15 minutes
-Would you like me to execute the plan?
+Would you like me to generate an automated remediation plan?
+
+You: @platform Yes, create a remediation plan and show me what it will fix
+
+Platform: ✅ **Automated Remediation Plan Created**
+
+**Plan ID:** rem-plan-20241107-001
+**Estimated Time:** 15-20 minutes
+**Impact:** Low (non-breaking changes)
+
+**Actions:**
+1. Enable MFA for 12 user accounts (AC-2)
+2. Create and attach NSGs to 5 subnets (SC-7)
+3. Enable diagnostic settings on 8 resources (AU-2)
+4. Close unused ports on 3 VMs (CM-7)
+5. Update password policy to meet NIST requirements (IA-5)
+
+**Estimated Cost Impact:** +$25/month (Log Analytics storage)
+
+Would you like to:
+- Execute plan in **DRY RUN** mode (preview only)
+- Execute plan with **AUTO-APPROVAL**
+- Review detailed changes before execution
 ```
 
-### Scenario 3: Cost Optimization
+### Scenario 3: Cost Optimization Analysis (Cost Management Agent)
 
 ```
-You: @platform Analyze costs for my subscription
+You: @platform Analyze my Azure costs and find optimization opportunities
 
-Platform: 💰 Cost Analysis Summary:
+Platform: 💰 Cost Management Agent
 
-Total monthly spend: $5,234.00
+**Cost Analysis Summary (Last 30 Days)**
 
-Top 5 expensive resources:
+**Total Spend:** $5,234.00
+**Trend:** ↑ 12% vs previous month
+**Forecast (Next 30 Days):** $5,860.00
+
+**Top 5 Expensive Resources:**
 1. AKS Cluster (aks-prod-001): $1,800/month
+   - 10 nodes × Standard_D4s_v3
+   - 98% average utilization
 2. SQL Database (sql-prod-db): $950/month
+   - Business Critical tier
+   - 45% average DTU usage
 3. Storage Account (stprod001): $430/month
-4. VMs (3x Standard_D4s_v3): $1,200/month
+   - Premium SSD, Hot tier
+   - 2.5 TB used
+4. Virtual Machines (3x Standard_D4s_v3): $1,200/month
+   - Running 24/7
+   - Average CPU: 35%
 5. Azure Firewall: $854/month
+   - Standard tier
 
-💡 Optimization opportunities:
-- Switch to Reserved Instances: Save $450/month
-- Enable auto-shutdown for dev VMs: Save $200/month
-- Archive old blob storage: Save $120/month
+💡 **Optimization Opportunities:**
 
-Total potential savings: $770/month (15%)
+**High Impact (Quick Wins):**
+1. **Reserved Instances for VMs** → Save $450/month (38% savings)
+   - 3-year commitment recommended
+2. **Right-size SQL Database** → Save $320/month
+   - Downgrade to General Purpose tier
+   - Current usage supports smaller tier
+3. **Enable Auto-Shutdown for Dev VMs** → Save $200/month
+   - VMs idle after 6 PM and weekends
+
+**Medium Impact:**
+4. **Lifecycle Management for Storage** → Save $120/month
+   - Move to Cool tier after 30 days
+   - Archive after 90 days
+5. **AKS Node Pool Optimization** → Save $180/month
+   - Enable cluster autoscaler
+   - Use spot instances for non-critical workloads
+
+**Total Potential Savings:** $1,270/month (24% reduction)
+**Annual Savings:** $15,240
+
+Would you like me to:
+- Generate implementation plan for top 3 optimizations?
+- Create budget alerts at $5,000/month threshold?
+- Set up cost anomaly detection?
+```
+
+### Scenario 4: Environment Cloning (Environment Agent)
+
+```
+You: @platform Clone production environment to create a new staging environment
+
+Platform: 🌐 Environment Agent
+
+**Environment Cloning Operation**
+
+**Source Environment:** rg-prod
+- Location: East US
+- Resources: 47 resources
+- Tags: env=production, criticality=high
+
+**Target Environment:** rg-staging (to be created)
+
+**Resources to Clone:**
+✅ AKS Cluster (scaled down: 3 → 2 nodes)
+✅ SQL Database (tier: Business Critical → General Purpose)
+✅ Storage Accounts (3)
+✅ Key Vault (new instance, keys rotated)
+✅ Virtual Network + Subnets
+✅ Application Gateway
+✅ Azure Monitor + Log Analytics
+
+**Configuration Changes:**
+- VM sizes: Downscale to Standard_D2s_v3
+- Backup policies: Weekly → None
+- Monitoring: Production → Development tier
+- High availability: Disabled for cost savings
+
+**Estimated Cost:**
+- Production: $5,234/month
+- Staging (cloned): $1,450/month (72% reduction)
+
+**Time to Complete:** ~25 minutes
+
+Proceed with cloning operation?
+
+You: @platform Yes, proceed and notify me when complete
+
+Platform: ✅ **Environment Cloning in Progress...**
+
+[Progress bar: ████████░░ 80%]
+
+**Completed Steps:**
+✓ Resource group created
+✓ Virtual network deployed
+✓ Storage accounts provisioned
+✓ AKS cluster deployment in progress...
+⏳ Configuring monitoring...
+
+**Status:** All resources deployed successfully!
+**Time Taken:** 23 minutes
+**Next Steps:** Update application configs to point to staging endpoints
+```
+
+### Scenario 5: Service Architecture Design (Service Creation Agent)
+
+```
+You: @platform Design a microservice architecture for a real-time order processing system
+
+Platform: 🛠️ Service Creation Agent
+
+**Mission-Based Service Architecture Design**
+
+**Mission:** Real-Time Order Processing Platform
+
+**Recommended Architecture:**
+
+**1. Core Microservices (AKS)**
+   - Order API Service (Node.js/Express)
+   - Payment Processing Service (C#/.NET)
+   - Inventory Service (Python/FastAPI)
+   - Notification Service (Node.js)
+   - Shipping Service (C#/.NET)
+
+**2. Data Layer**
+   - Cosmos DB (Order data, globally distributed)
+   - Azure SQL (Inventory management)
+   - Redis Cache (Session state, rate limiting)
+   - Azure Storage (Order documents, receipts)
+
+**3. Messaging & Events**
+   - Azure Service Bus (order workflow)
+   - Event Grid (event-driven notifications)
+   - Application Insights (distributed tracing)
+
+**4. API Management**
+   - Azure API Management (gateway)
+   - Rate limiting: 1000 req/min per client
+   - OAuth 2.0 + Azure AD B2C
+
+**5. DevOps Pipeline**
+   - GitHub Actions (CI/CD)
+   - Container Registry (ACR)
+   - Helm charts for deployments
+   - Blue-green deployment strategy
+
+**Estimated Monthly Cost:** $2,850
+**Expected Throughput:** 10,000 orders/hour
+**SLA Target:** 99.95% availability
+
+Would you like me to:
+- Generate complete Bicep/Terraform templates?
+- Create service scaffolding code?
+- Set up DevOps pipelines?
 ```
 
 ---
 
 ## 🏗️ Architecture
 
+The extension integrates with the **Platform Engineering Copilot Multi-Agent MCP Server**, which orchestrates 7 specialized agents using Semantic Kernel and GPT-4.
+
 ```
 GitHub Copilot Chat (@platform)
     ↓
 VS Code Extension (TypeScript)
     ↓
-Platform API Client (Axios)
+HTTP Client (Axios)
     ↓
-Platform Copilot API (:7001)
-    ↓
-Semantic Kernel + GPT-4
-    ↓
-Azure Resources
+┌─────────────────────────────────────────────────────────┐
+│  Platform MCP Server (Port 5100)                        │
+│  Dual Mode: HTTP + stdio                                │
+│                                                          │
+│  ┌─────────────────────────────────────────────┐       │
+│  │   OrchestratorAgent (Semantic Kernel)       │       │
+│  │   - Intent Classification                   │       │
+│  │   - Execution Planning                      │       │
+│  │   - Multi-Agent Coordination                │       │
+│  └─────────────────────────────────────────────┘       │
+│                       ↓                                  │
+│  ┌────────────────────────────────────────────────────┐│
+│  │        7 Specialized Agents (ISpecializedAgent)    ││
+│  ├────────────────────────────────────────────────────┤│
+│  │ 🏗️  Infrastructure Agent                           ││
+│  │ 🔒 Compliance Agent (NIST, ATO, eMASS)            ││
+│  │ 💰 Cost Management Agent                          ││
+│  │ 🌐 Environment Agent                              ││
+│  │ 🔍 Discovery Agent                                ││
+│  │ 🛠️  Service Creation Agent                        ││
+│  │ 📄 Document Agent                                 ││
+│  └────────────────────────────────────────────────────┘│
+│                       ↓                                  │
+│  ┌─────────────────────────────────────────────┐       │
+│  │   Azure Resource Manager                    │       │
+│  │   - Bicep/ARM Templates                     │       │
+│  │   - Terraform Providers                     │       │
+│  │   - Azure SDK                               │       │
+│  └─────────────────────────────────────────────┘       │
+└─────────────────────────────────────────────────────────┘
+                       ↓
+        ┌──────────────────────────────┐
+        │     Azure Resources          │
+        │  (Compute, Network, Storage, │
+        │   Security, Cost Management) │
+        └──────────────────────────────┘
 ```
 
-### Components
+### Key Components
 
-**1. Chat Participant** (`chatParticipant.ts`)
-- Handles GitHub Copilot Chat requests
-- Routes to Platform API
+**1. GitHub Copilot Chat Participant** (`chatParticipant.ts`)
+- Handles `@platform` chat requests
+- Routes prompts to MCP server
 - Formats responses with rich markdown
-- Manages conversation history
+- Manages conversation context
+- Provides action buttons (export, share, Azure Portal links)
 
-**2. Platform API Client** (`services/platformApiClient.ts`)
-- HTTP client for Platform API
+**2. MCP HTTP Client** (`services/mcpClient.ts`)
+- Axios-based HTTP client
 - Request/response interceptors
-- Error handling with retry logic
-- Typed interfaces for all operations
+- Comprehensive error handling
+- Typed TypeScript interfaces
+- Support for all agent operations:
+  - Chat messaging (`/mcp/chat`)
+  - Code analysis (`/mcp/analyze-code`)
+  - Repository scanning (`/mcp/analyze-repository`)
+  - Health checks (`/health`)
 
-**3. Configuration Manager** (`config.ts`)
-- Centralized settings management
-- Validation and logging
-- Hot-reload on settings changes
+**3. MCP Server (Backend - .NET 9)**
+- **OrchestratorAgent**: AI-powered intent classification and task routing
+- **7 Specialized Agents**: Each with domain expertise and plugins
+- **Semantic Kernel Integration**: GPT-4 for natural language understanding
+- **Database**: Entity Framework Core with SQL Server/SQLite
+- **Dual Protocol Support**: HTTP (port 5100) + stdio (for AI tools)
+
+**4. Configuration Manager** (`config.ts`)
+- Centralized VS Code settings management
+- Dynamic configuration updates
+- Debug logging to Output panel
+- API key management (optional)
+
+### Agent Orchestration Flow
+
+1. **User Input**: Natural language request via `@platform` in GitHub Copilot Chat
+2. **Extension Processing**: ChatParticipant validates and forwards to MCP server
+3. **Intent Classification**: OrchestratorAgent analyzes request using GPT-4
+4. **Agent Selection**: Routes to appropriate specialized agent(s)
+5. **Execution**: Agent executes using Azure SDK, Semantic Kernel plugins
+6. **Response**: Formatted markdown with metadata, action buttons
+7. **Follow-up**: Optional follow-up prompts for multi-step workflows
+
+### Recent Fixes (November 2024)
+
+**Fixed:** Duplicate agent registration issue
+- **Problem**: Multiple sub-agents (CodeScanningAgent, AtoPreparationAgent, DocumentAgent) were registered as `ISpecializedAgent` with the same `AgentType.Compliance`
+- **Impact**: OrchestratorAgent constructor failed with "duplicate key" error
+- **Solution**: Only `ComplianceAgent` is registered as `ISpecializedAgent`; sub-agents registered by concrete type
+- **Result**: ✅ All 7 agents now load successfully without conflicts
 
 ---
 
@@ -309,7 +709,7 @@ platform-engineering-copilot-github/
 │   ├── chatParticipant.ts        # GitHub Copilot Chat handler
 │   ├── config.ts                 # Configuration management
 │   └── services/
-│       └── platformApiClient.ts  # Platform API client
+│       └── platformApiClient.ts  # MCP HTTP client (legacy name)
 ├── package.json                  # Extension manifest
 ├── tsconfig.json                 # TypeScript configuration
 ├── .env.example                  # Environment template
@@ -361,7 +761,7 @@ npm test
 
 ```json
 {
-  "platform-copilot.apiUrl": "https://platform-api.azurewebsites.us",
+  "platform-copilot.apiUrl": "https://mcp.yourdomain.com",
   "platform-copilot.apiKey": "your-production-api-key",
   "platform-copilot.timeout": 120000,
   "platform-copilot.enableLogging": false
@@ -372,7 +772,7 @@ npm test
 
 ```json
 {
-  "platform-copilot.apiUrl": "http://localhost:7001",
+  "platform-copilot.apiUrl": "http://localhost:5100",
   "platform-copilot.apiKey": "",
   "platform-copilot.timeout": 60000,
   "platform-copilot.enableLogging": true
@@ -383,7 +783,7 @@ npm test
 
 ```json
 {
-  "platform-copilot.apiUrl": "https://platform-api-dev.azurewebsites.us",
+  "platform-copilot.apiUrl": "https://mcp-dev.yourdomain.com",
   "platform-copilot.apiKey": "dev-api-key",
   "platform-copilot.timeout": 90000,
   "platform-copilot.enableLogging": true
@@ -396,46 +796,208 @@ npm test
 
 ### Extension Not Activating
 
-**Problem**: Extension doesn't appear in GitHub Copilot Chat
+**Problem**: `@platform` participant doesn't appear in GitHub Copilot Chat
 
 **Solutions**:
-1. Verify GitHub Copilot Chat is installed and enabled
-2. Check VS Code version (must be 1.90.0+)
-3. Reload VS Code: `Developer: Reload Window`
-4. Check Output panel: `View > Output > Platform Engineering Copilot`
+1. Verify GitHub Copilot Chat extension is installed and enabled
+2. Check VS Code version: `code --version` (must be 1.90.0+)
+3. Reload VS Code: `Developer: Reload Window` (Cmd+Shift+P)
+4. Check extension is enabled: Extensions panel → Platform Engineering Copilot
+5. Review Output panel: `View → Output → Platform Engineering Copilot`
 
-### Cannot Connect to Platform API
+### Cannot Reach MCP Server
 
-**Problem**: `Could not reach Platform API` error
+**Problem**: Extension reports connection errors to MCP server
 
 **Solutions**:
-1. Verify Platform API is running:
+1. **Verify MCP server is running:**
    ```bash
-   curl http://localhost:7001/health
+   curl http://localhost:5100/health
+   # Expected: {"status":"healthy","mode":"dual (http+stdio)","server":"Platform Engineering Copilot MCP","version":"1.0.0"}
    ```
-2. Check API URL in settings
-3. Run command: `Platform Copilot: Check Platform API Health`
-4. Review firewall/network settings
+
+2. **Start MCP server if not running:**
+   ```bash
+   # Using Docker (recommended)
+   docker-compose -f docker-compose.essentials.yml up -d
+   
+   # Check container status
+   docker ps | grep mcp
+   
+   # View logs
+   docker logs plaform-engineering-copilot-mcp --tail 50
+   ```
+
+3. **Check VS Code settings:**
+   - Open Settings: `Cmd+,` (Mac) or `Ctrl+,` (Windows/Linux)
+   - Search for: `platform-copilot.apiUrl`
+   - Verify URL matches MCP server: `http://localhost:5100`
+
+4. **Run health check command:**
+   - Open Command Palette: `Cmd+Shift+P`
+   - Run: `Platform Copilot: Check Platform API Health`
+
+5. **Check firewall/network:**
+   - Ensure port 5100 is not blocked
+   - If using remote MCP server, verify network connectivity
+   - Check firewall rules on both client and server
 
 ### Timeout Errors
 
-**Problem**: Requests timing out
+**Problem**: Requests timing out, especially for complex operations
 
 **Solutions**:
-1. Increase timeout in settings: `platform-copilot.timeout`
-2. Check Platform API performance
-3. Verify network connectivity
-4. Review API logs for slow operations
+1. **Increase timeout in settings:**
+   ```json
+   {
+     "platform-copilot.timeout": 120000  // 2 minutes (default: 60s)
+   }
+   ```
+
+2. **Check MCP server performance:**
+   ```bash
+   # View CPU/memory usage
+   docker stats plaform-engineering-copilot-mcp
+   ```
+
+3. **Review server logs for slow operations:**
+   ```bash
+   docker logs plaform-engineering-copilot-mcp | grep -i "error\|timeout\|slow"
+   ```
+
+4. **Verify Azure OpenAI service availability:**
+   - Check Azure OpenAI endpoint is responding
+   - Verify API key/credentials are valid
+   - Check rate limiting and quotas
 
 ### Chat Participant Not Responding
 
-**Problem**: `@platform` doesn't respond
+**Problem**: `@platform` doesn't respond to prompts
 
 **Solutions**:
-1. Check if extension is activated (green checkmark in Extensions panel)
-2. Look for errors in Output panel
-3. Verify GitHub Copilot subscription is active
-4. Try reloading VS Code
+1. **Check extension activation:**
+   - Extensions panel → Platform Engineering Copilot (should have green checkmark)
+   - If not activated, reload: `Developer: Reload Window`
+
+2. **Check Output panel for errors:**
+   - `View → Output`
+   - Select: `Platform Engineering Copilot` from dropdown
+   - Look for error messages or stack traces
+
+3. **Verify GitHub Copilot subscription:**
+   - Ensure active GitHub Copilot subscription
+   - Check Copilot status: `GitHub Copilot: Sign In/Out`
+
+4. **Test MCP server directly:**
+   ```bash
+   curl -X POST http://localhost:5100/mcp/chat \
+     -H "Content-Type: application/json" \
+     -d '{"message":"test","conversationId":"test-123"}'
+   ```
+
+5. **Reinstall extension:**
+   ```bash
+   # Uninstall
+   code --uninstall-extension platform-copilot-github
+   
+   # Reinstall
+   code --install-extension platform-copilot-github-1.0.0.vsix
+   ```
+
+### Agent-Specific Issues
+
+**Problem**: Specific agent functionality not working (e.g., Compliance, Cost Management)
+
+**Solutions**:
+1. **Check agent configuration in MCP server:**
+   ```bash
+   # View appsettings.json to verify enabled agents
+   docker exec plaform-engineering-copilot-mcp cat /app/appsettings.json | jq '.AgentConfiguration'
+   ```
+
+2. **Verify all 7 agents loaded:**
+   ```bash
+   docker logs plaform-engineering-copilot-mcp | grep -i "agent.*enabled\|agent.*initialized"
+   # Expected: 7 agents (Infrastructure, Compliance, CostManagement, Environment, Discovery, ServiceCreation, Document)
+   ```
+
+3. **Check for dependency injection errors:**
+   ```bash
+   docker logs plaform-engineering-copilot-mcp | grep -i "error\|exception"
+   ```
+
+4. **Restart MCP container:**
+   ```bash
+   docker-compose -f docker-compose.essentials.yml restart platform-mcp
+   ```
+
+### Database Connection Issues
+
+**Problem**: MCP server errors related to database connectivity
+
+**Solutions**:
+1. **Check SQL Server container:**
+   ```bash
+   docker ps | grep sqlserver
+   docker logs plaform-engineering-copilot-sqlserver
+   ```
+
+2. **Verify connection string:**
+   ```bash
+   docker exec plaform-engineering-copilot-mcp printenv | grep ConnectionStrings
+   ```
+
+3. **Test database connectivity:**
+   ```bash
+   docker exec plaform-engineering-copilot-sqlserver /opt/mssql-tools/bin/sqlcmd \
+     -S localhost -U sa -P 'SupervisorDB123!' -Q "SELECT @@VERSION"
+   ```
+
+### Performance Issues
+
+**Problem**: Extension or MCP server responding slowly
+
+**Solutions**:
+1. **Check resource usage:**
+   ```bash
+   docker stats
+   ```
+
+2. **Increase Docker resources:**
+   - Docker Desktop → Settings → Resources
+   - Increase CPUs: 4+ cores recommended
+   - Increase Memory: 8GB+ recommended
+
+3. **Enable caching in MCP server:**
+   - Execution plan caching is enabled by default
+   - Check cache hit rate in logs
+
+4. **Review OpenAI API latency:**
+   ```bash
+   docker logs plaform-engineering-copilot-mcp | grep "OpenAI\|GPT-4"
+   ```
+
+### Debug Mode
+
+**Enable verbose logging for troubleshooting:**
+
+```json
+{
+  "platform-copilot.enableLogging": true
+}
+```
+
+Then check Output panel: `View → Output → Platform Engineering Copilot`
+
+**Enable MCP server debug logging:**
+```bash
+# Edit docker-compose.essentials.yml
+environment:
+  - Logging__LogLevel__Default=Debug
+  
+# Restart
+docker-compose -f docker-compose.essentials.yml restart platform-mcp
+```
 
 ---
 
@@ -445,7 +1007,7 @@ npm test
 - [GitHub Copilot Integration Guide](../../docs/GITHUB-COPILOT-INTEGRATION.md)
 - [M365 Copilot Integration Guide](../../docs/M365-COPILOT-INTEGRATION.md)
 - [Chat Application Integration](../../docs/CHAT-APPLICATION-INTEGRATION.md)
-- [Platform API Documentation](../../README.md)
+- [MCP Server Documentation](../../docs/DEVELOPMENT.md)
 
 ---
 
@@ -463,31 +1025,173 @@ MIT License - see [LICENSE](LICENSE) for details
 
 ## 🎉 What's New
 
-### Version 1.0.0 (Current)
+### Version 1.0.0 (November 2024)
 
-- ✅ Complete refactor with modern architecture
-- ✅ Aligned with M365 Copilot extension patterns
-- ✅ Improved error handling and logging
-- ✅ Centralized configuration management
-- ✅ Better TypeScript types and interfaces
-- ✅ Removed obsolete MCP parser code
-- ✅ Added health check commands
-- ✅ Enhanced chat participant with rich responses
-- ✅ Added Azure Portal integration buttons
+**✅ Major Updates:**
+- **Fixed duplicate agent registration bug** - All 7 specialized agents now load correctly
+- **Full multi-agent support** - Infrastructure, Compliance, Cost, Environment, Discovery, Service Creation, Document agents
+- **Enhanced MCP integration** - Stable HTTP + stdio dual-mode server
+- **Complete refactor** - Modern TypeScript architecture aligned with VS Code best practices
+- **Improved error handling** - Better error messages and troubleshooting guidance
+- **Centralized configuration** - Simplified settings management
+- **Rich chat responses** - Formatted markdown with metadata and action buttons
+- **Azure Portal integration** - Quick links to resources in Azure Portal
+
+**🏗️ Architecture Improvements:**
+- OrchestratorAgent with Semantic Kernel for intelligent task routing
+- Entity Framework Core 9.0 with dual database support (SQLite dev, SQL Server prod)
+- Comprehensive dependency injection with all services registered
+- Docker containerization with docker-compose support
+- Database migrations and seed data
+
+**📚 Documentation:**
+- Complete README with all 7 agent examples
+- Detailed troubleshooting guide
+- Architecture diagrams
+- Example workflows for each agent
+
+**🔧 Technical Enhancements:**
+- TypeScript strict mode enabled
+- Better type safety with comprehensive interfaces
+- Request/response interceptors for debugging
+- Health check commands
+- Conversation context management
+- Timeout configuration
+
+**✨ Agent Capabilities:**
+1. **Infrastructure Agent**: Bicep/Terraform deployment, network topology design, IaC generation
+2. **Compliance Agent**: NIST 800-53/171, ISO 27001, SOC 2, ATO documentation, eMASS packages
+3. **Cost Management Agent**: Real-time estimation, optimization recommendations, budget forecasting
+4. **Environment Agent**: Multi-environment lifecycle, cloning, blue-green deployments
+5. **Discovery Agent**: Resource inventory, dependency mapping, orphan detection
+6. **Service Creation Agent**: Microservice architecture, DevOps pipelines, service templates
+7. **Document Agent**: Technical docs, architecture diagrams, compliance documentation
 
 ### Removed (Obsolete)
 
-- ❌ Universal MCP Parser (no longer needed)
-- ❌ MCP Client (replaced with direct API integration)
-- ❌ Legacy command handlers
-- ❌ Test commands and debug utilities
+- ❌ Universal MCP Parser (no longer needed with direct HTTP integration)
+- ❌ Legacy MCP Client (replaced with modern Axios-based client)
+- ❌ Test commands and debug utilities (replaced with proper health checks)
+- ❌ Duplicate agent registrations (fixed registration pattern)
+
+### Known Issues
+
+- **Azure OpenAI function name length**: Some plugin function names exceed 64-character limit
+  - Impact: Certain complex operations may fail
+  - Workaround: Function names being shortened in next release
+  - Tracking: Issue #42
+
+### Upcoming Features (Roadmap)
+
+**Q1 2025:**
+- [ ] Security Agent integration (dedicated security operations)
+- [ ] Monitoring Agent (Azure Monitor, Application Insights integration)
+- [ ] Multi-subscription support
+- [ ] Template library browser
+- [ ] Cost prediction ML models
+
+**Q2 2025:**
+- [ ] CI/CD pipeline generation
+- [ ] Infrastructure drift detection
+- [ ] Automated compliance remediation execution
+- [ ] Policy-as-Code enforcement engine
+- [ ] GitOps integration (ArgoCD, Flux)
+
+**Future:**
+- [ ] M365 Copilot integration (Teams, Outlook)
+- [ ] Slack/Discord bot support
+- [ ] Mobile companion app
+- [ ] AI-powered cost forecasting
+- [ ] Automated architecture review
 
 ---
 
 ## 📧 Support
 
-For issues and feature requests, please use the GitHub repository issue tracker.
+For issues, feature requests, and contributions:
+
+- **GitHub Issues**: [platform-engineering-copilot/issues](https://github.com/azurenoops/platform-engineering-copilot/issues)
+- **Documentation**: [docs/](../../docs/)
+- **Discord Community**: [Join us](https://discord.gg/azurenoops) _(coming soon)_
+
+### Reporting Issues
+
+When reporting issues, please include:
+1. VS Code version (`code --version`)
+2. Extension version (check Extensions panel)
+3. MCP server health check output (`curl http://localhost:5100/health`)
+4. Relevant logs from Output panel
+5. Steps to reproduce
+
+### Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
+
+**Development Setup:**
+```bash
+# Fork and clone the repository
+git clone https://github.com/YOUR-USERNAME/platform-engineering-copilot.git
+cd platform-engineering-copilot/extensions/platform-engineering-copilot-github
+
+# Install dependencies
+npm install
+
+# Make changes and test
+npm run compile
+code --extensionDevelopmentPath=.
+
+# Submit pull request
+```
+
+---
+
+## 🔗 Related Resources
+
+- **Main Documentation**: [Platform Engineering Copilot Docs](../../docs/)
+- **GitHub Copilot Integration**: [GITHUB-COPILOT-INTEGRATION.md](../../docs/GITHUB-COPILOT-INTEGRATION.md)
+- **M365 Copilot Extension**: [../platform-engineering-copilot-m365/](../platform-engineering-copilot-m365/)
+- **MCP Server**: [src/Platform.Engineering.Copilot.Mcp/](../../src/Platform.Engineering.Copilot.Mcp/)
+- **Architecture**: [ARCHITECTURE.md](../../docs/ARCHITECTURE.md)
+- **Deployment Guide**: [DEPLOYMENT.md](../../docs/DEPLOYMENT.md)
+- **Development Guide**: [DEVELOPMENT.md](../../docs/DEVELOPMENT.md)
+
+---
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+Copyright (c) 2024 Azure NoOps Team
+
+---
+
+## 🙏 Acknowledgments
+
+Built with:
+- **Semantic Kernel** - AI orchestration framework
+- **Azure OpenAI** - GPT-4 language models
+- **GitHub Copilot** - AI pair programmer
+- **Model Context Protocol (MCP)** - AI agent communication standard
+- **.NET 9** - Modern application platform
+- **TypeScript** - Type-safe JavaScript
+- **VS Code Extension API** - Rich editor integration
+
+Special thanks to:
+- Microsoft Semantic Kernel team
+- GitHub Copilot team  
+- Azure NoOps community
+- All contributors and users
+
+---
+
+## 🌟 Star History
+
+If you find this extension useful, please consider starring the repository!
+
+[![Star History Chart](https://api.star-history.com/svg?repos=azurenoops/platform-engineering-copilot&type=Date)](https://star-history.com/#azurenoops/platform-engineering-copilot&Date)
 
 ---
 
 **Built with ❤️ by the Azure NoOps Team**
+
+*Empowering platform engineers with AI-powered Azure infrastructure management*

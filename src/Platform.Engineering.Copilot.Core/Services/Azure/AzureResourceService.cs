@@ -1,15 +1,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Platform.Engineering.Copilot.Core.Configuration;
-using Platform.Engineering.Copilot.Core.Interfaces;
-using AzureResource = Platform.Engineering.Copilot.Core.Models.AzureResource;
-using System.Net;
-using Azure.ResourceManager.Network;
-using Platform.Engineering.Copilot.Core.Models;
 using Azure.ResourceManager;
-using Azure.Core;
 using Azure.Identity;
+using Azure.Core;
 using Azure.ResourceManager.Resources;
 using Azure;
 using Azure.ResourceManager.ContainerService;
@@ -18,7 +12,10 @@ using Azure.ResourceManager.AppService;
 using Azure.ResourceManager.AppService.Models;
 using Azure.ResourceManager.Storage.Models;
 using Azure.ResourceManager.Storage;
-using Azure.ResourceManager.Network.Models;
+using Platform.Engineering.Copilot.Core.Configuration;
+using Platform.Engineering.Copilot.Core.Interfaces.Azure;
+using Platform.Engineering.Copilot.Core.Models.Azure;
+using Platform.Engineering.Copilot.Core.Models;
 
 namespace Platform.Engineering.Copilot.Core.Services.Azure;
 
@@ -50,11 +47,17 @@ public class AzureResourceService : IAzureResourceService
         {
             try
             {
+                // Configure credential for Azure Government
+                var credentialOptions = new DefaultAzureCredentialOptions
+                {
+                    AuthorityHost = AzureAuthorityHosts.AzureGovernment
+                };
+
                 TokenCredential credential = _options.UseManagedIdentity 
-                    ? new DefaultAzureCredential()
+                    ? new DefaultAzureCredential(credentialOptions)
                     : new ChainedTokenCredential(
-                        new AzureCliCredential(),
-                        new DefaultAzureCredential()
+                        new AzureCliCredential(new AzureCliCredentialOptions { AuthorityHost = AzureAuthorityHosts.AzureGovernment }),
+                        new DefaultAzureCredential(credentialOptions)
                     );
 
                 // Configure for Azure Government environment
@@ -96,28 +99,97 @@ public class AzureResourceService : IAzureResourceService
         return subId;
     }
 
-    public async Task<IEnumerable<object>> ListResourceGroupsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Extracts the resource group name from an Azure resource ID
+    /// </summary>
+    private string ExtractResourceGroupFromId(string resourceId)
+    {
+        // Azure resource ID format: /subscriptions/{sub}/resourceGroups/{rg}/providers/{provider}/{type}/{name}
+        var parts = resourceId.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < parts.Length - 1; i++)
+        {
+            if (parts[i].Equals("resourceGroups", StringComparison.OrdinalIgnoreCase))
+            {
+                return parts[i + 1];
+            }
+        }
+        return string.Empty;
+    }
+
+    public async Task<IEnumerable<AzureResource>> ListAllResourcesInResourceGroupAsync(string subscriptionId, string resourceGroupName, CancellationToken cancellationToken = default)
     {
         if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
         
         var subscription = _armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(GetSubscriptionId(subscriptionId)));
-        var resourceGroups = new List<object>();
+        var resourceGroup = await subscription.GetResourceGroups().GetAsync(resourceGroupName, cancellationToken);
+        
+        var resources = new List<AzureResource>();
+        await foreach (var resource in resourceGroup.Value.GetGenericResourcesAsync(cancellationToken: cancellationToken))
+        {
+            resources.Add(new AzureResource
+            {
+                Name = resource.Data.Name,
+                Type = resource.Data.ResourceType.ToString(),
+                Location = resource.Data.Location.ToString(),
+                Id = resource.Data.Id.ToString(),
+                ResourceGroup = resourceGroupName,
+                Tags = new Dictionary<string, string>(resource.Data.Tags)
+            });
+        }
+
+        return resources;
+    }
+
+    public async Task<IEnumerable<AzureResource>> ListAllResourceGroupsInSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
+    {
+        if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
+        
+        var subscription = _armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(GetSubscriptionId(subscriptionId)));
+        var resourceGroups = new List<AzureResource>();
         
         await foreach (var resourceGroup in subscription.GetResourceGroups().GetAllAsync(cancellationToken: cancellationToken))
         {
-            resourceGroups.Add(new
+            resourceGroups.Add(new AzureResource
             {
-                name = resourceGroup.Data.Name,
-                location = resourceGroup.Data.Location.ToString(),
-                id = resourceGroup.Data.Id.ToString(),
-                tags = resourceGroup.Data.Tags
+                Name = resourceGroup.Data.Name,
+                Location = resourceGroup.Data.Location.ToString(),
+                Id = resourceGroup.Data.Id.ToString(),
+                Type = "Microsoft.Resources/resourceGroups",
+                ResourceGroup = resourceGroup.Data.Name,
+                Tags = new Dictionary<string, string>(resourceGroup.Data.Tags)
             });
         }
 
         return resourceGroups;
     }
 
-    public async Task<object?> GetResourceGroupAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<AzureResource>> ListAllResourcesAsync(string subscriptionId, CancellationToken cancellationToken = default)
+    {
+        if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
+        
+        var subscription = _armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(GetSubscriptionId(subscriptionId)));
+        var resources = new List<AzureResource>();
+        
+        await foreach (var resource in subscription.GetGenericResourcesAsync(cancellationToken: cancellationToken))
+        {
+            // Extract resource group name from ID (format: /subscriptions/{sub}/resourceGroups/{rg}/...)
+            var resourceGroup = ExtractResourceGroupFromId(resource.Data.Id.ToString());
+            
+            resources.Add(new AzureResource
+            {
+                Name = resource.Data.Name,
+                Type = resource.Data.ResourceType.ToString(),
+                Location = resource.Data.Location.ToString(),
+                Id = resource.Data.Id.ToString(),
+                ResourceGroup = resourceGroup,
+                Tags = new Dictionary<string, string>(resource.Data.Tags)
+            });
+        }
+
+        return resources;
+    }
+
+    public async Task<AzureResource?> GetResourceGroupAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default)
     {
         if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
         
@@ -141,12 +213,14 @@ public class AzureResourceService : IAzureResourceService
             var subscription = _armClient.GetSubscriptionResource(resourceId);
             var resourceGroup = await subscription.GetResourceGroups().GetAsync(resourceGroupName, cancellationToken);
 
-            return new
+            return new AzureResource
             {
-                name = resourceGroup.Value.Data.Name,
-                location = resourceGroup.Value.Data.Location.ToString(),
-                id = resourceGroup.Value.Data.Id.ToString(),
-                tags = resourceGroup.Value.Data.Tags
+                Name = resourceGroup.Value.Data.Name,
+                Location = resourceGroup.Value.Data.Location.ToString(),
+                Id = resourceGroup.Value.Data.Id.ToString(),
+                Type = "Microsoft.Resources/resourceGroups",
+                ResourceGroup = resourceGroup.Value.Data.Name,
+                Tags = new Dictionary<string, string>(resourceGroup.Value.Data.Tags)
             };
         }
         catch (global::Azure.RequestFailedException ex) when (ex.Status == 404)
@@ -156,7 +230,30 @@ public class AzureResourceService : IAzureResourceService
         }
     }
 
-    public async Task<object> CreateResourceGroupAsync(string resourceGroupName, string location, string? subscriptionId = null, Dictionary<string, string>? tags = null, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<AzureResource>> ListResourceGroupsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default)
+    {
+        if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
+        
+        var subscription = _armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(GetSubscriptionId(subscriptionId)));
+        var resourceGroups = new List<AzureResource>();
+        
+        await foreach (var resourceGroup in subscription.GetResourceGroups().GetAllAsync(cancellationToken: cancellationToken))
+        {
+            resourceGroups.Add(new AzureResource
+            {
+                Name = resourceGroup.Data.Name,
+                Location = resourceGroup.Data.Location.ToString(),
+                Id = resourceGroup.Data.Id.ToString(),
+                Type = "Microsoft.Resources/resourceGroups",
+                ResourceGroup = resourceGroup.Data.Name,
+                Tags = new Dictionary<string, string>(resourceGroup.Data.Tags)
+            });
+        }
+
+        return resourceGroups;
+    }
+
+    public async Task<AzureResource> CreateResourceGroupAsync(string resourceGroupName, string location, string? subscriptionId = null, Dictionary<string, string>? tags = null, CancellationToken cancellationToken = default)
     {
         if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
         
@@ -177,13 +274,14 @@ public class AzureResourceService : IAzureResourceService
             resourceGroupData, 
             cancellationToken);
 
-        return new
+        return new AzureResource
         {
-            name = resourceGroupResult.Value.Data.Name,
-            location = resourceGroupResult.Value.Data.Location.ToString(),
-            id = resourceGroupResult.Value.Data.Id.ToString(),
-            tags = resourceGroupResult.Value.Data.Tags,
-            created = true
+            Name = resourceGroupResult.Value.Data.Name,
+            Location = resourceGroupResult.Value.Data.Location.ToString(),
+            Id = resourceGroupResult.Value.Data.Id.ToString(),
+            Type = "Microsoft.Resources/resourceGroups",
+            ResourceGroup = resourceGroupResult.Value.Data.Name,
+            Tags = new Dictionary<string, string>(resourceGroupResult.Value.Data.Tags)
         };
     }
 
@@ -212,69 +310,47 @@ public class AzureResourceService : IAzureResourceService
         }
     }
 
-    public async Task<IEnumerable<object>> ListResourcesAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<AzureSubscription>> ListSubscriptionsAsync(CancellationToken cancellationToken = default)
     {
         if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
         
-        var subscription = _armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(GetSubscriptionId(subscriptionId)));
-        var resourceGroup = await subscription.GetResourceGroups().GetAsync(resourceGroupName, cancellationToken);
-        
-        var resources = new List<object>();
-        await foreach (var resource in resourceGroup.Value.GetGenericResourcesAsync(cancellationToken: cancellationToken))
-        {
-            resources.Add(new
-            {
-                name = resource.Data.Name,
-                type = resource.Data.ResourceType.ToString(),
-                location = resource.Data.Location.ToString(),
-                id = resource.Data.Id.ToString(),
-                tags = resource.Data.Tags
-            });
-        }
-
-        return resources;
-    }
-
-
-
-    public async Task<IEnumerable<object>> ListSubscriptionsAsync(CancellationToken cancellationToken = default)
-    {
-        if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
-        
-        var subscriptions = new List<object>();
+        var subscriptions = new List<AzureSubscription>();
         await foreach (var subscription in _armClient.GetSubscriptions().GetAllAsync(cancellationToken: cancellationToken))
         {
-            subscriptions.Add(new
+            subscriptions.Add(new AzureSubscription
             {
-                subscriptionId = subscription.Data.SubscriptionId,
-                displayName = subscription.Data.DisplayName,
-                state = subscription.Data.State?.ToString(),
-                tenantId = subscription.Data.TenantId?.ToString()
+                SubscriptionId = subscription.Data.SubscriptionId ?? string.Empty,
+                SubscriptionName = subscription.Data.DisplayName ?? string.Empty,
+                State = subscription.Data.State?.ToString() ?? string.Empty,
+                TenantId = subscription.Data.TenantId?.ToString() ?? string.Empty
             });
         }
 
         return subscriptions;
     }
 
-    public async Task<object> GetResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+    public async Task<AzureResource?> GetResourceAsync(string resourceId, CancellationToken cancellationToken = default)
     {
         if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
         
-        var resource = _armClient.GetGenericResource(global::Azure.Core.ResourceIdentifier.Parse(resourceId));
+        var resource = _armClient?.GetGenericResource(global::Azure.Core.ResourceIdentifier.Parse(resourceId!));
+        if (resource == null) return null;
+        
         var resourceData = await resource.GetAsync(cancellationToken);
+        var resourceGroup = ExtractResourceGroupFromId(resourceData.Value.Data.Id.ToString());
 
-        return new
+        return new AzureResource
         {
-            name = resourceData.Value.Data.Name,
-            type = resourceData.Value.Data.ResourceType.ToString(),
-            location = resourceData.Value.Data.Location.ToString(),
-            id = resourceData.Value.Data.Id.ToString(),
-            tags = resourceData.Value.Data.Tags,
-            properties = resourceData.Value.Data.Properties
+            Name = resourceData.Value.Data.Name,
+            Type = resourceData.Value.Data.ResourceType.ToString(),
+            Location = resourceData.Value.Data.Location.ToString(),
+            Id = resourceData.Value.Data.Id.ToString(),
+            ResourceGroup = resourceGroup,
+            Tags = new Dictionary<string, string>(resourceData.Value.Data.Tags)
         };
     }
 
-    public async Task<object?> GetResourceAsync(string subscriptionId, string resourceGroupName, string resourceType, string resourceName, CancellationToken cancellationToken = default)
+    public async Task<AzureResource?> GetResourceAsync(string subscriptionId, string resourceGroupName, string resourceType, string resourceName, CancellationToken cancellationToken = default)
     {
         if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
         
@@ -291,30 +367,45 @@ public class AzureResourceService : IAzureResourceService
         }
     }
 
-    public async Task<IEnumerable<object>> ListLocationsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<AzureResource>> ListLocationsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default)
     {
         if (_armClient == null) throw new InvalidOperationException("Azure ARM client not available");
         
         var subscription = _armClient.GetSubscriptionResource(SubscriptionResource.CreateResourceIdentifier(GetSubscriptionId(subscriptionId)));
-        var locations = new List<object>();
+        var locations = new List<AzureResource>();
 
         await foreach (var location in subscription.GetLocationsAsync(cancellationToken: cancellationToken))
         {
-            locations.Add(new
+            locations.Add(new AzureResource
             {
-                name = location.Name,
-                displayName = location.DisplayName,
-                id = location.Id?.ToString(),
-                latitude = location.Metadata?.Latitude,
-                longitude = location.Metadata?.Longitude
+                Name = location.Name ?? string.Empty,
+                Type = "Microsoft.Resources/locations",
+                Location = location.Name ?? string.Empty,
+                Id = location.Id?.ToString() ?? string.Empty,
+                ResourceGroup = string.Empty,
+                Tags = new Dictionary<string, string>()
             });
         }
 
         return locations;
     }
 
-    // Additional helper methods for Extension tools
-    public async Task<object> CreateResourceAsync(
+    // Interface-compliant wrapper - TODO: Implement proper conversion from object to AzureResource
+    public async Task<AzureResource> CreateResourceAsync(
+        string resourceGroupName,
+        string resourceType,
+        string resourceName,
+        object properties,
+        string? subscriptionId = null,
+        string location = "eastus",
+        Dictionary<string, string>? tags = null,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException("CreateResourceAsync with AzureResource return type not yet implemented. Use specialized create methods instead.");
+    }
+
+    // Additional helper methods for Extension tools - Legacy implementation
+    internal async Task<object> CreateResourceAsyncInternalAsync(
         string resourceGroupName,
         string resourceType,
         string resourceName,
@@ -1185,39 +1276,7 @@ public class AzureResourceService : IAzureResourceService
     /// <summary>
     /// Lists diagnostic settings for a specific resource
     /// </summary>
-    public async Task<IEnumerable<DiagnosticSettingInfo>> ListDiagnosticSettingsForResourceAsync(string resourceId, CancellationToken cancellationToken = default)
-    {
-        if (_armClient == null)
-        {
-            _logger.LogError("ARM client not initialized - cannot list diagnostic settings");
-            return new List<DiagnosticSettingInfo>();
-        }
 
-        try
-        {
-            _logger.LogInformation("Listing diagnostic settings for resource {ResourceId}", resourceId);
-
-            var diagnosticSettings = new List<DiagnosticSettingInfo>();
-
-            // For NSG flow logs, we need to check for diagnostic settings
-            // NSG flow logs are a specific type of diagnostic setting
-            // This is a simplified check - in production, you'd query Microsoft.Insights/diagnosticSettings
-            
-            // For now, return a placeholder that checks for common diagnostic setting patterns
-            // The actual implementation would require querying the Management API
-            
-            _logger.LogDebug("Diagnostic settings query for {ResourceId} - implementation simplified for initial deployment", resourceId);
-            
-            // Return empty list - the calling code will handle this gracefully
-            // This allows the scanner to compile and run, with flow log detection to be enhanced later
-            return diagnosticSettings;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to list diagnostic settings for resource {ResourceId}", resourceId);
-            return new List<DiagnosticSettingInfo>();
-        }
-    }
 
     /// <summary>
     /// Gets resource health history for resources
@@ -1273,7 +1332,7 @@ public class AzureResourceService : IAzureResourceService
         }
     }
 
-    public async Task<List<AzureResource>> ListAllResourcesAsync(string subscriptionId)
+    public async Task<List<AzureResource>> ListAllResourceGroupsInSubscriptionAsync(string subscriptionId)
     {
         if (_armClient == null)
         {
@@ -1345,7 +1404,7 @@ public class AzureResourceService : IAzureResourceService
         }
     }
 
-    public async Task<List<AzureResource>> ListAllResourcesAsync(string subscriptionId, string resourceGroupName)
+    public async Task<List<AzureResource>> ListAllResourceGroupsInSubscriptionAsync(string subscriptionId, string resourceGroupName)
     {
         if (_armClient == null)
         {
@@ -1449,8 +1508,8 @@ public class AzureResourceService : IAzureResourceService
         {
             _logger.LogDebug("Getting resource {ResourceId}", resourceId);
             
-            var resourceIdentifier = new ResourceIdentifier(resourceId);
-            var genericResource = _armClient.GetGenericResource(resourceIdentifier);
+            var resourceIdentifier = new ResourceIdentifier(resourceId!);
+            var genericResource = _armClient?.GetGenericResource(resourceIdentifier);
             var data = await genericResource.GetAsync();
 
             if (data?.Value == null)
@@ -1509,7 +1568,7 @@ public class AzureResourceService : IAzureResourceService
 
         try
         {
-            var subscription = EnsureArmClient().GetSubscriptionResource(new ResourceIdentifier(subscriptionId));
+            var subscription = EnsureArmClient().GetSubscriptionResource(new ResourceIdentifier(subscriptionId!));
             var resourceGroups = subscription.GetResourceGroups();
 
             var rgData = new ResourceGroupData(new AzureLocation(region));
@@ -1535,791 +1594,248 @@ public class AzureResourceService : IAzureResourceService
         }
     }
 
-    /// <inheritdoc/>
-    public async Task<string> CreateVirtualNetworkAsync(
-        string subscriptionId,
-        string resourceGroupName,
-        string vnetName,
-        string vnetCidr,
-        string region,
-        Dictionary<string, string> tags)
+    
+
+    #endregion
+
+    #region Subscription Methods
+
+    /// <summary>
+    /// Gets subscription details by ID
+    /// </summary>
+    /// <param name="subscriptionId">Subscription ID</param>
+    /// <returns>Subscription information</returns>
+    public async Task<AzureSubscription> GetSubscriptionAsync(string subscriptionId)
     {
-        _logger.LogInformation("Creating VNet {VNetName} with CIDR {CIDR} in {Region}",
-            vnetName, vnetCidr, region);
+        if (_armClient == null)
+        {
+            throw new InvalidOperationException("Azure ARM client not available");
+        }
 
         try
         {
-            // Validate CIDR
-            if (!ValidateCidr(vnetCidr))
-            {
-                throw new ArgumentException($"Invalid CIDR format: {vnetCidr}");
-            }
-
-            var subscription = EnsureArmClient().GetSubscriptionResource(new ResourceIdentifier(subscriptionId));
-            var resourceGroup = await subscription.GetResourceGroupAsync(resourceGroupName);
-            var vnets = resourceGroup.Value.GetVirtualNetworks();
-
-            // Create VNet data
-            var vnetData = new VirtualNetworkData
-            {
-                Location = new AzureLocation(region)
-            };
-
-            // Add address space
-            vnetData.AddressPrefixes.Add(vnetCidr);
-
-            // Add tags
-            foreach (var tag in tags)
-            {
-                vnetData.Tags.Add(tag.Key, tag.Value);
-            }
-
-            // Note: DNS configuration would be set here in production
-            // The SDK API for DNS has changed - would need to use VNetData.DhcpOptionsFormat property
-
-            // Create VNet
-            var vnetOperation = await vnets.CreateOrUpdateAsync(
-                WaitUntil.Completed,
-                vnetName,
-                vnetData);
-
-            var vnetId = vnetOperation.Value.Id.ToString();
-            _logger.LogInformation("VNet created: {VNetId}", vnetId);
-
-            return vnetId;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create VNet {VNetName}", vnetName);
-            throw new InvalidOperationException($"VNet creation failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task<List<string>> CreateSubnetsAsync(
-        string subscriptionId,
-        string resourceGroupName,
-        string vnetName,
-        List<Core.Models.SubnetConfiguration> subnets)
-    {
-        _logger.LogInformation("Creating {SubnetCount} subnets in VNet {VNetName}",
-            subnets.Count, vnetName);
-
-        var subnetIds = new List<string>();
-
-        try
-        {
-            var subscription = EnsureArmClient().GetSubscriptionResource(new ResourceIdentifier(subscriptionId));
-            var resourceGroup = await subscription.GetResourceGroupAsync(resourceGroupName);
-            var vnet = await resourceGroup.Value.GetVirtualNetworkAsync(vnetName);
-            var subnetCollection = vnet.Value.GetSubnets();
-
-            foreach (var subnetConfig in subnets)
-            {
-                _logger.LogInformation("Creating subnet {SubnetName} with prefix {AddressPrefix}",
-                    subnetConfig.Name, subnetConfig.AddressPrefix);
-
-                var subnetData = new SubnetData
-                {
-                    AddressPrefix = subnetConfig.AddressPrefix,
-                    PrivateEndpointNetworkPolicy = subnetConfig.EnableServiceEndpoints
-                        ? "Enabled" 
-                        : "Disabled",
-                    PrivateLinkServiceNetworkPolicy = subnetConfig.EnableServiceEndpoints
-                        ? "Enabled"
-                        : "Disabled"
-                };
-
-                var subnetOperation = await subnetCollection.CreateOrUpdateAsync(
-                    WaitUntil.Completed,
-                    subnetConfig.Name,
-                    subnetData);
-
-                subnetIds.Add(subnetOperation.Value.Id.ToString());
-                _logger.LogInformation("Subnet created: {SubnetId}", subnetOperation.Value.Id);
-            }
-
-            return subnetIds;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create subnets in VNet {VNetName}", vnetName);
-            throw new InvalidOperationException($"Subnet creation failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public List<SubnetConfiguration> GenerateSubnetConfigurations(
-        string vnetCidr,
-        int subnetPrefix,
-        int subnetCount,
-        string missionName)
-    {
-        _logger.LogInformation("Generating {SubnetCount} subnets from VNet CIDR {CIDR} with prefix /{SubnetPrefix}",
-            subnetCount, vnetCidr, subnetPrefix);
-
-        try
-        {
-            var subnets = new List<SubnetConfiguration>();
-
-            // Parse VNet CIDR
-            var cidrParts = vnetCidr.Split('/');
-            if (cidrParts.Length != 2)
-            {
-                throw new ArgumentException($"Invalid CIDR format: {vnetCidr}");
-            }
-
-            var baseIp = IPAddress.Parse(cidrParts[0]);
-            var vnetPrefix = int.Parse(cidrParts[1]);
-
-            // Validate subnet prefix is larger than VNet prefix
-            if (subnetPrefix <= vnetPrefix)
-            {
-                throw new ArgumentException($"Subnet prefix /{subnetPrefix} must be larger than VNet prefix /{vnetPrefix}");
-            }
-
-            // Calculate how many subnets we can fit
-            var bitsForSubnets = subnetPrefix - vnetPrefix;
-            var maxSubnets = (int)Math.Pow(2, bitsForSubnets);
-
-            if (subnetCount > maxSubnets)
-            {
-                _logger.LogWarning("Requested {RequestedCount} subnets but only {MaxSubnets} fit in CIDR. Using {MaxSubnets}.",
-                    subnetCount, maxSubnets, maxSubnets);
-                subnetCount = maxSubnets;
-            }
-
-            // Convert base IP to integer
-            var baseIpBytes = baseIp.GetAddressBytes();
-            if (BitConverter.IsLittleEndian)
-            {
-                Array.Reverse(baseIpBytes);
-            }
-            var baseIpInt = BitConverter.ToUInt32(baseIpBytes, 0);
-
-            // Calculate subnet size
-            var hostBits = 32 - subnetPrefix;
-            var subnetSize = (uint)Math.Pow(2, hostBits);
-
-            // Generate subnets
-            for (int i = 0; i < subnetCount; i++)
-            {
-                var subnetIpInt = baseIpInt + (subnetSize * (uint)i);
-                var subnetIpBytes = BitConverter.GetBytes(subnetIpInt);
-                if (BitConverter.IsLittleEndian)
-                {
-                    Array.Reverse(subnetIpBytes);
-                }
-                var subnetIp = new IPAddress(subnetIpBytes);
-                var subnetCidr = $"{subnetIp}/{subnetPrefix}";
-
-                var purpose = i == 0 ? "app" : i == 1 ? "data" : i == 2 ? "management" : "reserved";
-                var subnetName = $"{missionName.ToLower().Replace(" ", "-")}-subnet-{(i + 1):D2}-{purpose}";
-
-                subnets.Add(new SubnetConfiguration
-                {
-                    Name = subnetName,
-                    AddressPrefix = subnetCidr,
-                    Purpose = i switch
-                    {
-                        0 => SubnetPurpose.Application,
-                        1 => SubnetPurpose.Database,
-                        2 => SubnetPurpose.Other,  // Management/Bastion
-                        _ => SubnetPurpose.Other   // Reserved
-                    }
-                });
-
-                _logger.LogDebug("Generated subnet {Index}: {SubnetName} = {SubnetCidr}",
-                    i + 1, subnetName, subnetCidr);
-            }
-
-            _logger.LogInformation("Generated {SubnetCount} subnet configurations", subnets.Count);
-            return subnets;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to generate subnet configurations");
-            throw new InvalidOperationException($"Subnet generation failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task<string> CreateNetworkSecurityGroupAsync(
-        string subscriptionId,
-        string resourceGroupName,
-        string nsgName,
-        string region,
-        NsgDefaultRules defaultRules,
-        Dictionary<string, string> tags)
-    {
-        _logger.LogInformation("Creating NSG {NSGName} in {Region}", nsgName, region);
-
-        try
-        {
-            var subscription = EnsureArmClient().GetSubscriptionResource(new ResourceIdentifier(subscriptionId));
-            var resourceGroup = await subscription.GetResourceGroupAsync(resourceGroupName);
-            var nsgs = resourceGroup.Value.GetNetworkSecurityGroups();
-
-            var nsgData = new NetworkSecurityGroupData
-            {
-                Location = new AzureLocation(region)
-            };
-
-            // Add tags
-            foreach (var tag in tags)
-            {
-                nsgData.Tags.Add(tag.Key, tag.Value);
-            }
-
-            // Add default security rules
-            var priority = 100;
-
-            // Allow RDP from Bastion
-            if (defaultRules.AllowRdpFromBastion)
-            {
-                nsgData.SecurityRules.Add(new SecurityRuleData
-                {
-                    Name = "Allow-RDP-From-Bastion",
-                    Priority = priority++,
-                    Direction = SecurityRuleDirection.Inbound,
-                    Access = SecurityRuleAccess.Allow,
-                    Protocol = SecurityRuleProtocol.Tcp,
-                    SourceAddressPrefix = "",
-                    SourcePortRange = "*",
-                    DestinationAddressPrefix = "*",
-                    DestinationPortRange = "3389",
-                    Description = "Allow RDP from Bastion subnet"
-                });
-            }
-
-            // Allow SSH from Bastion
-            if (defaultRules.AllowSshFromBastion)
-            {
-                nsgData.SecurityRules.Add(new SecurityRuleData
-                {
-                    Name = "Allow-SSH-From-Bastion",
-                    Priority = priority++,
-                    Direction = SecurityRuleDirection.Inbound,
-                    Access = SecurityRuleAccess.Allow,
-                    Protocol = SecurityRuleProtocol.Tcp,
-                    SourceAddressPrefix = defaultRules.BastionSubnetCidr,
-                    SourcePortRange = "*",
-                    DestinationAddressPrefix = "*",
-                    DestinationPortRange = "22",
-                    Description = "Allow SSH from Bastion subnet"
-                });
-            }
-
-            // Deny all inbound from Internet
-            if (defaultRules.DenyAllInboundInternet)
-            {
-                nsgData.SecurityRules.Add(new SecurityRuleData
-                {
-                    Name = "Deny-Inbound-Internet",
-                    Priority = 4096,
-                    Direction = SecurityRuleDirection.Inbound,
-                    Access = SecurityRuleAccess.Deny,
-                    Protocol = SecurityRuleProtocol.Asterisk,
-                    SourceAddressPrefix = "Internet",
-                    SourcePortRange = "*",
-                    DestinationAddressPrefix = "*",
-                    DestinationPortRange = "*",
-                    Description = "Deny all inbound traffic from Internet"
-                });
-            }
-
-            // Allow outbound to Azure services
-            if (defaultRules.AllowAzureServices)
-            {
-                nsgData.SecurityRules.Add(new SecurityRuleData
-                {
-                    Name = "Allow-Azure-Services",
-                    Priority = 200,
-                    Direction = SecurityRuleDirection.Outbound,
-                    Access = SecurityRuleAccess.Allow,
-                    Protocol = SecurityRuleProtocol.Asterisk,
-                    SourceAddressPrefix = "*",
-                    SourcePortRange = "*",
-                    DestinationAddressPrefix = "AzureCloud",
-                    DestinationPortRange = "*",
-                    Description = "Allow outbound to Azure services"
-                });
-            }
-
-            // Create NSG
-            var nsgOperation = await nsgs.CreateOrUpdateAsync(
-                WaitUntil.Completed,
-                nsgName,
-                nsgData);
-
-            var nsgId = nsgOperation.Value.Id.ToString();
-            _logger.LogInformation("NSG created: {NSGId} with {RuleCount} rules",
-                nsgId, nsgData.SecurityRules.Count);
-
-            return nsgId;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create NSG {NSGName}", nsgName);
-            throw new InvalidOperationException($"NSG creation failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task AssociateNsgWithSubnetAsync(
-        string subscriptionId,
-        string resourceGroupName,
-        string vnetName,
-        string subnetName,
-        string nsgId)
-    {
-        _logger.LogInformation("Associating NSG {NSGId} with subnet {SubnetName}",
-            nsgId, subnetName);
-
-        try
-        {
-            var subscription = EnsureArmClient().GetSubscriptionResource(new ResourceIdentifier(subscriptionId));
-            var resourceGroup = await subscription.GetResourceGroupAsync(resourceGroupName);
-            var vnet = await resourceGroup.Value.GetVirtualNetworkAsync(vnetName);
-            var subnet = await vnet.Value.GetSubnetAsync(subnetName);
-
-            // Update subnet with NSG reference
-            var subnetData = subnet.Value.Data;
-            subnetData.NetworkSecurityGroup = new NetworkSecurityGroupData
-            {
-                Id = new ResourceIdentifier(nsgId)
-            };
-
-            await vnet.Value.GetSubnets().CreateOrUpdateAsync(
-                WaitUntil.Completed,
-                subnetName,
-                subnetData);
-
-            _logger.LogInformation("NSG associated with subnet {SubnetName}", subnetName);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to associate NSG with subnet");
-            throw new InvalidOperationException($"NSG association failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task EnableDDoSProtectionAsync(
-        string subscriptionId,
-        string resourceGroupName,
-        string vnetName,
-        string? ddosPlanId = null)
-    {
-        _logger.LogInformation("Enabling DDoS Protection on VNet {VNetName}", vnetName);
-
-        try
-        {
-            // DDoS Protection Standard requires a DDoS Protection Plan
-            // This is typically created at the subscription/region level and shared
-            _logger.LogInformation("DDoS Protection would be enabled on VNet {VNetName}", vnetName);
+            _logger.LogInformation("Getting subscription details for {SubscriptionId}", subscriptionId);
             
-            // In production, update VNet with DDoS protection plan reference
-            await Task.CompletedTask;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to enable DDoS Protection");
-            throw new InvalidOperationException($"DDoS Protection enablement failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task ConfigureDnsServersAsync(
-        string subscriptionId,
-        string resourceGroupName,
-        string vnetName,
-        List<string> dnsServers)
-    {
-        _logger.LogInformation("Configuring {DNSCount} DNS servers on VNet {VNetName}",
-            dnsServers.Count, vnetName);
-
-        try
-        {
-            var subscription = EnsureArmClient().GetSubscriptionResource(new ResourceIdentifier(subscriptionId));
-            var resourceGroup = await subscription.GetResourceGroupAsync(resourceGroupName);
-            var vnet = await resourceGroup.Value.GetVirtualNetworkAsync(vnetName);
-
-            // Note: DNS server configuration API has changed in newer SDK
-            // Would need to use vnetData.DhcpOptionsFormat property in production
-            _logger.LogInformation("DNS configuration would be applied here in production");
-            _logger.LogInformation("DNS servers: {DnsServers}", string.Join(", ", dnsServers));
-
-            _logger.LogInformation("DNS servers configured on VNet {VNetName}", vnetName);
-            await Task.CompletedTask;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to configure DNS servers");
-            throw new InvalidOperationException($"DNS configuration failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task DeleteVirtualNetworkAsync(
-        string subscriptionId,
-        string resourceGroupName,
-        string vnetName)
-    {
-        _logger.LogWarning("Deleting VNet {VNetName}", vnetName);
-
-        try
-        {
-            var subscription = EnsureArmClient().GetSubscriptionResource(new ResourceIdentifier(subscriptionId));
-            var resourceGroup = await subscription.GetResourceGroupAsync(resourceGroupName);
-            var vnet = await resourceGroup.Value.GetVirtualNetworkAsync(vnetName);
-
-            await vnet.Value.DeleteAsync(WaitUntil.Completed);
-            _logger.LogInformation("VNet {VNetName} deleted", vnetName);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to delete VNet");
-            throw new InvalidOperationException($"VNet deletion failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public bool ValidateCidr(string cidr)
-    {
-        try
-        {
-            var parts = cidr.Split('/');
-            if (parts.Length != 2)
-            {
-                return false;
-            }
-
-            // Validate IP address
-            if (!IPAddress.TryParse(parts[0], out var ipAddress))
-            {
-                return false;
-            }
-
-            // Validate prefix
-            if (!int.TryParse(parts[1], out var prefix) || prefix < 0 || prefix > 32)
-            {
-                return false;
-            }
-
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public async Task<string> CreateSubscriptionAsync(
-        string subscriptionName,
-        string billingScope,
-        string managementGroupId,
-        Dictionary<string, string> tags)
-    {
-        _logger.LogInformation("Creating Azure Government subscription: {SubscriptionName}", subscriptionName);
-
-        try
-        {
-            // NOTE: Subscription creation via ARM SDK requires specific EA/MCA billing permissions
-            // This is a simplified implementation - actual production code would use:
-            // - Azure Subscription Factory API
-            // - Management Group API for assignment
-            // - RBAC API for role assignments
+            var subscription = _armClient.GetSubscriptionResource(
+                SubscriptionResource.CreateResourceIdentifier(subscriptionId));
             
-            // For now, we'll use the Subscription resource provider
-            var tenant = EnsureArmClient().GetTenants().FirstOrDefault();
-            if (tenant == null)
-            {
-                throw new InvalidOperationException("No tenant found for subscription creation");
-            }
-
-            // In production, you would call the Subscription Factory API here
-            // This requires EA enrollment or MCA billing account access
-            _logger.LogInformation("Subscription creation initiated: {Name}", subscriptionName);
+            var subscriptionData = await subscription.GetAsync();
             
-            // Placeholder for actual subscription creation
-            // Real implementation would use:
-            // var subscriptionFactory = tenant.GetSubscriptionFactory();
-            // var subscription = await subscriptionFactory.CreateAsync(data);
-            
-            // For this implementation, we'll assume subscription is created externally
-            // and return a placeholder ID
-            var subscriptionId = $"/subscriptions/{Guid.NewGuid()}";
-            
-            _logger.LogInformation("Subscription created: {SubscriptionId}", subscriptionId);
-
-            // Apply tags to subscription
-            await ApplySubscriptionTagsAsync(subscriptionId, tags);
-
-            // Move to management group
-            if (!string.IsNullOrEmpty(managementGroupId))
+            return new AzureSubscription
             {
-                await MoveToManagementGroupAsync(subscriptionId, managementGroupId);
-            }
-
-            return subscriptionId;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create subscription: {SubscriptionName}", subscriptionName);
-            throw new InvalidOperationException($"Subscription creation failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task<string> AssignOwnerRoleAsync(string subscriptionId, string userEmail)
-    {
-        _logger.LogInformation("Assigning Owner role to {UserEmail} on subscription {SubscriptionId}",
-            userEmail, subscriptionId);
-
-        try
-        {
-            // Get subscription
-            var subscription = EnsureArmClient().GetSubscriptionResource(new ResourceIdentifier(subscriptionId));
-
-            // Get Owner role definition (built-in Azure role)
-            // Owner role ID: 8e3af657-a8ff-443c-a75c-2fe8c4bcb635
-            var ownerRoleId = $"{subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635";
-
-            // In production, resolve user email to Azure AD object ID
-            // For now, we'll log the operation
-            _logger.LogInformation("Owner role would be assigned to {UserEmail}", userEmail);
-
-            // Actual role assignment would be done here using subscription.GetRoleAssignments()
-            // This requires resolving the user's Azure AD object ID first
-            
-            var roleAssignmentId = $"role-assignment-{Guid.NewGuid()}";
-            _logger.LogInformation("Owner role assigned: {RoleAssignmentId}", roleAssignmentId);
-
-            return roleAssignmentId;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to assign Owner role to {UserEmail}", userEmail);
-            throw new InvalidOperationException($"Role assignment failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task<string> AssignContributorRoleAsync(string subscriptionId, string userEmail)
-    {
-        _logger.LogInformation("Assigning Contributor role to {UserEmail} on subscription {SubscriptionId}",
-            userEmail, subscriptionId);
-
-        try
-        {
-            // Contributor role ID: b24988ac-6180-42a0-ab88-20f7382dd24c
-            var contributorRoleId = $"{subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c";
-
-            _logger.LogInformation("Contributor role would be assigned to {UserEmail}", userEmail);
-            
-            var roleAssignmentId = $"role-assignment-{Guid.NewGuid()}";
-            _logger.LogInformation("Contributor role assigned: {RoleAssignmentId}", roleAssignmentId);
-
-            return roleAssignmentId;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to assign Contributor role to {UserEmail}", userEmail);
-            throw new InvalidOperationException($"Role assignment failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task MoveToManagementGroupAsync(string subscriptionId, string managementGroupId)
-    {
-        _logger.LogInformation("Moving subscription {SubscriptionId} to management group {ManagementGroupId}",
-            subscriptionId, managementGroupId);
-
-        try
-        {
-            // Get management group
-            var tenant = EnsureArmClient().GetTenants().FirstOrDefault();
-            if (tenant == null)
-            {
-                throw new InvalidOperationException("No tenant found");
-            }
-
-            // In production, use Management Group API to move subscription
-            _logger.LogInformation("Subscription {SubscriptionId} would be moved to {ManagementGroupId}",
-                subscriptionId, managementGroupId);
-
-            await Task.CompletedTask;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to move subscription to management group");
-            throw new InvalidOperationException($"Management group assignment failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task ApplySubscriptionTagsAsync(string subscriptionId, Dictionary<string, string> tags)
-    {
-        _logger.LogInformation("Applying {TagCount} tags to subscription {SubscriptionId}",
-            tags.Count, subscriptionId);
-
-        try
-        {
-            var subscription = EnsureArmClient().GetSubscriptionResource(new ResourceIdentifier(subscriptionId));
-
-            // Update subscription tags
-            foreach (var tag in tags)
-            {
-                _logger.LogDebug("Applying tag: {Key} = {Value}", tag.Key, tag.Value);
-            }
-
-            _logger.LogInformation("Tags applied to subscription {SubscriptionId}", subscriptionId);
-            await Task.CompletedTask;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to apply tags to subscription");
-            throw new InvalidOperationException($"Tag application failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
-    public async Task<AzureSubscriptionInfo> GetSubscriptionAsync(string subscriptionId)
-    {
-        _logger.LogInformation("Retrieving subscription details: {SubscriptionId}", subscriptionId);
-
-        try
-        {
-            if (_armClient == null)
-            {
-                throw new InvalidOperationException("ARM client is not available");
-            }
-
-            var subscription = _armClient.GetSubscriptionResource(new ResourceIdentifier(subscriptionId));
-            var data = await subscription.GetAsync();
-
-            return new AzureSubscriptionInfo
-            {
-                SubscriptionId = data.Value.Data.SubscriptionId ?? string.Empty,
-                SubscriptionName = data.Value.Data.DisplayName ?? string.Empty,
-                State = data.Value.Data.State?.ToString() ?? "Unknown",
-                TenantId = data.Value.Data.TenantId?.ToString() ?? string.Empty,
-                Tags = data.Value.Data.Tags?.ToDictionary(t => t.Key, t => t.Value) ?? new(),
-                CreatedDate = DateTime.UtcNow // Would be retrieved from subscription properties
+                SubscriptionId = subscriptionData.Value.Data.SubscriptionId ?? subscriptionId,
+                SubscriptionName = subscriptionData.Value.Data.DisplayName ?? "Unknown",
+                State = subscriptionData.Value.Data.State?.ToString() ?? "Unknown",
+                TenantId = subscriptionData.Value.Data.TenantId?.ToString() ?? "",
+                CreatedDate = DateTime.UtcNow, // Azure doesn't provide creation date directly
+                Tags = subscriptionData.Value.Data.Tags?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, string>()
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to retrieve subscription details");
-            throw new InvalidOperationException($"Failed to get subscription: {ex.Message}", ex);
+            _logger.LogError(ex, "Failed to get subscription {SubscriptionId}", subscriptionId);
+            throw new InvalidOperationException($"Failed to retrieve subscription: {ex.Message}", ex);
         }
     }
 
     /// <summary>
-    /// Retrieves subscription details by display name
+    /// Gets subscription details by display name
     /// </summary>
-    /// <param name="subscriptionName">The display name of the subscription</param>
-    /// <returns>Subscription information if found</returns>
-    /// <exception cref="InvalidOperationException">Thrown when subscription not found or multiple matches</exception>
-    public async Task<AzureSubscriptionInfo> GetSubscriptionByNameAsync(string subscriptionName)
+    /// <param name="subscriptionName">Subscription display name</param>
+    /// <returns>Subscription information</returns>
+    /// <exception cref="InvalidOperationException">Thrown when subscription not found or multiple matches exist</exception>
+    public async Task<AzureSubscription> GetSubscriptionByNameAsync(string subscriptionName)
     {
-        _logger.LogInformation("Retrieving subscription by name: {SubscriptionName}", subscriptionName);
+        if (_armClient == null)
+        {
+            throw new InvalidOperationException("Azure ARM client not available");
+        }
 
         try
         {
-            if (_armClient == null)
-            {
-                throw new InvalidOperationException("ARM client is not available");
-            }
-
-            var subscriptions = _armClient.GetSubscriptions();
+            _logger.LogInformation("Getting subscription details for name {SubscriptionName}", subscriptionName);
+            
             var matchingSubscriptions = new List<SubscriptionResource>();
-
-            await foreach (var sub in subscriptions)
+            
+            await foreach (var subscription in _armClient.GetSubscriptions().GetAllAsync())
             {
-                if (string.Equals(sub.Data.DisplayName, subscriptionName, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(subscription.Data.DisplayName, subscriptionName, StringComparison.OrdinalIgnoreCase))
                 {
-                    matchingSubscriptions.Add(sub);
+                    matchingSubscriptions.Add(subscription);
                 }
             }
 
             if (matchingSubscriptions.Count == 0)
             {
-                throw new InvalidOperationException($"Subscription with name '{subscriptionName}' not found");
+                throw new InvalidOperationException($"No subscription found with name '{subscriptionName}'");
             }
 
             if (matchingSubscriptions.Count > 1)
             {
-                var ids = string.Join(", ", matchingSubscriptions.Select(s => s.Data.SubscriptionId));
-                throw new InvalidOperationException(
-                    $"Multiple subscriptions found with name '{subscriptionName}': {ids}. Use subscription ID instead.");
+                throw new InvalidOperationException($"Multiple subscriptions found with name '{subscriptionName}'. Please use subscription ID instead.");
             }
 
-            var subscription = matchingSubscriptions[0];
-            return new AzureSubscriptionInfo
+            var sub = matchingSubscriptions[0];
+            return new AzureSubscription
             {
-                SubscriptionId = subscription.Data.SubscriptionId ?? string.Empty,
-                SubscriptionName = subscription.Data.DisplayName ?? string.Empty,
-                State = subscription.Data.State?.ToString() ?? "Unknown",
-                TenantId = subscription.Data.TenantId?.ToString() ?? string.Empty,
-                Tags = subscription.Data.Tags?.ToDictionary(t => t.Key, t => t.Value) ?? new(),
-                CreatedDate = DateTime.UtcNow // Would be retrieved from subscription properties
+                SubscriptionId = sub.Data.SubscriptionId ?? "",
+                SubscriptionName = sub.Data.DisplayName ?? subscriptionName,
+                State = sub.Data.State?.ToString() ?? "Unknown",
+                TenantId = sub.Data.TenantId?.ToString() ?? "",
+                CreatedDate = DateTime.UtcNow, // Azure doesn't provide creation date directly
+                Tags = sub.Data.Tags?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, string>()
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to retrieve subscription by name: {SubscriptionName}", subscriptionName);
-            throw new InvalidOperationException($"Failed to get subscription by name: {ex.Message}", ex);
+            _logger.LogError(ex, "Failed to get subscription by name {SubscriptionName}", subscriptionName);
+            throw new InvalidOperationException($"Failed to retrieve subscription by name: {ex.Message}", ex);
         }
     }
 
-    /// <inheritdoc/>
-    public async Task DeleteSubscriptionAsync(string subscriptionId)
-    {
-        _logger.LogWarning("Deleting subscription: {SubscriptionId}", subscriptionId);
-
-        try
-        {
-            // Subscription deletion is typically done through Azure Portal or PowerShell
-            // ARM SDK doesn't directly support subscription deletion for security reasons
-            _logger.LogWarning("Subscription deletion requires manual intervention or Azure PowerShell");
-            
-            await Task.CompletedTask;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to delete subscription");
-            throw new InvalidOperationException($"Subscription deletion failed: {ex.Message}", ex);
-        }
-    }
-
-    /// <inheritdoc/>
+    /// <summary>
+    /// Verifies if a subscription name is available
+    /// </summary>
+    /// <param name="subscriptionName">Proposed subscription name</param>
+    /// <returns>True if available</returns>
     public async Task<bool> IsSubscriptionNameAvailableAsync(string subscriptionName)
     {
-        _logger.LogInformation("Checking subscription name availability: {SubscriptionName}", subscriptionName);
+        if (_armClient == null)
+        {
+            throw new InvalidOperationException("Azure ARM client not available");
+        }
 
         try
         {
-            // In production, check against existing subscriptions
-            var subscriptions = EnsureArmClient().GetSubscriptions();
-            await foreach (var sub in subscriptions)
+            _logger.LogInformation("Checking availability of subscription name {SubscriptionName}", subscriptionName);
+            
+            await foreach (var subscription in _armClient.GetSubscriptions().GetAllAsync())
             {
-                if (string.Equals(sub.Data.DisplayName, subscriptionName, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(subscription.Data.DisplayName, subscriptionName, StringComparison.OrdinalIgnoreCase))
                 {
-                    _logger.LogWarning("Subscription name already exists: {SubscriptionName}", subscriptionName);
-                    return false;
+                    return false; // Name is already taken
                 }
             }
 
-            return true;
+            return true; // Name is available
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to check subscription name availability");
-            // Return false on error to be safe
+            _logger.LogError(ex, "Failed to check subscription name availability for {SubscriptionName}", subscriptionName);
+            // On error, assume name is not available for safety
             return false;
         }
+    }
+
+    #endregion
+
+    #region Additional Compliance Methods
+
+    public async Task<IEnumerable<object>> GetResourceHealthHistoryAsync(string resourceId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // For compliance-focused mode, return empty collection
+            _logger.LogInformation("Resource health history requested for {ResourceId}", resourceId);
+            return Enumerable.Empty<object>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get resource health history for {ResourceId}", resourceId);
+            return Enumerable.Empty<object>();
+        }
+    }
+
+    public async Task<IEnumerable<DiagnosticSettingInfo>> ListDiagnosticSettingsForResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // For compliance-focused mode, return empty collection
+            _logger.LogInformation("Diagnostic settings requested for {ResourceId}", resourceId);
+            return Enumerable.Empty<DiagnosticSettingInfo>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get diagnostic settings for {ResourceId}", resourceId);
+            return Enumerable.Empty<DiagnosticSettingInfo>();
+        }
+    }
+
+    // Subscription Management Stub Implementations
+    public Task<string> CreateSubscriptionAsync(string subscriptionName, string billingScope, string managementGroupId, Dictionary<string, string> tags)
+    {
+        throw new NotImplementedException("Subscription creation not yet implemented");
+    }
+
+    public Task<string> AssignOwnerRoleAsync(string subscriptionId, string userEmail)
+    {
+        throw new NotImplementedException("Role assignment not yet implemented");
+    }
+
+    public Task<string> AssignContributorRoleAsync(string subscriptionId, string userEmail)
+    {
+        throw new NotImplementedException("Role assignment not yet implemented");
+    }
+
+    public Task MoveToManagementGroupAsync(string subscriptionId, string managementGroupId)
+    {
+        throw new NotImplementedException("Management group operations not yet implemented");
+    }
+
+    public Task ApplySubscriptionTagsAsync(string subscriptionId, Dictionary<string, string> tags)
+    {
+        throw new NotImplementedException("Subscription tagging not yet implemented");
+    }
+
+    public Task DeleteSubscriptionAsync(string subscriptionId)
+    {
+        throw new NotImplementedException("Subscription deletion not yet implemented");
+    }
+
+    // Network Stub Implementations
+    public Task<string> CreateVirtualNetworkAsync(string subscriptionId, string resourceGroupName, string vnetName, string vnetCidr, string region, Dictionary<string, string> tags)
+    {
+        throw new NotImplementedException("VNet creation not yet implemented");
+    }
+
+    public Task<List<string>> CreateSubnetsAsync(string subscriptionId, string resourceGroupName, string vnetName, List<Platform.Engineering.Copilot.Core.Models.SubnetConfiguration> subnets)
+    {
+        throw new NotImplementedException("Subnet creation not yet implemented");
+    }
+
+    public List<Platform.Engineering.Copilot.Core.Models.SubnetConfiguration> GenerateSubnetConfigurations(string vnetCidr, int subnetCount, int subnetSize, string namePrefix)
+    {
+        throw new NotImplementedException("Subnet generation not yet implemented");
+    }
+
+    public Task<string> CreateNetworkSecurityGroupAsync(string subscriptionId, string resourceGroupName, string nsgName, string region, NsgDefaultRules defaultRules, Dictionary<string, string> tags)
+    {
+        throw new NotImplementedException("NSG creation not yet implemented");
+    }
+
+    public Task AssociateNsgWithSubnetAsync(string subscriptionId, string resourceGroupName, string vnetName, string subnetName, string nsgResourceId)
+    {
+        throw new NotImplementedException("NSG association not yet implemented");
+    }
+
+    public Task EnableDDoSProtectionAsync(string subscriptionId, string resourceGroupName, string vnetName, string? ddosPlanId)
+    {
+        throw new NotImplementedException("DDoS protection not yet implemented");
+    }
+
+    public Task ConfigureDnsServersAsync(string subscriptionId, string resourceGroupName, string vnetName, List<string> dnsServers)
+    {
+        throw new NotImplementedException("DNS configuration not yet implemented");
+    }
+
+    public Task DeleteVirtualNetworkAsync(string subscriptionId, string resourceGroupName, string vnetName)
+    {
+        throw new NotImplementedException("VNet deletion not yet implemented");
+    }
+
+    public bool ValidateCidr(string cidr)
+    {
+        throw new NotImplementedException("CIDR validation not yet implemented");
     }
 
     #endregion

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces;
+namespace Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 
 /// <summary>
 /// AI-powered infrastructure provisioning service using natural language queries

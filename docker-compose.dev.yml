@@ -1,65 +1,31 @@
-version: "3.9"
-
 # Development overrides for docker-compose.yml
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 services:
   # MCP Server (Multi-Agent Orchestrator)
   platform-mcp:
-    build:
-      context: .
-      dockerfile: src/Platform.Engineering.Copilot.Mcp/Dockerfile
-      target: build  # Use build stage for hot reload
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - DOTNET_USE_POLLING_FILE_WATCHER=true
-    volumes:
-      - ./src:/src:ro  # Mount source for hot reload
-      - plaform-engineering-copilot-logs:/app/logs
-    command: >
-      sh -c "dotnet watch run --project src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj -- --http"
+      - Logging__LogLevel__Default=Debug
+      - Logging__LogLevel__Microsoft=Information
 
   platform-chat:
-    build:
-      context: .
-      dockerfile: src/Platform.Engineering.Copilot.Chat/Dockerfile
-      target: build  # Use build stage for hot reload
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - DOTNET_USE_POLLING_FILE_WATCHER=true
-    volumes:
-      - ./src/Platform.Engineering.Copilot.Chat:/src:ro  # Mount source for hot reload
-      - plaform-engineering-copilot-logs:/app/logs
-    command: >
-      sh -c "dotnet watch run --project Platform.Engineering.Copilot.Chat.csproj --urls http://0.0.0.0:5001"
+      - Logging__LogLevel__Default=Debug
+      - Logging__LogLevel__Microsoft=Information
 
   admin-api:
-    build:
-      context: .
-      dockerfile: src/Platform.Engineering.Copilot.Admin.API/Dockerfile
-      target: build  # Use build stage for hot reload
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - DOTNET_USE_POLLING_FILE_WATCHER=true
-    volumes:
-      - ./src/Platform.Engineering.Copilot.Admin.API:/src:ro  # Mount source for hot reload
-      - plaform-engineering-copilot-logs:/app/logs
-    command: >
-      sh -c "dotnet watch run --project Platform.Engineering.Copilot.Admin.API.csproj --urls http://0.0.0.0:5002"
+      - Logging__LogLevel__Default=Debug
+      - Logging__LogLevel__Microsoft=Information
 
   admin-client:
-    build:
-      context: .
-      dockerfile: src/Platform.Engineering.Copilot.Admin.Client/Dockerfile
-      target: build  # Use build stage for hot reload
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - DOTNET_USE_POLLING_FILE_WATCHER=true
-    volumes:
-      - ./src/Platform.Engineering.Copilot.Admin.Client:/src:ro  # Mount source for hot reload
-      - plaform-engineering-copilot-logs:/app/logs
-    command: >
-      sh -c "dotnet watch run --project Platform.Engineering.Copilot.Admin.Client.csproj --urls http://0.0.0.0:5003"
+      - Logging__LogLevel__Default=Debug
+      - Logging__LogLevel__Microsoft=Information
 
   sqlserver:
     ports:
@@ -71,7 +37,7 @@ services:
   # Development tools
   adminer:
     image: adminer:latest
-    container_name: supervisor-adminer
+    container_name: plaform-engineering-copilot-adminer
     restart: unless-stopped
     depends_on:
       - sqlserver
@@ -81,4 +47,4 @@ services:
       - ADMINER_DEFAULT_SERVER=sqlserver
       - ADMINER_DESIGN=hydra
     networks:
-      - supervisor-network
+      - plaform-engineering-copilot-network

@@ -12,9 +12,9 @@ using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Models.EnvironmentManagement;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Services.Notifications;
-using Platform.Engineering.Copilot.Core.Services.Onboarding;
-using Platform.Engineering.Copilot.Data.Context;
-using Platform.Engineering.Copilot.Data.Entities;
+using Platform.Engineering.Copilot.Core.Services.ServiceCreation;
+using Platform.Engineering.Copilot.Core.Data.Context;
+using Platform.Engineering.Copilot.Core.Data.Entities;
 using Xunit;
 
 namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
@@ -244,21 +244,21 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
     public async Task GetPendingRequestsAsync_ReturnsOnlyPendingAndUnderReviewAsync()
         {
             // Arrange
-            var request1 = new OnboardingRequest
+            var request1 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
                 Status = OnboardingStatus.PendingReview,
                 Priority = 1,
                 CreatedAt = DateTime.UtcNow
             };
-            var request2 = new OnboardingRequest
+            var request2 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
                 Status = OnboardingStatus.UnderReview,
                 Priority = 2,
                 CreatedAt = DateTime.UtcNow
             };
-            var request3 = new OnboardingRequest
+            var request3 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
                 Status = OnboardingStatus.Approved,
@@ -283,14 +283,14 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
     public async Task GetPendingRequestsAsync_OrdersByPriorityThenCreatedDateAsync()
         {
             // Arrange
-            var request1 = new OnboardingRequest
+            var request1 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
                 Status = OnboardingStatus.PendingReview,
                 Priority = 1,
                 CreatedAt = DateTime.UtcNow.AddDays(-1)
             };
-            var request2 = new OnboardingRequest
+            var request2 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
                 Status = OnboardingStatus.PendingReview,
@@ -315,13 +315,13 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var email = "john.doe@navy.mil";
-            var request1 = new OnboardingRequest
+            var request1 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
                 MissionOwnerEmail = email,
                 CreatedAt = DateTime.UtcNow
             };
-            var request2 = new OnboardingRequest
+            var request2 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
                 MissionOwnerEmail = "jane.smith@navy.mil",

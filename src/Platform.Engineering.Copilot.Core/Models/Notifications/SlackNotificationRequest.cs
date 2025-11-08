@@ -12,7 +12,7 @@ public abstract class SlackNotificationRequest
 }
 
 /// <summary>
-/// Slack notification for onboarding request approval
+/// Slack notification for ServiceCreation request approval
 /// </summary>
 public class SlackApprovalRequest : SlackNotificationRequest
 {
@@ -22,7 +22,7 @@ public class SlackApprovalRequest : SlackNotificationRequest
 }
 
 /// <summary>
-/// Slack notification for onboarding request rejection
+/// Slack notification for ServiceCreation request rejection
 /// </summary>
 public class SlackRejectionRequest : SlackNotificationRequest
 {

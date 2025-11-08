@@ -9,32 +9,32 @@ output "service_plan_name" {
 }
 
 output "api_app_service_id" {
-  description = "The ID of the API App Service"
+  description = "The ID of the Admin API App Service"
   value       = azurerm_linux_web_app.api.id
 }
 
 output "api_app_service_name" {
-  description = "The name of the API App Service"
+  description = "The name of the Admin API App Service"
   value       = azurerm_linux_web_app.api.name
 }
 
 output "api_app_service_hostname" {
-  description = "The default hostname of the API App Service"
+  description = "The default hostname of the Admin API App Service"
   value       = azurerm_linux_web_app.api.default_hostname
 }
 
 output "api_app_service_identity_principal_id" {
-  description = "The principal ID of the API App Service managed identity"
+  description = "The principal ID of the Admin API App Service managed identity"
   value       = azurerm_linux_web_app.api.identity[0].principal_id
 }
 
 output "api_app_service_outbound_ip_addresses" {
-  description = "The outbound IP addresses of the API App Service"
+  description = "The outbound IP addresses of the Admin API App Service"
   value       = split(",", azurerm_linux_web_app.api.outbound_ip_addresses)
 }
 
 output "api_url" {
-  description = "The URL of the API App Service"
+  description = "The URL of the Admin API App Service"
   value       = "https://${azurerm_linux_web_app.api.default_hostname}"
 }
 

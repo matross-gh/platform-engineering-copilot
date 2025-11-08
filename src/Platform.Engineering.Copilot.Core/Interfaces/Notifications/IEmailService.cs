@@ -1,6 +1,6 @@
 using Platform.Engineering.Copilot.Core.Models.Notifications;
 
-namespace Platform.Engineering.Copilot.Core.Services.Notifications;
+namespace Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 
 /// <summary>
 /// Service for sending email notifications to mission owners and NNWC team
@@ -9,7 +9,7 @@ namespace Platform.Engineering.Copilot.Core.Services.Notifications;
 public interface IEmailService
 {
     /// <summary>
-    /// Send email notification when onboarding request is approved
+    /// Send email notification when ServiceCreation request is approved
     /// </summary>
     /// <param name="request">Approval email details including mission info and approver</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -19,7 +19,7 @@ public interface IEmailService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Send email notification when onboarding request is rejected
+    /// Send email notification when ServiceCreation request is rejected
     /// </summary>
     /// <param name="request">Rejection email details including reason and appeal process</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -49,7 +49,7 @@ public interface IEmailService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Send email to NNWC team with onboarding request summary (for internal tracking)
+    /// Send email to NNWC team with ServiceCreation request summary (for internal tracking)
     /// </summary>
     /// <param name="missionName">Mission name</param>
     /// <param name="requestId">Request ID</param>

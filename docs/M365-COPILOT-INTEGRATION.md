@@ -29,7 +29,7 @@ Declarative Agent (manifest.json)
     ↓
 API Plugin (OpenAPI spec)
     ↓
-Platform Engineering Copilot API (:7001)
+Platform MCP Server (:5100)
     ↓
 Azure Resources
 ```
@@ -74,7 +74,7 @@ cd src/Platform.Engineering.Copilot.API
 dotnet run
 
 # In another terminal, expose it
-ngrok http 7001 --domain=<your-static-domain>.ngrok.io
+ngrok http 5100 --domain=<your-static-domain>.ngrok.io
 ```
 
 #### Option B: Deploy to Azure App Service (Production)
@@ -244,7 +244,7 @@ security:
 **Generate from your API**:
 ```bash
 # If you have Swashbuckle/Swagger configured
-curl http://localhost:7001/swagger/v1/swagger.json > openapi/platform-copilot-openapi.json
+curl http://localhost:5100/swagger/v1/swagger.json > openapi/platform-copilot-openapi.json
 ```
 
 ---

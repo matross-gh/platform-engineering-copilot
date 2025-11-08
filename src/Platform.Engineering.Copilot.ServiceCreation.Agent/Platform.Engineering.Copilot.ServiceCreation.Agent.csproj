@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.12.0" />
+    <PackageReference Include="Azure.Communication.Email" Version="1.1.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.26.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Plugins.Core" Version="1.26.0-alpha" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Core\Platform.Engineering.Copilot.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Temporarily exclude files with type mapping issues until proper models are defined -->
+    <Compile Remove="Interfaces/IServiceCreationService.cs" />
+    <Compile Remove="Services/FlankspeedServiceCreationService.cs" />
+    <Compile Remove="Services/FlankspeedGenericServiceCreationAdapter.cs" />
+  </ItemGroup>
+
+</Project>

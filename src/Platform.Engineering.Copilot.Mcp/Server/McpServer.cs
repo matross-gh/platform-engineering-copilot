@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Mcp.Tools;
 using Platform.Engineering.Copilot.Mcp.Models;
+using Platform.Engineering.Copilot.Core.Models.Mcp;
 using System.Text.Json;
 
 namespace Platform.Engineering.Copilot.Mcp.Server;
@@ -158,7 +159,7 @@ public class McpServer
             new McpTool
             {
                 Name = "platform_engineering_chat",
-                Description = "Process platform engineering requests through the multi-agent orchestrator. Supports infrastructure provisioning, compliance scanning, cost analysis, resource discovery, environment management, and mission onboarding. The orchestrator automatically selects and coordinates the appropriate specialized agents.",
+                Description = "Process platform engineering requests through the multi-agent orchestrator. Supports infrastructure provisioning, compliance scanning, cost analysis, resource discovery, environment management, and mission ServiceCreation. The orchestrator automatically selects and coordinates the appropriate specialized agents.",
                 InputSchema = new
                 {
                     type = "object",

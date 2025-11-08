@@ -4,6 +4,14 @@ using Serilog.Events;
 using Platform.Engineering.Copilot.Chat.App.Data;
 using Platform.Engineering.Copilot.Chat.App.Hubs;
 using Platform.Engineering.Copilot.Chat.App.Services;
+using Platform.Engineering.Copilot.Compliance.Core.Extensions;
+using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
+using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
+using Platform.Engineering.Copilot.Environment.Core.Extensions;
+using Platform.Engineering.Copilot.Discovery.Core.Extensions;
+using Platform.Engineering.Copilot.ServiceCreation.Core.Extensions;
+using Platform.Engineering.Copilot.Security.Core.Extensions;
+using Platform.Engineering.Copilot.Document.Core.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +57,16 @@ builder.Services.AddCors(options =>
 
 // Register services
 builder.Services.AddScoped<IChatService, ChatService>();
+
+// Add domain-specific agents and plugins
+builder.Services.AddComplianceCore();
+builder.Services.AddInfrastructureCore();
+builder.Services.AddCostManagementCore();
+builder.Services.AddEnvironmentCore();
+builder.Services.AddDiscoveryCore();
+builder.Services.AddServiceCreationCore();
+builder.Services.AddSecurityCore();
+builder.Services.AddDocumentCore();
 
 // Add SPA services
 builder.Services.AddSpaStaticFiles(configuration =>

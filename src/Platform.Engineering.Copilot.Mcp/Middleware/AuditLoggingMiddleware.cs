@@ -9,7 +9,9 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Platform.Engineering.Copilot.Core.Interfaces.Audits;
 using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.Audits;
 using Platform.Engineering.Copilot.Core.Services.Audits;
 
 namespace Platform.Engineering.Copilot.Mcp.Middleware;
@@ -30,6 +32,7 @@ public class AuditLoggingMiddleware
         "Cookie",
         "Set-Cookie"
     };
+AuditConfiguration? Config { get => _config; set => _config = value; }
 
     public AuditLoggingMiddleware(
         RequestDelegate next,
@@ -137,7 +140,7 @@ public class AuditLoggingMiddleware
             },
             Tags = new Dictionary<string, string>
             {
-                ["Environment"] = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production",
+                ["Environment"] = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production",
                 ["Service"] = "Platform.MCP"
             }
         };

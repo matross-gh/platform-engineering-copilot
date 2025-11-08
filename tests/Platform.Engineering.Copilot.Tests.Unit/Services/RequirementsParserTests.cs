@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Moq;
-using Platform.Engineering.Copilot.Core.Services.Onboarding.Parsing;
+using Platform.Engineering.Copilot.Core.Services.ServiceCreation.Parsing;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;

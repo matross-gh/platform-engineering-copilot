@@ -567,7 +567,7 @@ Core/
 │   ├── Cost/             # CostEstimate, CostBreakdown
 │   ├── EnvironmentManagement/  # EnvironmentRequest, DeploymentStatus
 │   ├── Notifications/    # NotificationRequest, EmailTemplate
-│   └── Onboarding/       # OnboardingFlowRequest, StepDefinition
+│   └── ServiceCreation/       # OnboardingFlowRequest, StepDefinition
 ├── Plugins/              # Semantic Kernel plugins (8)
 │   ├── BaseSupervisorPlugin.cs       # Base class for all plugins
 │   ├── CompliancePlugin.cs           # AI-powered (Option C)
@@ -591,7 +591,7 @@ Core/
     │   └── Kubernetes/  # K8s manifests
     ├── Infrastructure/   # InfrastructureProvisioningService (AI-powered)
     ├── Notifications/    # Email, Teams notifications
-    ├── Onboarding/       # User onboarding workflows
+    ├── ServiceCreation/       # User ServiceCreation workflows
     ├── Security/         # Security scanning, RBAC
     ├── TemplateGeneration/  # Template orchestration
     └── Validation/       # Input validation services
@@ -705,7 +705,7 @@ Data/
 │   ├── ChatContext.cs         # Chat history and sessions
 │   └── AdminContext.cs        # Admin and configuration data
 ├── Entities/                            # Database entities
-│   ├── OnboardingRequest.cs             # Complete entity (343 lines)
+│   ├── ServiceCreationRequest.cs             # Complete entity (343 lines)
 │   ├── OnboardingStatus.cs              # Enum (Draft → Completed)
 │   ├── EnvironmentTemplate.cs
 │   ├── DeploymentRecord.cs
@@ -782,7 +782,7 @@ Data/
 
 **Purpose**: Admin backend API for platform management and operations.
 
-**Port**: 7002
+**Port**: 5002
 
 **Admin Controllers** (7):
 - **InfrastructureAdminController** - Infrastructure management (updated for Option C)
@@ -790,7 +790,7 @@ Data/
 - **DeploymentAdminController** - Deployment operations
 - **EnvironmentAdminController** - Environment lifecycle
 - **GovernanceAdminController** - Policy and compliance
-- **OnboardingAdminController** - User onboarding management
+- **OnboardingAdminController** - User ServiceCreation management
 - **TemplateAdminController** - Template CRUD operations
 
 ---
@@ -801,12 +801,12 @@ Data/
 
 **Architecture**: ASP.NET Core host + React TypeScript SPA
 
-**Port**: 3001 (React dev server), proxies to Admin.API on 7002
+**Port**: 3001 (React dev server), proxies to Admin.API on 5002
 
 **Features**:
 - Infrastructure management dashboard
 - Cost analytics and visualizations
-- User onboarding approval workflows
+- User ServiceCreation approval workflows
 - Template library management
 - Compliance reporting
 - Deployment monitoring
@@ -821,7 +821,7 @@ Data/
 **Configuration**:
 ```json
 {
-  "proxy": "http://localhost:7002"  // Routes API calls to Admin.API
+    "proxy": "http://localhost:5002"  // Routes API calls to Admin.API
 }
 ```
 

@@ -1,14 +1,24 @@
 using Microsoft.EntityFrameworkCore;
-using Platform.Engineering.Copilot.Core.Extensions;
-using Platform.Engineering.Copilot.Data.Context;
+using Platform.Engineering.Copilot.Core.Data.Context;
 using Platform.Engineering.Copilot.Admin.Services;
-using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Core.Services.Azure.Cost;
-using Platform.Engineering.Copilot.Core.Services.Compliance;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Services.Validation.Validators;
 using Platform.Engineering.Copilot.Core.Services.Validation;
+using Platform.Engineering.Copilot.Compliance.Core.Extensions;
+using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
+using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
+using Platform.Engineering.Copilot.Environment.Core.Extensions;
+using Platform.Engineering.Copilot.Discovery.Core.Extensions;
+using Platform.Engineering.Copilot.ServiceCreation.Core.Extensions;
+using Platform.Engineering.Copilot.Security.Core.Extensions;
+using Platform.Engineering.Copilot.Document.Core.Extensions;
+using Platform.Engineering.Copilot.Infrastructure.Core.Services;
+using Platform.Engineering.Copilot.Compliance.Core.Services.Compliance;
+using Platform.Engineering.Copilot.Compliance.Core.Interfaces;
+using Platform.Engineering.Copilot.Compliance.Core.Services.Governance;
+using Platform.Engineering.Copilot.Compliance.Core.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,10 +30,10 @@ if (File.Exists(sharedConfigPath))
     Console.WriteLine($"[Admin API] Loaded shared configuration from: {sharedConfigPath}");
 }
 
-// Configure to listen on port 7002
+// Configure to listen on port 5002
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(7002);
+    options.ListenAnyIP(5002);
 });
 
 // Add services to the container
@@ -70,7 +80,7 @@ builder.Services.AddCors(options =>
 });
 
 // Register database context - use shared database from root
-var sharedDbPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../..", "environment_management.db"));
+var sharedDbPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../..", "platform_engineering_copilot_management.db"));
 var connectionString = $"Data Source={sharedDbPath}";
 
 Console.WriteLine($"[Admin API] Using database: {sharedDbPath}");
@@ -95,10 +105,10 @@ builder.Services.AddScoped<IAzureCostManagementService>(
 
 // Cost Optimization and Predictive Scaling Engines (now properly scoped)
 builder.Services.AddScoped<ICostOptimizationEngine, CostOptimizationEngine>();
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.Infrastructure.IPredictiveScalingEngine, Platform.Engineering.Copilot.Core.Services.Infrastructure.PredictiveScalingEngine>();
+builder.Services.AddScoped<IPredictiveScalingEngine, PredictiveScalingEngine>();
 
 // Environment Storage Service (for database persistence)
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.Infrastructure.EnvironmentStorageService>();
+builder.Services.AddScoped<EnvironmentStorageService>();
 
 // Deployment Orchestration Service
 builder.Services.AddScoped<IDeploymentOrchestrationService, Platform.Engineering.Copilot.Core.Services.Deployment.DeploymentOrchestrationService>();
@@ -106,8 +116,8 @@ builder.Services.AddScoped<IDeploymentOrchestrationService, Platform.Engineering
 // Add services needed by EnvironmentManagementEngine
 builder.Services.AddScoped<IGitHubServices, Platform.Engineering.Copilot.Core.Services.GitHubGatewayService>();
 
-// Navy Flankspeed Onboarding Service
-builder.Services.AddScoped<IOnboardingService, Platform.Engineering.Copilot.Core.Services.Onboarding.FlankspeedOnboardingService>();
+// Navy Flankspeed ServiceCreation Service
+builder.Services.AddScoped<IOnboardingService, Platform.Engineering.Copilot.Core.Services.ServiceCreation.FlankspeedOnboardingService>();
 
 // Notification Services (Phase 5)
 builder.Services.Configure<Platform.Engineering.Copilot.Core.Configuration.EmailConfiguration>(
@@ -129,22 +139,22 @@ builder.Services.AddSingleton<ITeamsNotificationService,
 builder.Services.AddMemoryCache();
 
 // Add ComplianceMetricsService (needed by NistControlsService)
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.Compliance.ComplianceMetricsService>();
+builder.Services.AddScoped<ComplianceMetricsService>();
 
 // Add services needed by AtoComplianceEngine
-builder.Services.AddScoped<INistControlsService, Platform.Engineering.Copilot.Core.Services.Compliance.NistControlsService>();
+builder.Services.AddScoped<INistControlsService, NistControlsService>();
 
 // Environment Management Engine (for environment lifecycle operations)
-builder.Services.AddScoped<IEnvironmentManagementEngine, Platform.Engineering.Copilot.Core.Services.Infrastructure.EnvironmentManagementEngine>();
+builder.Services.AddScoped<IEnvironmentManagementEngine, EnvironmentManagementEngine>();
 
 // Infrastructure Provisioning Service (for foundational infrastructure resources)
-builder.Services.AddScoped<IInfrastructureProvisioningService, Platform.Engineering.Copilot.Core.Services.Infrastructure.InfrastructureProvisioningService>();
+builder.Services.AddScoped<IInfrastructureProvisioningService, InfrastructureProvisioningService>();
 
 // Governance Engine (for policy enforcement and approval workflows)
-builder.Services.AddScoped<IGovernanceEngine, Platform.Engineering.Copilot.Core.Services.Governance.GovernanceEngine>();
+builder.Services.AddScoped<IGovernanceEngine, GovernanceEngine>();
 
 // Azure Policy Service (for Azure policy evaluation)
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.IAzurePolicyService, AzurePolicyEngine>();
+builder.Services.AddScoped<IAzurePolicyService, AzurePolicyEngine>();
 
 // ATO Compliance Engine (for security scanning) - Will be registered as optional for now
 // builder.Services.AddScoped<IAtoComplianceEngine, Platform.Engineering.Copilot.Core.Services.Compliance.AtoComplianceEngine>();
@@ -174,6 +184,16 @@ builder.Services.AddScoped<ITemplateAdminService, TemplateAdminService>();
 
 // Register Azure Pricing Service for cost estimates
 builder.Services.AddScoped<IAzurePricingService, AzurePricingService>();
+
+// Add domain-specific agents and plugins
+builder.Services.AddComplianceCore();
+builder.Services.AddInfrastructureCore();
+builder.Services.AddCostManagementCore();
+builder.Services.AddEnvironmentCore();
+builder.Services.AddDiscoveryCore();
+builder.Services.AddServiceCreationCore();
+builder.Services.AddSecurityCore();
+builder.Services.AddDocumentCore();
 
 // NOTE: DeploymentPollingService removed - legacy service from Extensions project
 
@@ -215,8 +235,8 @@ Console.WriteLine("==============================================");
 Console.WriteLine("Supervisor Platform Admin API");
 Console.WriteLine("==============================================");
 Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
-Console.WriteLine($"Listening on: http://localhost:7002");
-Console.WriteLine($"Swagger UI: http://localhost:7002");
+Console.WriteLine($"Listening on: http://localhost:5002");
+Console.WriteLine($"Swagger UI: http://localhost:5002");
 Console.WriteLine("==============================================");
 
 app.Run();

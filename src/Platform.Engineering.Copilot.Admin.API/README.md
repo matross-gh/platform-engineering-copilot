@@ -4,20 +4,20 @@ Admin API for platform engineers to manage service templates, infrastructure, an
 
 ## 🚀 Overview
 
-The Platform Admin API provides full CRUD operations for service templates and infrastructure management. This API powers the **Platform Engineering Admin Console** (web UI on port 7003) and can be used directly for automation and scripting.
+The Platform Admin API provides full CRUD operations for service templates and infrastructure management. This API powers the **Platform Engineering Admin Console** (web UI on port 5003) and can be used directly for automation and scripting.
 
 ### Access Methods
 
-1. **🌐 Admin Console (Recommended)**: http://localhost:7003 - User-friendly web interface
-2. **📡 Admin API**: http://localhost:7002 - RESTful API for automation
-3. **📖 Swagger UI**: http://localhost:7002 - Interactive API documentation
+1. **🌐 Admin Console (Recommended)**: http://localhost:5003 - User-friendly web interface
+2. **📡 Admin API**: http://localhost:5002 - RESTful API for automation
+3. **📖 Swagger UI**: http://localhost:5002 - Interactive API documentation
 
 ## 🏗️ Architecture
 
 ```
-Platform Engineering Admin Console (Port 7003) - Web UI
+Platform Engineering Admin Console (Port 5003) - Web UI
     ↓ HTTP
-Platform Admin API (Port 7002) - REST API
+Platform Admin API (Port 5002) - REST API
     ↓
 ├── Template Management (Full CRUD)
 ├── Infrastructure Provisioning
@@ -294,10 +294,10 @@ cd src/Platform.Engineering.Copilot.Admin
 dotnet run
 ```
 
-The API will start on `http://localhost:7002`
+The API will start on `http://localhost:5002`
 
 ### Access Swagger UI
-Open your browser to: `http://localhost:7002`
+Open your browser to: `http://localhost:5002`
 
 The Swagger UI provides interactive API documentation and testing.
 
@@ -305,7 +305,7 @@ The Swagger UI provides interactive API documentation and testing.
 
 ### Example 1: Create .NET Microservice with SQL Server
 ```bash
-curl -X POST http://localhost:7002/api/admin/templates \
+curl -X POST http://localhost:5002/api/admin/templates \
   -H "Content-Type: application/json" \
   -d '{
     "templateName": "dotnet-api-sqlserver",
@@ -332,7 +332,7 @@ curl -X POST http://localhost:7002/api/admin/templates \
 
 ### Example 2: Create Node.js + MongoDB Template
 ```bash
-curl -X POST http://localhost:7002/api/admin/templates \
+curl -X POST http://localhost:5002/api/admin/templates \
   -H "Content-Type: application/json" \
   -d '{
     "templateName": "nodejs-mongodb-api",
@@ -357,7 +357,7 @@ curl -X POST http://localhost:7002/api/admin/templates \
 
 ### Example 3: Infrastructure-Only Template
 ```bash
-curl -X POST http://localhost:7002/api/admin/templates \
+curl -X POST http://localhost:5002/api/admin/templates \
   -H "Content-Type: application/json" \
   -d '{
     "templateName": "data-platform-infra",
@@ -387,7 +387,7 @@ curl -X POST http://localhost:7002/api/admin/templates \
 
 ### Current State
 - **Development Mode**: No authentication required
-- **Port 7002**: Admin API (full access)
+- **Port 5002**: Admin API (full access)
 - **MCP Tools**: Read-only access (list, get, delete)
 
 ### Production Recommendations
@@ -439,7 +439,7 @@ The `ServiceTemplateToolReadOnly` provides read-only access via MCP:
 ```
 
 For create/update operations, it directs users to the Admin API:
-> ℹ️ **To create new templates**, use the Platform Admin API at `http://localhost:7002`
+> ℹ️ **To create new templates**, use the Platform Admin API at `http://localhost:5002`
 
 ## 🎓 Best Practices
 
@@ -475,11 +475,11 @@ For create/update operations, it directs users to the Admin API:
 
 ## 📝 Notes
 
-- Admin API runs on port **7002**
-- Platform API runs on port **7001**
-- Chat App runs on port **7000**
+- Admin API runs on port **5002**
+- MCP server runs on port **5100**
+- Chat App runs on port **5001**
 - All APIs share the same `appsettings.json` configuration
-- Database: SQLite `environment_management.db`
+- Database: SQLite `platform_engineering_copilot_management.db`
 
 ## 🤝 Contributing
 

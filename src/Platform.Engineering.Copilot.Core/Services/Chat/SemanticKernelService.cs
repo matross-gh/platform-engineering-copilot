@@ -3,7 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using Platform.Engineering.Copilot.Core.Interfaces;
+using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 using Platform.Engineering.Copilot.Core.Models.Agents;
 
 namespace Platform.Engineering.Copilot.Core.Services.Chat;
@@ -29,7 +29,7 @@ public class SemanticKernelService : ISemanticKernelService
     /// <summary>
     /// Create a specialized kernel for a specific agent type.
     /// This is the PRIMARY method used by the multi-agent system.
-    /// Each agent (Orchestrator, Infrastructure, Compliance, Cost, Environment, Discovery, Onboarding)
+    /// Each agent (Orchestrator, Infrastructure, Compliance, Cost, Environment, Discovery, ServiceCreation)
     /// calls this to get its own isolated kernel instance.
     /// </summary>
     /// <param name="agentType">The type of agent to create a kernel for</param>

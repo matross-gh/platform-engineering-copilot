@@ -1,0 +1,33 @@
+using Microsoft.Extensions.DependencyInjection;
+using Platform.Engineering.Copilot.Core.Interfaces.Agents;
+using Platform.Engineering.Copilot.Core.Interfaces.Azure;
+using Platform.Engineering.Copilot.Core.Interfaces.Cost;
+using Platform.Engineering.Copilot.CostManagement.Agent.Services.Agents;
+using Platform.Engineering.Copilot.CostManagement.Agent.Plugins;
+using Platform.Engineering.Copilot.Core.Services.Azure.Cost;
+
+namespace Platform.Engineering.Copilot.CostManagement.Core.Extensions;
+
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddCostManagementCore(this IServiceCollection services)
+    {
+        // Register Cost Management Agent and Plugin
+        services.AddScoped<CostManagementAgent>();
+        services.AddScoped<ISpecializedAgent, CostManagementAgent>(sp => sp.GetRequiredService<CostManagementAgent>());
+        services.AddScoped<CostManagementPlugin>();
+        
+        // Register Cost Optimization Services
+        services.AddScoped<ICostOptimizationEngine, CostOptimizationEngine>();
+        
+        // Register Azure Metrics Service
+        services.AddScoped<AzureMetricsService>();
+        services.AddScoped<IAzureMetricsService, AzureMetricsService>();
+        
+        // Register Azure Cost Management Service
+        services.AddScoped<AzureCostManagementService>();
+        services.AddScoped<IAzureCostManagementService, AzureCostManagementService>();
+        
+        return services;
+    }
+}

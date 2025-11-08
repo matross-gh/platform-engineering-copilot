@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Mcp.Tools;
 using System.Text.Json;
@@ -16,12 +17,10 @@ namespace Platform.Engineering.Copilot.Mcp.Server;
 /// </summary>
 public class McpHttpBridge
 {
-    private readonly PlatformEngineeringCopilotTools _chatTool;
     private readonly ILogger<McpHttpBridge> _logger;
 
-    public McpHttpBridge(PlatformEngineeringCopilotTools chatTool, ILogger<McpHttpBridge> logger)
+    public McpHttpBridge(ILogger<McpHttpBridge> logger)
     {
-        _chatTool = chatTool;
         _logger = logger;
     }
 
@@ -31,7 +30,7 @@ public class McpHttpBridge
     public void MapHttpEndpoints(WebApplication app)
     {
         // Process chat request through multi-agent orchestrator
-        app.MapPost("/mcp/chat", async (HttpContext context) =>
+        app.MapPost("/mcp/chat", async (HttpContext context, PlatformEngineeringCopilotTools chatTool) =>
         {
             try
             {
@@ -46,10 +45,11 @@ public class McpHttpBridge
                     return;
                 }
 
-                _logger.LogInformation("HTTP: Processing chat request for conversation: {ConversationId}", 
-                    requestBody.ConversationId ?? "new");
+                context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>()
+                    .LogInformation("HTTP: Processing chat request for conversation: {ConversationId}", 
+                        requestBody.ConversationId ?? "new");
 
-                var result = await _chatTool.ProcessRequestAsync(
+                var result = await chatTool.ProcessRequestAsync(
                     requestBody.Message,
                     requestBody.ConversationId,
                     requestBody.Context,
@@ -59,7 +59,8 @@ public class McpHttpBridge
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing chat request");
+                context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>()
+                    .LogError(ex, "Error processing chat request");
                 context.Response.StatusCode = 500;
                 await context.Response.WriteAsJsonAsync(new { error = ex.Message });
             }

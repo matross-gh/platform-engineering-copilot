@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const config = {
-    // Platform Copilot API
-    platformApiUrl: process.env.PLATFORM_API_URL || 'http://localhost:7001',
+    // MCP HTTP endpoint (legacy env names retained)
+    platformApiUrl: process.env.PLATFORM_API_URL || 'http://localhost:5100',
     platformApiKey: process.env.PLATFORM_API_KEY || '',
 
     // Azure AD

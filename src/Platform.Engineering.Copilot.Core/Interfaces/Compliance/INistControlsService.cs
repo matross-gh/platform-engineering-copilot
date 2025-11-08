@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.Compliance;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces;
+namespace Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 
 /// <summary>
 /// Production-ready service for fetching and caching NIST 800-53 controls

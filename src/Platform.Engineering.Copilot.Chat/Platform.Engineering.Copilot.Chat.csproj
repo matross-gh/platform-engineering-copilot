@@ -35,7 +35,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Platform.Engineering.Copilot.Core\Platform.Engineering.Copilot.Core.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Data\Platform.Engineering.Copilot.Data.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Compliance.Agent\Platform.Engineering.Copilot.Compliance.Agent.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Infrastructure.Agent\Platform.Engineering.Copilot.Infrastructure.Agent.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.CostManagement.Agent\Platform.Engineering.Copilot.CostManagement.Agent.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Environment.Agent\Platform.Engineering.Copilot.Environment.Agent.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Discovery.Agent\Platform.Engineering.Copilot.Discovery.Agent.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.ServiceCreation.Agent\Platform.Engineering.Copilot.ServiceCreation.Agent.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Security.Agent\Platform.Engineering.Copilot.Security.Agent.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Document.Agent\Platform.Engineering.Copilot.Document.Agent.csproj" />
   </ItemGroup>
 
   <Target Name="DebugEnsureNodeEnv" BeforeTargets="Build" Condition=" '$(Configuration)' == 'Debug' And !Exists('$(SpaRoot)node_modules') ">

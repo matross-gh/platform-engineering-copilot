@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.Compliance;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces;
+namespace Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 
 /// <summary>
 /// Comprehensive ATO Remediation Engine interface for orchestrating compliance remediation workflows

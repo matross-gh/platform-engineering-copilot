@@ -12,7 +12,7 @@ using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Configuration;
 using Platform.Engineering.Copilot.Core.Services.Compliance;
-using Platform.Engineering.Copilot.Data.Context;
+using Platform.Engineering.Copilot.Core.Data.Context;
 using Xunit;
 
 namespace Platform.Engineering.Copilot.Tests.Integration.Governance;

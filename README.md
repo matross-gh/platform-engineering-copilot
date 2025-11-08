@@ -858,7 +858,7 @@ For issues, questions, or contributions:
 - **[Natural Language Test Cases](./NATURAL-LANGUAGE-TEST-CASES.md)** - 50+ test scenarios for multi-agent system
 
 ### For Developers
-- **[Generic Onboarding Framework](./docs/GENERIC-ONBOARDING-FRAMEWORK.md)** - Build custom onboarding workflows
+- **[Generic ServiceCreation Framework](./docs/GENERIC-ServiceCreation-FRAMEWORK.md)** - Build custom ServiceCreation workflows
 - **[Generator Architecture](./docs/ARCHITECTURE.md#generator-architecture)** - Create new generators
 - **[Implementation Roadmap](./docs/IMPLEMENTATION-ROADMAP.md)** - Development roadmap
 

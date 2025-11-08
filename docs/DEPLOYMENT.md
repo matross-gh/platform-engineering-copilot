@@ -88,28 +88,28 @@ NIST_CONTROLS_BASE_URL=https://raw.githubusercontent.com/usnistgov/oscal-content
 **Option 1: MCP Server Only (Recommended for AI Client Development)**
 ```bash
 # Start essentials
-docker-compose -f docker-compose.essentials.yml up -d
+docker compose -f docker-compose.essentials.yml up -d
 
 # With development hot reload
-docker-compose -f docker-compose.essentials.yml -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.essentials.yml -f docker-compose.dev.yml up -d
 
 # With production settings
-docker-compose -f docker-compose.essentials.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.essentials.yml -f docker-compose.prod.yml up -d
 ```
 
 **Option 2: All Services (Complete Platform)**
 ```bash
 # Start all services
-docker-compose up -d
+docker compose up -d
 
 # Development with hot reload
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 # Production with scaling
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 # Production with reverse proxy
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile proxy up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile proxy up -d
 ```
 
 **📖 See [DOCKER-COMPOSE-GUIDE.md](../DOCKER-COMPOSE-GUIDE.md) for all configuration options**
@@ -118,11 +118,11 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile proxy 
 
 ```bash
 # Check service status
-docker-compose ps
+docker compose ps
 
 # View logs
-docker-compose logs -f platform-mcp
-docker-compose logs -f sqlserver
+docker compose logs -f platform-mcp
+docker compose logs -f sqlserver
 
 # Test MCP Server health
 curl http://localhost:5100/health
@@ -135,66 +135,95 @@ curl http://localhost:5003/health  # Admin Client
 
 ### Docker Compose Configurations
 
-#### Production (`docker-compose.prod.yml`)
+The platform now runs across four ASP.NET Core services plus optional infrastructure containers. The base compose file builds each service from the `src/` directory and binds the expected local development ports.
+
+#### Base (`docker-compose.yml`)
 
 ```yaml
-version: '3.8'
+version: "3.9"
 
 services:
-  platform-api:
+  platform-mcp:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: src/Platform.Engineering.Copilot.Mcp/Dockerfile
     ports:
-      - "7001:80"
+      - "5100:5100"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=${CONNECTION_STRING}
-      - Azure__SubscriptionId=${AZURE_SUBSCRIPTION_ID}
-      - Azure__TenantId=${AZURE_TENANT_ID}
-      - Azure__CloudEnvironment=${AZURE_ENVIRONMENT}
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:5100
+      - ASPNETCORE_HTTP_PORTS=5100
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=plaform-engineering-copilotDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
     depends_on:
-      - sqlserver
-      - redis
-    restart: unless-stopped
+      sqlserver:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "curl -f http://localhost:5100/health || exit 1"]
 
-  chat-service:
+  platform-chat:
     build:
       context: .
-      dockerfile: Dockerfile.chat
+      dockerfile: src/Platform.Engineering.Copilot.Chat/Dockerfile
     ports:
-      - "5000:80"
+      - "5001:5001"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - PlatformServices__ApiBaseUrl=http://platform-api
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:5001
+      - ASPNETCORE_HTTP_PORTS=5001
+      - McpServer__BaseUrl=http://platform-mcp:5100
     depends_on:
-      - platform-api
-    restart: unless-stopped
+      platform-mcp:
+        condition: service_healthy
+      sqlserver:
+        condition: service_healthy
+
+  admin-api:
+    build:
+      context: .
+      dockerfile: src/Platform.Engineering.Copilot.Admin.API/Dockerfile
+    ports:
+      - "5002:5002"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:5002
+      - ASPNETCORE_HTTP_PORTS=5002
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=plaform-engineering-copilotAdminDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  admin-client:
+    build:
+      context: .
+      dockerfile: src/Platform.Engineering.Copilot.Admin.Client/Dockerfile
+    ports:
+      - "5003:5003"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:5003
+      - ASPNETCORE_HTTP_PORTS=5003
+      - AdminApi__BaseUrl=http://admin-api:5002
+    depends_on:
+      admin-api:
+        condition: service_healthy
 
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=${SA_PASSWORD}
     ports:
       - "1433:1433"
-    volumes:
-      - sqlserver_data:/var/opt/mssql
-    restart: unless-stopped
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=plaform-engineering-copilotDB123!
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P plaform-engineering-copilotDB123! -C -Q 'SELECT 1' || exit 1"]
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server /etc/redis/redis.conf
+    profiles:
+      - cache
 
   nginx:
     image: nginx:alpine
@@ -203,95 +232,95 @@ services:
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - platform-api
-      - chat-service
-    restart: unless-stopped
-
-volumes:
-  sqlserver_data:
-  redis_data:
+    profiles:
+      - proxy
 ```
 
-#### Development (`docker-compose.dev.yml`)
+#### Production Overrides (`docker-compose.prod.yml`)
 
 ```yaml
-version: '3.8'
-
 services:
-  platform-api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-      target: development
-    ports:
-      - "7001:80"
+  platform-mcp:
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=${CONNECTION_STRING}
-    volumes:
-      - ./src/Platform.Engineering.Copilot.API:/app/src/Platform.Engineering.Copilot.API
-      - ./src/Platform.Engineering.Copilot.Core:/app/src/Platform.Engineering.Copilot.Core
-    depends_on:
-      - sqlserver
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://0.0.0.0:5100
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
-  chat-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.chat
-      target: development
-    ports:
-      - "5000:80"
+  platform-chat:
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - PlatformServices__ApiBaseUrl=http://platform-api
-    volumes:
-      - ./src/Platform.Engineering.Copilot.Chat:/app/src/Platform.Engineering.Copilot.Chat
+      - ASPNETCORE_ENVIRONMENT=Production
+    deploy:
+      replicas: 1
+
+  admin-api:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+
+  admin-client:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
 
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=${SA_PASSWORD}
-    ports:
-      - "1433:1433"
+      - MSSQL_PID=Standard
 
-  adminer:
-    image: adminer
-    ports:
-      - "8081:8080"
-    depends_on:
-      - sqlserver
+  nginx:
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+```
+
+> Apply production settings with `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` to layer environment-specific knobs on top of the base file.
+
+#### Development Overrides (`docker-compose.dev.yml`)
+
+Use the development override when you want bind-mounted source code or extra tooling such as Adminer:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
 ### Docker Management Commands
 
 ```bash
 # View running containers
-docker-compose ps
+docker compose ps
 
 # View logs
-docker-compose logs -f [service-name]
+docker compose logs -f platform-mcp
 
 # Restart specific service
-docker-compose restart platform-api
+docker compose restart platform-chat
 
 # Update and restart services
-docker-compose pull
-docker-compose up -d
+docker compose pull
+docker compose up -d
 
 # Stop all services
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (destructive)
-docker-compose down -v
+docker compose down -v
 
 # Build specific service
-docker-compose build platform-api
+docker compose build admin-api
+
+# Redeploy a single service after rebuilding
+docker compose up -d admin-api
 
 # Scale services
-docker-compose up -d --scale platform-api=3
+docker compose up -d --scale platform-mcp=3
 ```
 
 ---
@@ -350,30 +379,30 @@ helm install platform-supervisor ./helm/platform-supervisor \
 
 ### 4. Manual Kubernetes Deployment
 
-#### Platform API Deployment
+#### Platform MCP Deployment
 
 ```yaml
-# platform-api-deployment.yaml
+# platform-mcp-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: platform-api
+  name: platform-mcp
   namespace: platform-supervisor
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: platform-api
+      app: platform-mcp
   template:
     metadata:
       labels:
-        app: platform-api
+        app: platform-mcp
     spec:
       containers:
-      - name: platform-api
-        image: your-registry/platform-api:latest
+      - name: platform-mcp
+        image: your-registry/platform-mcp:latest
         ports:
-        - containerPort: 80
+        - containerPort: 5100
         env:
         - name: ASPNETCORE_ENVIRONMENT
           value: "Production"
@@ -387,6 +416,8 @@ spec:
             secretKeyRef:
               name: azure-config
               key: subscription-id
+        - name: ASPNETCORE_URLS
+          value: "http://0.0.0.0:5100"
         resources:
           requests:
             memory: "256Mi"
@@ -397,13 +428,13 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 80
+            port: 5100
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health/ready
-            port: 80
+            port: 5100
           initialDelaySeconds: 5
           periodSeconds: 5
 
@@ -411,16 +442,18 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: platform-api-service
+  name: platform-mcp-service
   namespace: platform-supervisor
 spec:
   selector:
-    app: platform-api
+    app: platform-mcp
   ports:
-  - port: 80
-    targetPort: 80
+  - port: 5100
+    targetPort: 5100
   type: ClusterIP
 ```
+
+> Create similar manifests for `platform-chat` (port 5001), `admin-api` (port 5002), and `admin-client` (port 5003). Reference the MCP service (`platform-mcp-service`) from downstream deployments via environment variables such as `McpServer__BaseUrl=http://platform-mcp-service:5100`.
 
 #### Ingress Configuration
 
@@ -445,20 +478,27 @@ spec:
   - host: platform.yourdomain.com
     http:
       paths:
-      - path: /api
+      - path: /mcp
         pathType: Prefix
         backend:
           service:
-            name: platform-api-service
+            name: platform-mcp-service
             port:
-              number: 80
-      - path: /
+              number: 5100
+      - path: /chat
         pathType: Prefix
         backend:
           service:
-            name: chat-service
+            name: platform-chat-service
             port:
-              number: 80
+              number: 5001
+      - path: /admin
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-client-service
+            port:
+              number: 5003
 ```
 
 ---
@@ -471,19 +511,32 @@ spec:
 # Create resource group
 az group create --name platform-supervisor-rg --location usgovvirginia
 
-# Deploy to ACI
+# Deploy MCP orchestrator
 az container create \
   --resource-group platform-supervisor-rg \
-  --name platform-supervisor \
-  --image your-registry/platform-api:latest \
-  --ports 7001 5000 \
+  --name platform-mcp \
+  --image your-registry/platform-mcp:latest \
+  --ports 5100 \
   --environment-variables \
     ASPNETCORE_ENVIRONMENT=Production \
-    Azure__SubscriptionId=$AZURE_SUBSCRIPTION_ID \
+    ASPNETCORE_URLS=http://0.0.0.0:5100 \
   --secure-environment-variables \
     ConnectionStrings__DefaultConnection=$CONNECTION_STRING \
   --cpu 2 \
   --memory 4
+
+# Deploy chat experience (optional)
+az container create \
+  --resource-group platform-supervisor-rg \
+  --name platform-chat \
+  --image your-registry/platform-chat:latest \
+  --ports 5001 \
+  --environment-variables \
+    ASPNETCORE_ENVIRONMENT=Production \
+    ASPNETCORE_URLS=http://0.0.0.0:5001 \
+    McpServer__BaseUrl=http://platform-mcp:5100 \
+  --cpu 1 \
+  --memory 2
 ```
 
 ### Azure Kubernetes Service (AKS)
@@ -514,18 +567,28 @@ az containerapp env create \
   --resource-group platform-supervisor-rg \
   --location usgovvirginia
 
-# Deploy API service
+# Deploy MCP container app
 az containerapp create \
-  --name platform-api \
+  --name platform-mcp \
   --resource-group platform-supervisor-rg \
   --environment platform-supervisor-env \
-  --image your-registry/platform-api:latest \
-  --target-port 80 \
+  --image your-registry/platform-mcp:latest \
+  --target-port 5100 \
   --ingress external \
   --min-replicas 1 \
   --max-replicas 10 \
   --cpu 1.0 \
   --memory 2Gi
+
+# Deploy web workloads
+az containerapp create \
+  --name platform-chat \
+  --resource-group platform-supervisor-rg \
+  --environment platform-supervisor-env \
+  --image your-registry/platform-chat:latest \
+  --target-port 5001 \
+  --ingress external \
+  --env-vars McpServer__BaseUrl=https://platform-mcp.yourdomain.com
 ```
 
 ---
@@ -540,10 +603,13 @@ export ASPNETCORE_ENVIRONMENT=Production
 export AZURE_SUBSCRIPTION_ID=your-subscription-id
 export AZURE_TENANT_ID=your-tenant-id
 export AZURE_ENVIRONMENT=AzureUSGovernment
-export CONNECTION_STRING="Server=prod-sql-server;Database=PlatformSupervisor;..."
+export CONNECTION_STRING="Server=prod-sql-server;Database=PlatformCopilot;..."
 
-# Security
-export CORS_ORIGINS="https://yourdomain.com,https://api.yourdomain.com"
+# Public endpoints
+export MCP_BASE_URL="https://mcp.yourdomain.com"
+export CHAT_BASE_URL="https://chat.yourdomain.com"
+export ADMIN_API_BASE_URL="https://admin-api.yourdomain.com"
+export ADMIN_CLIENT_BASE_URL="https://admin.yourdomain.com"
 export JWT_SECRET=your-jwt-secret
 export ENCRYPTION_KEY=your-encryption-key
 
@@ -569,10 +635,18 @@ export REQUEST_TIMEOUT_SECONDS=30
     "TenantId": "#{AZURE_TENANT_ID}#",
     "CloudEnvironment": "AzureUSGovernment"
   },
-  "PlatformServices": {
-    "ApiBaseUrl": "https://api.yourdomain.com",
+  "McpServer": {
+    "PublicBaseUrl": "https://mcp.yourdomain.com",
+    "EnableStdioBridge": true
+  },
+  "Chat": {
+    "BaseUrl": "https://chat.yourdomain.com",
     "EnableCaching": true,
     "CacheExpirationMinutes": 15
+  },
+  "Admin": {
+    "ApiBaseUrl": "https://admin-api.yourdomain.com",
+    "ClientBaseUrl": "https://admin.yourdomain.com"
   },
   "Security": {
     "EnableHttpsRedirection": true,
@@ -634,7 +708,7 @@ global:
 scrape_configs:
   - job_name: 'platform-supervisor'
     static_configs:
-      - targets: ['platform-api:80']
+      - targets: ['platform-mcp:5100']
     metrics_path: /metrics
     scrape_interval: 5s
 ```
@@ -662,14 +736,20 @@ server {
     add_header X-Frame-Options DENY;
     add_header X-Content-Type-Options nosniff;
     
-    location / {
-        proxy_pass http://chat-service:80;
+    location /chat/ {
+        proxy_pass http://platform-chat:5001/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
     
-    location /api {
-        proxy_pass http://platform-api:80;
+    location /mcp/ {
+        proxy_pass http://platform-mcp:5100/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /admin/ {
+        proxy_pass http://admin-client:5003/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
@@ -699,7 +779,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: platform-api
+      app: platform-mcp
   policyTypes:
   - Ingress
   - Egress
@@ -707,10 +787,10 @@ spec:
   - from:
     - podSelector:
         matchLabels:
-          app: chat-service
+          app: platform-chat
     ports:
     - protocol: TCP
-      port: 80
+      port: 5001
   egress:
   - to: []
     ports:
@@ -747,13 +827,22 @@ jobs:
     
     - name: Build and push Docker images
       run: |
-        docker build -t ${{ secrets.REGISTRY_URL }}/platform-api:${{ github.sha }} -f Dockerfile.api .
-        docker push ${{ secrets.REGISTRY_URL }}/platform-api:${{ github.sha }}
+        docker build -t ${{ secrets.REGISTRY_URL }}/platform-mcp:${{ github.sha }} -f src/Platform.Engineering.Copilot.Mcp/Dockerfile .
+        docker push ${{ secrets.REGISTRY_URL }}/platform-mcp:${{ github.sha }}
+        docker build -t ${{ secrets.REGISTRY_URL }}/platform-chat:${{ github.sha }} -f src/Platform.Engineering.Copilot.Chat/Dockerfile .
+        docker push ${{ secrets.REGISTRY_URL }}/platform-chat:${{ github.sha }}
+        docker build -t ${{ secrets.REGISTRY_URL }}/admin-api:${{ github.sha }} -f src/Platform.Engineering.Copilot.Admin.API/Dockerfile .
+        docker push ${{ secrets.REGISTRY_URL }}/admin-api:${{ github.sha }}
+        docker build -t ${{ secrets.REGISTRY_URL }}/admin-client:${{ github.sha }} -f src/Platform.Engineering.Copilot.Admin.Client/Dockerfile .
+        docker push ${{ secrets.REGISTRY_URL }}/admin-client:${{ github.sha }}
     
     - name: Deploy to AKS
       run: |
         az aks get-credentials --resource-group platform-supervisor-rg --name platform-supervisor-aks
-        kubectl set image deployment/platform-api platform-api=${{ secrets.REGISTRY_URL }}/platform-api:${{ github.sha }}
+        kubectl set image deployment/platform-mcp platform-mcp=${{ secrets.REGISTRY_URL }}/platform-mcp:${{ github.sha }}
+        kubectl set image deployment/platform-chat platform-chat=${{ secrets.REGISTRY_URL }}/platform-chat:${{ github.sha }}
+        kubectl set image deployment/admin-api admin-api=${{ secrets.REGISTRY_URL }}/admin-api:${{ github.sha }}
+        kubectl set image deployment/admin-client admin-client=${{ secrets.REGISTRY_URL }}/admin-client:${{ github.sha }}
 ```
 
 ### Azure DevOps Pipeline
@@ -775,11 +864,35 @@ stages:
   - job: Build
     steps:
     - task: Docker@2
-      displayName: 'Build and Push API Image'
+      displayName: 'Build and Push MCP Image'
       inputs:
         command: 'buildAndPush'
-        repository: 'platform-api'
-        dockerfile: 'Dockerfile.api'
+        repository: 'platform-mcp'
+        dockerfile: 'src/Platform.Engineering.Copilot.Mcp/Dockerfile'
+        tags: '$(Build.BuildId)'
+
+    - task: Docker@2
+      displayName: 'Build and Push Chat Image'
+      inputs:
+        command: 'buildAndPush'
+        repository: 'platform-chat'
+        dockerfile: 'src/Platform.Engineering.Copilot.Chat/Dockerfile'
+        tags: '$(Build.BuildId)'
+
+    - task: Docker@2
+      displayName: 'Build and Push Admin API Image'
+      inputs:
+        command: 'buildAndPush'
+        repository: 'admin-api'
+        dockerfile: 'src/Platform.Engineering.Copilot.Admin.API/Dockerfile'
+        tags: '$(Build.BuildId)'
+
+    - task: Docker@2
+      displayName: 'Build and Push Admin Client Image'
+      inputs:
+        command: 'buildAndPush'
+        repository: 'admin-client'
+        dockerfile: 'src/Platform.Engineering.Copilot.Admin.Client/Dockerfile'
         tags: '$(Build.BuildId)'
 
 - stage: Deploy
@@ -807,26 +920,26 @@ stages:
 
 ```bash
 # Check container logs
-docker logs platform-api
+docker logs platform-mcp
 
 # Check resource usage
 docker stats
 
 # Verify environment variables
-docker exec platform-api env | grep AZURE
+docker exec platform-mcp env | grep ASPNETCORE
 ```
 
 #### Service Discovery Issues
 
 ```bash
 # Check DNS resolution
-kubectl exec -it platform-api -- nslookup sqlserver
+kubectl exec -it platform-mcp -- nslookup sqlserver
 
 # Check service endpoints
 kubectl get endpoints -n platform-supervisor
 
 # Test connectivity
-kubectl exec -it platform-api -- telnet sqlserver 1433
+kubectl exec -it platform-mcp -- telnet sqlserver 1433
 ```
 
 #### Performance Issues
@@ -836,26 +949,26 @@ kubectl exec -it platform-api -- telnet sqlserver 1433
 kubectl top pods -n platform-supervisor
 
 # Check health endpoints
-curl http://localhost:7001/health
-curl http://localhost:7001/health/ready
+curl http://localhost:5100/health
+curl http://localhost:5100/health/ready
 
 # Review application metrics
-curl http://localhost:7001/metrics
+curl http://localhost:5100/metrics
 ```
 
 ### Rollback Procedures
 
 ```bash
 # Kubernetes rollback
-kubectl rollout undo deployment/platform-api -n platform-supervisor
+kubectl rollout undo deployment/platform-mcp -n platform-supervisor
 
 # Docker Compose rollback
-docker-compose down
+docker compose down
 git checkout previous-tag
-docker-compose up -d
+docker compose up -d
 
 # Azure Container Apps rollback
-az containerapp revision list --name platform-api --resource-group platform-supervisor-rg
+az containerapp revision list --name platform-mcp --resource-group platform-supervisor-rg
 az containerapp revision activate --revision revision-name
 ```
 

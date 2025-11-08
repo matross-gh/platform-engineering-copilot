@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // In development, use proxy (relative path). In production, use full URL.
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? (process.env.REACT_APP_ADMIN_API_URL || 'http://localhost:7002')
+  ? (process.env.REACT_APP_ADMIN_API_URL || 'http://localhost:5002')
   : ''; // Empty string means relative to current origin, which will use the proxy
 
 // Enums
@@ -880,30 +880,30 @@ class AdminApiService {
 
   // ==================== END GOVERNANCE METHODS ====================
 
-  // ==================== NAVY FLANKSPEED ONBOARDING METHODS ====================
+  // ==================== NAVY FLANKSPEED ServiceCreation METHODS ====================
 
   /**
-   * Get pending Navy Flankspeed onboarding requests
+   * Get pending Navy Flankspeed ServiceCreation requests
    */
-  async getPendingOnboardingRequests(): Promise<OnboardingRequest[]> {
-    const response = await this.apiClient.get<OnboardingRequest[]>(
-      '/onboarding/pending'
+  async getPendingOnboardingRequests(): Promise<ServiceCreationRequest[]> {
+    const response = await this.apiClient.get<ServiceCreationRequest[]>(
+      '/ServiceCreation/pending'
     );
     return response.data;
   }
 
   /**
-   * Get specific onboarding request by ID
+   * Get specific ServiceCreation request by ID
    */
-  async getOnboardingRequest(requestId: string): Promise<OnboardingRequest> {
-    const response = await this.apiClient.get<OnboardingRequest>(
-      `/onboarding/${requestId}`
+  async getOnboardingRequest(requestId: string): Promise<ServiceCreationRequest> {
+    const response = await this.apiClient.get<ServiceCreationRequest>(
+      `/ServiceCreation/${requestId}`
     );
     return response.data;
   }
 
   /**
-   * Approve a Navy Flankspeed onboarding request
+   * Approve a Navy Flankspeed ServiceCreation request
    */
   async approveOnboardingRequest(
     requestId: string, 
@@ -911,14 +911,14 @@ class AdminApiService {
     comments?: string
   ): Promise<OnboardingApprovalResponse> {
     const response = await this.apiClient.post<OnboardingApprovalResponse>(
-      `/onboarding/${requestId}/approve`,
+      `/ServiceCreation/${requestId}/approve`,
       { approvedBy, comments }
     );
     return response.data;
   }
 
   /**
-   * Reject a Navy Flankspeed onboarding request
+   * Reject a Navy Flankspeed ServiceCreation request
    */
   async rejectOnboardingRequest(
     requestId: string, 
@@ -926,43 +926,43 @@ class AdminApiService {
     reason: string
   ): Promise<OnboardingApprovalResponse> {
     const response = await this.apiClient.post<OnboardingApprovalResponse>(
-      `/onboarding/${requestId}/reject`,
+      `/ServiceCreation/${requestId}/reject`,
       { rejectedBy, reason }
     );
     return response.data;
   }
 
   /**
-   * Get onboarding requests by mission owner email
+   * Get ServiceCreation requests by mission owner email
    */
-  async getOnboardingRequestsByOwner(email: string): Promise<OnboardingRequest[]> {
-    const response = await this.apiClient.get<OnboardingRequest[]>(
-      `/onboarding/owner/${email}`
+  async getOnboardingRequestsByOwner(email: string): Promise<ServiceCreationRequest[]> {
+    const response = await this.apiClient.get<ServiceCreationRequest[]>(
+      `/ServiceCreation/owner/${email}`
     );
     return response.data;
   }
 
   /**
-   * Get onboarding statistics
+   * Get ServiceCreation statistics
    */
   async getOnboardingStats(): Promise<any> {
     const response = await this.apiClient.get<any>(
-      '/onboarding/stats'
+      '/ServiceCreation/stats'
     );
     return response.data;
   }
 
-  // ==================== END NAVY FLANKSPEED ONBOARDING METHODS ====================
+  // ==================== END NAVY FLANKSPEED ServiceCreation METHODS ====================
 
   // ==================== CHAT METHODS ====================
 
   /**
    * Send a chat message to the AI assistant
-   * This calls the Platform API (port 7001) chat endpoint
+   * This calls the MCP HTTP endpoint (port 5100) chat interface
    */
   async sendChatMessage(message: string, context?: string[]): Promise<ChatResponse> {
-    // Platform API is on a different port, so we need to use full URL
-    const platformApiUrl = process.env.REACT_APP_PLATFORM_API_URL || 'http://localhost:7001';
+    // MCP HTTP endpoint runs on a different port, so we need to use a full URL (env var retained for backward compatibility)
+    const platformApiUrl = process.env.REACT_APP_PLATFORM_API_URL || 'http://localhost:5100';
     
     const response = await axios.post<ChatResponse>(
       `${platformApiUrl}/api/chat/query`,
@@ -1208,8 +1208,8 @@ export interface ApprovalStatsResponse {
   byResourceType: Record<string, number>;
 }
 
-// ==================== NAVY FLANKSPEED ONBOARDING TYPES ====================
-export interface OnboardingRequest {
+// ==================== NAVY FLANKSPEED ServiceCreation TYPES ====================
+export interface ServiceCreationRequest {
   id: string;
   // Mission Details
   missionName: string;
@@ -1274,7 +1274,7 @@ export interface OnboardingApprovalResponse {
   message: string;
   provisioningJobId?: string;
 }
-// ==================== END NAVY FLANKSPEED ONBOARDING TYPES ====================
+// ==================== END NAVY FLANKSPEED ServiceCreation TYPES ====================
 
 export interface NamingValidationResponse {
   isValid: boolean;

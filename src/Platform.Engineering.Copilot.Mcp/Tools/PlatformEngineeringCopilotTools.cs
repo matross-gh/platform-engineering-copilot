@@ -1,7 +1,5 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Platform.Engineering.Copilot.Core.Interfaces;
-using Platform.Engineering.Copilot.Core.Models.IntelligentChat;
+using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 
 namespace Platform.Engineering.Copilot.Mcp.Tools;
 

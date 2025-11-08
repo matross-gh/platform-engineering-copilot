@@ -1,6 +1,6 @@
 using Octokit;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces
+namespace Platform.Engineering.Copilot.Core.Interfaces.GitHub
 {
     /// <summary>
     /// Gateway service interface for GitHub operations

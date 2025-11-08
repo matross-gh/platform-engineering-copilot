@@ -2,8 +2,6 @@
 # This configuration includes only the MCP Server and SQL Server
 # Use this for minimal deployments or when connecting AI clients via stdio mode
 
-version: '3.8'
-
 services:
   # SQL Server Database
   sqlserver:
@@ -53,6 +51,11 @@ services:
       - Gateway__Azure__CloudEnvironment=${AZURE_CLOUD_ENVIRONMENT:-AzureGovernment}
       - Gateway__Azure__UseManagedIdentity=${AZURE_USE_MANAGED_IDENTITY:-false}
       - Gateway__Azure__Enabled=${AZURE_ENABLED:-true}
+      
+      # Azure Service Principal Authentication
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
       
       # Azure OpenAI Configuration
       - Gateway__AzureOpenAI__ApiKey=${AZURE_OPENAI_API_KEY}

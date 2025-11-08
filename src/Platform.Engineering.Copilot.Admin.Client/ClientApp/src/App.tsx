@@ -85,7 +85,7 @@ function App() {
         </main>
 
         <footer className="footer">
-          <p>Platform Engineering Admin Console v0.4 | Port 7003 | Admin API: http://localhost:7002</p>
+          <p>Platform Engineering Admin Console v0.4 | Port 5003 | Admin API: http://localhost:5002</p>
         </footer>
 
         <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />

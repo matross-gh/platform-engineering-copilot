@@ -6,90 +6,40 @@ using Polly;
 using Polly.Extensions.Http;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Configuration;
-using Platform.Engineering.Copilot.Core.Services.Compliance;
 using Platform.Engineering.Copilot.Core.Services.Audits;
 
 namespace Platform.Engineering.Copilot.Core.Extensions;
 
 /// <summary>
 /// Service collection extensions for Governance and Compliance services
+/// NOTE: Compliance services have been moved to Platform.Engineering.Copilot.Compliance.Core
+/// This extension file may be deprecated in favor of domain-specific registrations
 /// </summary>
 public static class GovernanceServiceCollectionExtensions
 {
     /// <summary>
     /// Add enhanced ATO compliance services with NIST integration
+    /// DEPRECATED: Use Platform.Engineering.Copilot.Compliance.Core.Extensions.AddComplianceCore() instead
     /// </summary>
+    [Obsolete("Compliance services have been moved to Platform.Engineering.Copilot.Compliance.Core")]
     public static IServiceCollection AddEnhancedAtoCompliance(
         this IServiceCollection services, 
         IConfiguration configuration)
     {
-        // Configuration
-        services.Configure<NistControlsOptions>(
-            configuration.GetSection(NistControlsOptions.SectionName));
-
-        // Validation of configuration
-        services.AddOptionsWithValidateOnStart<NistControlsOptions>()
-            .Bind(configuration.GetSection(NistControlsOptions.SectionName))
-            .Validate(options => !string.IsNullOrWhiteSpace(options.BaseUrl), 
-                "NIST controls base URL must be configured");
-
-        // HTTP client for NIST controls with retry policy
-        services.AddHttpClient<INistControlsService, NistControlsService>(client =>
-        {
-            client.DefaultRequestHeaders.Add("User-Agent", 
-                "PlatformMCP-Supervisor/1.0 (+https://github.com/jrspinella/platform-mcp-supervisor)");
-        })
-        .AddPolicyHandler(GetRetryPolicy())
-        .AddPolicyHandler(GetCircuitBreakerPolicy());
-
-        // Core services - using Singleton to match Platform expectations
-        services.AddSingleton<INistControlsService, NistControlsService>();
-        services.AddSingleton<ComplianceMetricsService>();
-        
-        // ATO Compliance Engine and supporting services
-        services.AddSingleton<IAtoComplianceEngine, AtoComplianceEngine>();
-        services.AddSingleton<IAtoRemediationEngine, AtoRemediationEngine>();
-        services.AddSingleton<IAuditLoggingService, AuditLoggingService>();
-        
-        // NOTE: IComplianceService is obsolete - use IAtoComplianceEngine instead
-        // ComplianceServiceAdapter removed as it's no longer needed
-        
-        // Legacy services for backward compatibility (health checks, etc.)
-        services.AddSingleton<ComplianceValidationService>();
-        
-        // Azure Resource Health monitoring service - DISABLED due to missing AzureOptions
-        // services.AddSingleton<IAzureResourceHealthService, AzureResourceHealthService>();
-
-        // Memory caching for NIST controls
-        services.AddMemoryCache();
-
-        // Health checks
-        services.AddHealthChecks()
-            .AddCheck<NistControlsHealthCheck>(
-                "nist-controls",
-                HealthStatus.Degraded,
-                tags: new[] { "nist", "compliance", "external" },
-                timeout: TimeSpan.FromSeconds(30));
-
-        // Logging enhancement
-        services.AddLogging(builder =>
-        {
-            builder.AddFilter("Platform.Engineering.Copilot.Governance", LogLevel.Information);
-            builder.AddFilter("System.Net.Http.HttpClient.INistControlsService", LogLevel.Warning);
-        });
-
+        // This method is deprecated - compliance services are now in the Compliance.Core domain project
+        // Consumers should call services.AddComplianceCore() instead
         return services;
     }
 
     /// <summary>
     /// Add ATO compliance background services
+    /// DEPRECATED: Use Platform.Engineering.Copilot.Compliance.Core.Extensions.AddComplianceCore() instead
     /// </summary>
+    [Obsolete("Compliance services have been moved to Platform.Engineering.Copilot.Compliance.Core")]
     public static IServiceCollection AddAtoComplianceBackgroundServices(
         this IServiceCollection services)
     {
-        // Background service for cache warming and validation
-        services.AddHostedService<NistControlsCacheWarmupService>();
-        
+        // This method is deprecated - compliance services are now in the Compliance.Core domain project
         return services;
     }
 

@@ -9,7 +9,7 @@ AI-powered Azure infrastructure management directly in Microsoft Teams, Outlook,
 - **Cost Estimation**: Get real-time cost estimates for Azure resources
 - **Rich Adaptive Cards**: Interactive results with drill-down capabilities
 - **Proactive Guidance**: AI asks clarifying questions for incomplete requests
-- **Multi-Plugin Support**: Works with Onboarding, Compliance, Infrastructure, Cost, and Deployment plugins
+- **Multi-Plugin Support**: Works with ServiceCreation, Compliance, Infrastructure, Cost, and Deployment plugins
 
 ## 📦 Installation
 
@@ -17,7 +17,7 @@ AI-powered Azure infrastructure management directly in Microsoft Teams, Outlook,
 
 - **Microsoft 365 Tenant** with Copilot licenses
 - **Azure AD App Registration**
-- **Platform Engineering Copilot API** running (http://localhost:7001 or deployed)
+- **Platform MCP Server** running (http://localhost:5100 or deployed)
 - **Node.js 18+**
 
 ### Setup
@@ -83,7 +83,7 @@ API Plugin (ai-plugin.json + OpenAPI)
     ↓
 Platform Copilot M365 Service (Node.js)
     ↓
-Platform Engineering Copilot API (:7001)
+Platform MCP Server (:5100)
     ↓
 Azure Resources
 ```
@@ -100,7 +100,7 @@ platform-copilot-m365/
 │   ├── index.ts                    # Main server entry point
 │   ├── config.ts                   # Configuration management
 │   ├── services/
-│   │   ├── platformApiClient.ts    # Client for Platform Copilot API
+│   │   ├── platformApiClient.ts    # MCP HTTP client (legacy name)
 │   │   ├── adaptiveCardBuilder.ts  # Builds rich Teams cards
 │   │   └── messageHandler.ts       # Processes user messages
 │   ├── appPackage/
@@ -118,8 +118,8 @@ platform-copilot-m365/
 ### Environment Variables (`.env`)
 
 ```bash
-# Platform Copilot API
-PLATFORM_API_URL=http://localhost:7001
+# MCP HTTP endpoint (legacy env name)
+PLATFORM_API_URL=http://localhost:5100
 PLATFORM_API_KEY=your-api-key
 
 # Azure AD
@@ -252,7 +252,7 @@ The extension uses rich Adaptive Cards for interactive responses:
 ## 🔒 Security
 
 - **OAuth 2.0 Authentication**: Secure user authentication via Azure AD
-- **API Key Management**: Encrypted storage of Platform API credentials
+- **API Key Management**: Encrypted storage of MCP server credentials
 - **Role-Based Access**: Respects Azure RBAC permissions
 - **Audit Logging**: All operations logged for compliance
 - **Rate Limiting**: Prevents abuse and excessive API calls

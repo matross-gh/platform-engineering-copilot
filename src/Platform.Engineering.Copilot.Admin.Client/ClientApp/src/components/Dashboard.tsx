@@ -204,7 +204,7 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Unified Pending Approvals Panel (Infrastructure + Onboarding) */}
+      {/* Unified Pending Approvals Panel (Infrastructure + ServiceCreation) */}
       <PendingApprovalsPanel />
 
       <div className="recent-templates">
@@ -239,11 +239,11 @@ const Dashboard: React.FC = () => {
       <div className="info-panel">
         <h3>ℹ️ System Information</h3>
         <ul>
-          <li><strong>Admin Console:</strong> http://localhost:7003</li>
-          <li><strong>Admin API:</strong> http://localhost:7002</li>
-          <li><strong>Swagger UI:</strong> <a href="http://localhost:7002" target="_blank" rel="noopener noreferrer">Open API Docs</a></li>
-          <li><strong>Platform API:</strong> http://localhost:7001</li>
-          <li><strong>Chat App:</strong> http://localhost:7000</li>
+          <li><strong>Admin Console:</strong> http://localhost:5003</li>
+          <li><strong>Admin API:</strong> http://localhost:5002</li>
+          <li><strong>Swagger UI:</strong> <a href="http://localhost:5002" target="_blank" rel="noopener noreferrer">Open API Docs</a></li>
+          <li><strong>MCP Server:</strong> http://localhost:5100</li>
+          <li><strong>Chat App:</strong> http://localhost:5001</li>
         </ul>
       </div>
 

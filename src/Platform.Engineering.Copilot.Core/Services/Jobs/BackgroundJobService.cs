@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using Platform.Engineering.Copilot.Core.Interfaces;
+using Platform.Engineering.Copilot.Core.Interfaces.Jobs;
 using Platform.Engineering.Copilot.Core.Models.Jobs;
 
 namespace Platform.Engineering.Copilot.Core.Services.Jobs;

@@ -1,11 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Azure.ResourceManager;
 using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.Azure;
+using Platform.Engineering.Copilot.Core.Models.Cost;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces
+namespace Platform.Engineering.Copilot.Core.Interfaces.Azure
 {
     public interface IAzureMetricsService
     {
@@ -44,24 +42,24 @@ namespace Platform.Engineering.Copilot.Core.Interfaces
     public interface IAzureResourceService
     {
         // Original methods
-        Task<List<AzureResource>> ListAllResourcesAsync(string subscriptionId);
-        Task<List<AzureResource>> ListAllResourcesAsync(string subscriptionId, string resourceGroupName);
+        Task<IEnumerable<AzureResource>> ListAllResourcesAsync(string subscriptionId, CancellationToken cancellationToken);
+        Task<IEnumerable<AzureResource>> ListAllResourcesInResourceGroupAsync(string subscriptionId, string resourceGroupName, CancellationToken cancellationToken = default);
+        Task<IEnumerable<AzureResource>> ListAllResourceGroupsInSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default);
         Task<AzureResource?> GetResourceAsync(string resourceId);
 
         // Resource Group operations
-        Task<IEnumerable<object>> ListResourceGroupsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default);
-        Task<object?> GetResourceGroupAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default);
-        Task<object> CreateResourceGroupAsync(string resourceGroupName, string location, string? subscriptionId = null, Dictionary<string, string>? tags = null, CancellationToken cancellationToken = default);
+        Task<IEnumerable<AzureResource>> ListResourceGroupsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default);
+        Task<AzureResource?> GetResourceGroupAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default);
+        Task<AzureResource> CreateResourceGroupAsync(string resourceGroupName, string location, string? subscriptionId = null, Dictionary<string, string>? tags = null, CancellationToken cancellationToken = default);
         Task DeleteResourceGroupAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default);
 
         // Resource operations
-        Task<IEnumerable<object>> ListResourcesAsync(string resourceGroupName, string? subscriptionId = null, CancellationToken cancellationToken = default);
-        Task<object?> GetResourceAsync(string subscriptionId, string resourceGroupName, string resourceType, string resourceName, CancellationToken cancellationToken = default);
-        Task<object> CreateResourceAsync(string resourceGroupName, string resourceType, string resourceName, object properties, string? subscriptionId = null, string location = "eastus", Dictionary<string, string>? tags = null, CancellationToken cancellationToken = default);
+        Task<AzureResource?> GetResourceAsync(string subscriptionId, string resourceGroupName, string resourceType, string resourceName, CancellationToken cancellationToken = default);
+        Task<AzureResource> CreateResourceAsync(string resourceGroupName, string resourceType, string resourceName, object properties, string? subscriptionId = null, string location = "eastus", Dictionary<string, string>? tags = null, CancellationToken cancellationToken = default);
 
         // Subscription operations
-        Task<IEnumerable<object>> ListSubscriptionsAsync(CancellationToken cancellationToken = default);
-        Task<IEnumerable<object>> ListLocationsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default);
+        Task<IEnumerable<AzureSubscription>> ListSubscriptionsAsync(CancellationToken cancellationToken = default);
+        Task<IEnumerable<AzureResource>> ListLocationsAsync(string? subscriptionId = null, CancellationToken cancellationToken = default);
         string GetSubscriptionId(string? subscriptionId = null);
 
         /// <summary>
@@ -113,7 +111,7 @@ namespace Platform.Engineering.Copilot.Core.Interfaces
         /// </summary>
         /// <param name="subscriptionId">Subscription ID</param>
         /// <returns>Subscription information</returns>
-        Task<AzureSubscriptionInfo> GetSubscriptionAsync(string subscriptionId);
+        Task<AzureSubscription> GetSubscriptionAsync(string subscriptionId);
 
         /// <summary>
         /// Gets subscription details by display name.
@@ -121,7 +119,7 @@ namespace Platform.Engineering.Copilot.Core.Interfaces
         /// <param name="subscriptionName">Subscription display name</param>
         /// <returns>Subscription information</returns>
         /// <exception cref="InvalidOperationException">Thrown when subscription not found or multiple matches exist</exception>
-        Task<AzureSubscriptionInfo> GetSubscriptionByNameAsync(string subscriptionName);
+        Task<AzureSubscription> GetSubscriptionByNameAsync(string subscriptionName);
 
         /// <summary>
         /// Deletes a subscription (for cleanup/rollback).
@@ -305,20 +303,6 @@ namespace Platform.Engineering.Copilot.Core.Interfaces
         bool ValidateCidr(string cidr);
     }
 
-    public class MetricDataPoint
-    {
-        public DateTime Timestamp { get; set; }
-        public double Value { get; set; }
-        public string? Unit { get; set; }
-    }
-
-    public class CostData
-    {
-        public decimal TotalCost { get; set; }
-        public Dictionary<string, decimal> ServiceCosts { get; set; } = new();
-        public Dictionary<string, decimal> ResourceGroupCosts { get; set; } = new();
-    }
-
     /// <summary>
     /// NSG default rules configuration
     /// </summary>
@@ -343,18 +327,4 @@ namespace Platform.Engineering.Copilot.Core.Interfaces
         public string? EventHubName { get; set; }
     }
 
-    /// <summary>
-    /// Azure subscription information
-    /// </summary>
-    public class AzureSubscriptionInfo
-    {
-        public string SubscriptionId { get; set; } = "";
-        public string SubscriptionName { get; set; } = "";
-        public string State { get; set; } = "";
-        public string TenantId { get; set; } = "";
-        public DateTime CreatedDate { get; set; }
-        public Dictionary<string, string> Tags { get; set; } = new();
-    }
-
-    // Note: Use Platform.Engineering.Copilot.Core.Models.AzureResource instead of this old class
 }

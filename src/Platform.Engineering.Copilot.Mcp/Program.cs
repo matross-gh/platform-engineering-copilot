@@ -3,12 +3,21 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 using Platform.Engineering.Copilot.Core.Extensions;
+using Platform.Engineering.Copilot.Core.Data.Context;
 using Platform.Engineering.Copilot.Mcp.Server;
 using Platform.Engineering.Copilot.Mcp.Tools;
 using Platform.Engineering.Copilot.Mcp.Middleware;
+using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
+using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
+using Platform.Engineering.Copilot.Environment.Core.Extensions;
+using Platform.Engineering.Copilot.Discovery.Core.Extensions;
+using Platform.Engineering.Copilot.ServiceCreation.Core.Extensions;
+using Platform.Engineering.Copilot.Document.Core.Extensions;
 using Serilog;
-using Serilog.Sinks.SystemConsole.Themes;
+using Platform.Engineering.Copilot.Security.Agent.Extensions;
+using Platform.Engineering.Copilot.Compliance.Agent.Extensions;
 
 namespace Platform.Engineering.Copilot.Mcp;
 
@@ -95,11 +104,20 @@ class Program
             logging.AddSerilog();
         });
 
+        // Register database context (SQLite)
+        var dbPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../..", "platform_engineering_copilot_management.db"));
+        var connectionString = $"Data Source={dbPath}";
+        builder.Services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
+            options.UseSqlite(connectionString));
+
+        // Register HttpClient for services that need it (like NistControlsService)
+        builder.Services.AddHttpClient();
+
         // Add Core services (Multi-Agent Orchestrator, Plugins, etc.)
         builder.Services.AddPlatformEngineeringCopilotCore();
 
-        // Register MCP Chat Tool (exposes orchestrator through MCP)
-        builder.Services.AddSingleton<PlatformEngineeringCopilotTools>();
+        // Register MCP Chat Tool - Scoped to match IIntelligentChatService
+        builder.Services.AddScoped<PlatformEngineeringCopilotTools>();
 
         // Register MCP server for stdio
         builder.Services.AddSingleton<McpServer>();
@@ -125,13 +143,98 @@ class Program
             logging.AddSerilog();
         });
 
+        // Register database context (SQLite) - use SQL Server connection from config
+        var configuration = builder.Configuration;
+        var connectionString = configuration.GetConnectionString("DefaultConnection") 
+            ?? configuration.GetConnectionString("SqlServerConnection");
+        
+        if (!string.IsNullOrEmpty(connectionString))
+        {
+            builder.Services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
+                options.UseSqlServer(connectionString));
+        }
+        else
+        {
+            // Fallback to SQLite
+            var dbPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../..", "platform_engineering_copilot_management.db"));
+            var sqliteConnectionString = $"Data Source={dbPath}";
+            builder.Services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
+                options.UseSqlite(sqliteConnectionString));
+        }
+
+        // Register HttpClient for services that need it (like NistControlsService)
+        builder.Services.AddHttpClient();
+
         // Add Core services (Multi-Agent Orchestrator, Plugins, etc.)
         builder.Services.AddPlatformEngineeringCopilotCore();
+        
+        // Configure which agents are enabled
+        builder.Services.Configure<Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration>(
+            builder.Configuration.GetSection(Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration.SectionName));
+        
+        // Add domain-specific agents and plugins based on configuration
+        var agentConfig = builder.Configuration
+            .GetSection(Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration.SectionName)
+            .Get<Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration>() 
+            ?? new Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration();
 
-        // Register MCP Chat Tool
-        builder.Services.AddSingleton<PlatformEngineeringCopilotTools>();
+        var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger("AgentLoader");
+        logger.LogInformation("🔧 Loading agents based on configuration...");
 
-        // Register HTTP bridge
+        if (agentConfig.IsAgentEnabled("Compliance"))
+        {
+            builder.Services.AddComplianceCore();
+            logger.LogInformation("✅ Compliance agent enabled");
+        }
+
+        if (agentConfig.IsAgentEnabled("Infrastructure"))
+        {
+            builder.Services.AddInfrastructureCore();
+            logger.LogInformation("✅ Infrastructure agent enabled");
+        }
+
+        if (agentConfig.IsAgentEnabled("CostManagement"))
+        {
+            builder.Services.AddCostManagementCore();
+            logger.LogInformation("✅ CostManagement agent enabled");
+        }
+
+        if (agentConfig.IsAgentEnabled("Environment"))
+        {
+            builder.Services.AddEnvironmentCore();
+            logger.LogInformation("✅ Environment agent enabled");
+        }
+
+        if (agentConfig.IsAgentEnabled("Discovery"))
+        {
+            builder.Services.AddDiscoveryCore();
+            logger.LogInformation("✅ Discovery agent enabled");
+        }
+
+        if (agentConfig.IsAgentEnabled("ServiceCreation"))
+        {
+            builder.Services.AddServiceCreationCore();
+            logger.LogInformation("✅ ServiceCreation agent enabled");
+        }
+
+        if (agentConfig.IsAgentEnabled("Security"))
+        {
+            builder.Services.AddSecurityAgent();
+            logger.LogInformation("✅ Security agent enabled");
+        }
+
+        if (agentConfig.IsAgentEnabled("Document"))
+        {
+            builder.Services.AddDocumentCore();
+            logger.LogInformation("✅ Document agent enabled");
+        }
+
+        logger.LogInformation($"🚀 Loaded {agentConfig.EnabledAgents.Count(kvp => kvp.Value)} of {agentConfig.EnabledAgents.Count} available agents");
+
+        // Register MCP Chat Tool - Scoped to match IIntelligentChatService
+        builder.Services.AddScoped<PlatformEngineeringCopilotTools>();
+
+        // Register HTTP bridge - Singleton (resolves scoped services per request)
         builder.Services.AddSingleton<McpHttpBridge>();
 
         var app = builder.Build();

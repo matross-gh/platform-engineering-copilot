@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import adminApi, { ApprovalWorkflow, OnboardingRequest } from '../services/adminApi';
+import adminApi, { ApprovalWorkflow, ServiceCreationRequest } from '../services/adminApi';
 import './PendingApprovalsPanel.css';
 
-type ApprovalType = 'infrastructure' | 'onboarding';
+type ApprovalType = 'infrastructure' | 'ServiceCreation';
 
 interface UnifiedApproval {
   id: string;
@@ -11,7 +11,7 @@ interface UnifiedApproval {
   requester: string;
   requestedAt: string;
   status: string;
-  data: ApprovalWorkflow | OnboardingRequest;
+  data: ApprovalWorkflow | ServiceCreationRequest;
 }
 
 const PendingApprovalsPanel: React.FC = () => {
@@ -34,7 +34,7 @@ const PendingApprovalsPanel: React.FC = () => {
     try {
       setLoading(true);
       
-      // Load both infrastructure approvals and onboarding requests in parallel
+      // Load both infrastructure approvals and ServiceCreation requests in parallel
       const [infraApprovals, onboardingRequests] = await Promise.all([
         adminApi.getPendingApprovals().catch(() => []),
         adminApi.getPendingOnboardingRequests().catch(() => [])
@@ -51,10 +51,10 @@ const PendingApprovalsPanel: React.FC = () => {
           status: workflow.status,
           data: workflow
         })),
-        ...onboardingRequests.map((request: OnboardingRequest) => ({
+        ...onboardingRequests.map((request: ServiceCreationRequest) => ({
           id: request.id,
-          type: 'onboarding' as ApprovalType,
-          title: `${request.missionName || 'Mission'} - Flankspeed Onboarding`,
+          type: 'ServiceCreation' as ApprovalType,
+          title: `${request.missionName || 'Mission'} - Flankspeed ServiceCreation`,
           requester: request.missionOwner || request.missionOwnerEmail,
           requestedAt: request.createdAt,
           status: request.status,
@@ -124,7 +124,7 @@ const PendingApprovalsPanel: React.FC = () => {
     try {
       const response = await adminApi.approveOnboardingRequest(requestId, currentUser, comments || undefined);
       if (response.success) {
-        window.alert(`✅ Onboarding request approved successfully!\n\n${response.message}\n\nProvisioning Job ID: ${response.provisioningJobId || 'N/A'}`);
+        window.alert(`✅ ServiceCreation request approved successfully!\n\n${response.message}\n\nProvisioning Job ID: ${response.provisioningJobId || 'N/A'}`);
         await loadAllApprovals();
       } else {
         window.alert(`❌ Failed to approve: ${response.message}`);
@@ -148,7 +148,7 @@ const PendingApprovalsPanel: React.FC = () => {
     try {
       const response = await adminApi.rejectOnboardingRequest(requestId, currentUser, reason);
       if (response.success) {
-        window.alert('❌ Onboarding request rejected. Mission owner will be notified.');
+        window.alert('❌ ServiceCreation request rejected. Mission owner will be notified.');
         await loadAllApprovals();
       } else {
         window.alert(`❌ Failed to reject: ${response.message}`);
@@ -195,7 +195,7 @@ const PendingApprovalsPanel: React.FC = () => {
   };
 
   const getTypeLabel = (type: ApprovalType): string => {
-    return type === 'infrastructure' ? 'Infrastructure' : 'Onboarding';
+    return type === 'infrastructure' ? 'Infrastructure' : 'ServiceCreation';
   };
 
   const filteredApprovals = filterType === 'all' 
@@ -225,7 +225,7 @@ const PendingApprovalsPanel: React.FC = () => {
   }
 
   const infraCount = approvals.filter(a => a.type === 'infrastructure').length;
-  const onboardingCount = approvals.filter(a => a.type === 'onboarding').length;
+  const onboardingCount = approvals.filter(a => a.type === 'ServiceCreation').length;
 
   if (approvals.length === 0) {
     return (
@@ -235,7 +235,7 @@ const PendingApprovalsPanel: React.FC = () => {
         </div>
         <div className="approval-empty">
           <p>✅ No pending approvals</p>
-          <small>Infrastructure and onboarding requests requiring approval will appear here</small>
+          <small>Infrastructure and ServiceCreation requests requiring approval will appear here</small>
         </div>
       </div>
     );
@@ -263,10 +263,10 @@ const PendingApprovalsPanel: React.FC = () => {
               🏗️ Infrastructure ({infraCount})
             </button>
             <button 
-              className={filterType === 'onboarding' ? 'active' : ''}
-              onClick={() => setFilterType('onboarding')}
+              className={filterType === 'ServiceCreation' ? 'active' : ''}
+              onClick={() => setFilterType('ServiceCreation')}
             >
-              ⚓ Onboarding ({onboardingCount})
+              ⚓ ServiceCreation ({onboardingCount})
             </button>
           </div>
           <button onClick={loadAllApprovals} className="refresh-btn" disabled={loading}>
@@ -313,7 +313,7 @@ const PendingApprovalsPanel: React.FC = () => {
                     />
                   ) : (
                     <OnboardingDetails 
-                      request={approval.data as OnboardingRequest}
+                      request={approval.data as ServiceCreationRequest}
                       onApprove={() => handleApproveOnboarding(approval.id)}
                       onReject={() => handleRejectOnboarding(approval.id)}
                       isInProgress={isInProgress}
@@ -408,9 +408,9 @@ const InfrastructureDetails: React.FC<{
   );
 };
 
-// Sub-component for Onboarding Request Details
+// Sub-component for ServiceCreation Request Details
 const OnboardingDetails: React.FC<{
-  request: OnboardingRequest;
+  request: ServiceCreationRequest;
   onApprove: () => void;
   onReject: () => void;
   isInProgress: boolean;

@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Azure.ResourceManager.Resources;
 
-namespace Platform.Engineering.Copilot.Core.Models;
+namespace Platform.Engineering.Copilot.Core.Models.Azure;
 
 /// <summary>
 /// Represents an Azure resource with its properties for compliance scanning
@@ -168,5 +169,10 @@ public class AzureResource
             "backup" => Type.Contains("Compute") || Type.Contains("Sql") || Type.Contains("Storage"),
             _ => false
         };
+    }
+
+    public static explicit operator GenericResource(AzureResource v)
+    {
+        throw new NotImplementedException();
     }
 }

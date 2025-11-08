@@ -169,7 +169,7 @@ dotnet ef database update \
   --project src/Platform.Engineering.Copilot.Data/Platform.Engineering.Copilot.Data.csproj
 ```
 
-This creates `environment_management.db` at the repository root. Use `ConnectionStrings:DefaultConnection` in `appsettings.json` to change the location.
+This creates `platform_engineering_copilot_management.db` at the repository root. Use `ConnectionStrings:DefaultConnection` in `appsettings.json` to change the location.
 
 #### Switch to SQL Server
 
@@ -218,7 +218,7 @@ dotnet build src/Platform.Engineering.Copilot.Admin.Client/Platform.Engineering.
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Data Source=/path/to/environment_management.db",
+    "DefaultConnection": "Data Source=/path/to/platform_engineering_copilot_management.db",
     "SqlServerConnection": "Server=localhost,1433;Database=PlatformCopilot;User Id=sa;Password=YourStrongPassword!;TrustServerCertificate=true"
 dotnet build Platform.Engineering.Copilot.sln --configuration Release --no-restore
 
@@ -679,7 +679,7 @@ Swagger UI is available at `http://localhost:5002` (development). Core controlle
 | `DeploymentAdminController` | `api/admin/deployments` | Trigger redeployments, fetch history, retrieve artifacts. |
 | `GovernanceAdminController` | `api/admin/governance` | Policy evaluation, approval workflows, compliance snapshots. |
 | `CostAdminController` | `api/admin/cost` | Cost trend reports, budget status, optimization insights. |
-| `OnboardingAdminController` | `api/admin/onboarding` | Navy Flankspeed onboarding workflows. |
+| `OnboardingAdminController` | `api/admin/ServiceCreation` | Navy Flankspeed ServiceCreation workflows. |
 
 #### Create Template
 

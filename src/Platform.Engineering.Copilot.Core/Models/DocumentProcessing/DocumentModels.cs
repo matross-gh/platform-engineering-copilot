@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Http;
 
-namespace Platform.Engineering.Copilot.DocumentProcessing.Models;
+namespace Platform.Engineering.Copilot.Core.Models.DocumentProcessing;
 
 public enum DocumentAnalysisType
 {

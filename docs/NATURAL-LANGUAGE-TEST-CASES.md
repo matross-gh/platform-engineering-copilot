@@ -6,7 +6,7 @@ Quick reference guide for testing the platform engineering copilot multi-agent s
 
 ```bash
 # Test via API
-curl -X POST http://localhost:7001/api/chat/intelligent-query \
+curl -X POST http://localhost:5100/api/chat/intelligent-query \
   -H "Content-Type: application/json" \
   -d '{"message": "YOUR_QUERY", "conversationId": "test-1"}' | jq .
 ```
@@ -869,7 +869,7 @@ Can I see the AKS cluster Bicep templates?
 **Option 2: Download via API (for programmatic access)**
 ```bash
 # Get the job ID from the response metadata
-curl -X GET http://localhost:7001/api/jobs/{jobId}/artifacts
+curl -X GET http://localhost:5100/api/jobs/{jobId}/artifacts
 ```
 
 **Option 3: Check Job Output in Admin UI**
@@ -1333,12 +1333,12 @@ Is my staging environment configured the same as production?
 
 ---
 
-### 🚀 OnboardingAgent (Mission/Team Onboarding)
+### 🚀 OnboardingAgent (Mission/Team ServiceCreation)
 
 > **🤖 Conversational Requirements Gathering**  
 > OnboardingAgent uses progressive questioning through 4 phases: mission basics → technical → compliance → budget.
 
-**Test 6.1: New Mission Onboarding (Conversational - Multi-Turn)**
+**Test 6.1: New Mission ServiceCreation (Conversational - Multi-Turn)**
 ```
 Turn 1: "We have a new mission coming online called Project Lighthouse"
 Turn 2: (Agent asks Phase 1 questions: mission owner, classification, timeline)
@@ -1354,16 +1354,16 @@ Turn 9: "$50k/month budget, must use usgovvirginia region"
 - Agent asks 2-4 questions per turn (not all at once)
 - Builds on previous answers to ask relevant follow-ups
 - After Phase 4 complete, **IMMEDIATELY calls create_onboarding_request**
-- No confirmation needed - just creates onboarding with all gathered requirements
+- No confirmation needed - just creates ServiceCreation with all gathered requirements
 
 **Validation:**
 - ✅ Progressive questioning (not overwhelming)
 - ✅ Context maintained across all turns
 - ✅ For CUI classification, automatically includes compliance questions
 - ✅ For AKS requirement, includes security/networking questions
-- ✅ Final onboarding request includes all gathered info
+- ✅ Final ServiceCreation request includes all gathered info
 
-**Test 6.2: Minimal Information Onboarding (Conversational)**
+**Test 6.2: Minimal Information ServiceCreation (Conversational)**
 ```
 I need to onboard a new mission
 ```
@@ -1479,7 +1479,7 @@ Turn 17: "yes"
 ```
 **Expected:**
 - OnboardingAgent: Progressive 4-phase questioning → creates request
-- InfrastructureAgent: Uses onboarding data, confirms only template type → generates
+- InfrastructureAgent: Uses ServiceCreation data, confirms only template type → generates
 - EnvironmentAgent: Uses template from SharedMemory, confirms deploy → deploys
 - ComplianceAgent: Uses resource group from SharedMemory, confirms scan → scans
 - CostManagementAgent: Uses resources from SharedMemory, confirms estimate → estimates
@@ -2144,7 +2144,7 @@ We're deploying a new mission-critical application for SPAWAR. The application i
 
 Please help me get this set up and ensure everything is compliant.
 ```
-**Expected:** Full multi-agent orchestration (Onboarding → Infrastructure → Environment → Compliance → Cost)
+**Expected:** Full multi-agent orchestration (ServiceCreation → Infrastructure → Environment → Compliance → Cost)
 
 ---
 
@@ -2255,7 +2255,7 @@ For each test query, check:
 
 ```bash
 # Test a single query
-curl -X POST http://localhost:7001/api/chat/intelligent-query \
+curl -X POST http://localhost:5100/mcp/chat \
   -H "Content-Type: application/json" \
   -d '{
     "message": "Show me all my AKS clusters and check if they are compliant",
@@ -2264,7 +2264,7 @@ curl -X POST http://localhost:7001/api/chat/intelligent-query \
 
 # Test multi-turn conversation
 # Turn 1
-curl -X POST http://localhost:7001/api/chat/intelligent-query \
+curl -X POST http://localhost:5100/mcp/chat \
   -H "Content-Type: application/json" \
   -d '{
     "message": "Discover all AKS clusters in my subscription",
@@ -2272,7 +2272,7 @@ curl -X POST http://localhost:7001/api/chat/intelligent-query \
   }' | jq .
 
 # Turn 2 (references "them" from Turn 1)
-curl -X POST http://localhost:7001/api/chat/intelligent-query \
+curl -X POST http://localhost:5100/mcp/chat \
   -H "Content-Type: application/json" \
   -d '{
     "message": "How much are they costing me per month?",
@@ -2361,7 +2361,7 @@ info: OrchestratorAgent[0]
   }' | jq .
 
 # Turn 2 (references "them" from Turn 1)
-curl -X POST http://localhost:7001/api/chat/intelligent-query \
+curl -X POST http://localhost:5100/api/chat/intelligent-query \
   -H "Content-Type: application/json" \
   -d '{
     "message": "How much are they costing me per month?",
@@ -2397,7 +2397,7 @@ Use this checklist to verify conversational requirements gathering is working co
 - [ ] Builds on previous answers for follow-up questions
 - [ ] For classified missions, includes compliance/ATO questions
 - [ ] For large-scale missions, includes performance/cost questions
-- [ ] After Phase 4 complete, creates onboarding request immediately
+- [ ] After Phase 4 complete, creates ServiceCreation request immediately
 
 ### Error Handling
 - [ ] Agent handles very vague requests gracefully (asks clarifying questions)
@@ -2447,13 +2447,13 @@ Turn 3: User: "usgovvirginia, dev, 3 nodes"
 Turn 4: Agent: [IMMEDIATELY generates template - no confirmation]
 ```
 
-**Multi-Turn Progressive (Complex onboarding):**
+**Multi-Turn Progressive (Complex ServiceCreation):**
 ```
 Turn 1-2: Mission basics (4 questions)
 Turn 3-4: Technical requirements (4 questions)
 Turn 5-6: Compliance needs (4 questions)
 Turn 7-8: Budget and constraints (2 questions)
-Turn 9: Agent creates onboarding request
+Turn 9: Agent creates ServiceCreation request
 ```
 
 ---

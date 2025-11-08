@@ -5,6 +5,7 @@ using Platform.Engineering.Copilot.Core.Models.Notifications;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 
 namespace Platform.Engineering.Copilot.Core.Services.Notifications;
 
@@ -28,7 +29,7 @@ public class SlackService : ISlackService
         _httpClient = httpClientFactory.CreateClient("SlackWebhook");
     }
 
-    public async Task<SlackNotificationResult> SendOnboardingApprovedAsync(
+    public async Task<SlackNotificationResult> SendServiceCreationApprovedAsync(
         SlackApprovalRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -48,7 +49,7 @@ public class SlackService : ISlackService
                     Text = new SlackText
                     {
                         Type = "plain_text",
-                        Text = "✅ Onboarding Request Approved",
+                        Text = "✅ ServiceCreation Request Approved",
                         Emoji = true
                     }
                 },
@@ -79,7 +80,7 @@ public class SlackService : ISlackService
         return await SendSlackMessageAsync(payload, "OnboardingApproved", cancellationToken);
     }
 
-    public async Task<SlackNotificationResult> SendOnboardingRejectedAsync(
+    public async Task<SlackNotificationResult> SendServiceCreationRejectedAsync(
         SlackRejectionRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -99,7 +100,7 @@ public class SlackService : ISlackService
                     Text = new SlackText
                     {
                         Type = "plain_text",
-                        Text = "⚠️ Onboarding Request Needs Review",
+                        Text = "⚠️ ServiceCreation Request Needs Review",
                         Emoji = true
                     }
                 },

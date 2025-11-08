@@ -1,5 +1,3 @@
-version: "3.9"
-
 networks:
   plaform-engineering-copilot-network:
     driver: bridge

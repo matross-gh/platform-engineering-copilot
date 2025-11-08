@@ -1,4 +1,6 @@
-namespace Platform.Engineering.Copilot.DocumentProcessing.Models;
+using Platform.Engineering.Copilot.Core.Models.Compliance;
+
+namespace Platform.Engineering.Copilot.Core.Models.DocumentProcessing;
 
 // Architecture Analysis Models
 public class ArchitectureAnalysis
@@ -69,13 +71,6 @@ public class SecurityRisk
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public RiskLevel Level { get; set; }
-}
-
-public class ComplianceGap
-{
-    public string Description { get; set; } = string.Empty;
-    public RiskLevel RiskLevel { get; set; }
-    public string Remediation { get; set; } = string.Empty;
 }
 
 public class SecurityPosture

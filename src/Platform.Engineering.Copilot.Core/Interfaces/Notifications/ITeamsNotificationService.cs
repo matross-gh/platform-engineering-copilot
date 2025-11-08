@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces;
+namespace Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 
 /// <summary>
 /// Service for sending notifications to Microsoft Teams via webhooks
@@ -9,9 +9,9 @@ namespace Platform.Engineering.Copilot.Core.Interfaces;
 public interface ITeamsNotificationService
 {
     /// <summary>
-    /// Send notification when onboarding request is approved
+    /// Send notification when ServiceCreation request is approved
     /// </summary>
-    Task SendOnboardingApprovedNotificationAsync(
+    Task SendServiceCreationApprovedNotificationAsync(
         string missionName,
         string missionOwner,
         string command,

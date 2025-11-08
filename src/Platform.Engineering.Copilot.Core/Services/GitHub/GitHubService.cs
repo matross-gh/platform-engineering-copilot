@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Octokit;
 using Platform.Engineering.Copilot.Core.Configuration;
-using Platform.Engineering.Copilot.Core.Interfaces;
+using Platform.Engineering.Copilot.Core.Interfaces.GitHub;
 
 namespace Platform.Engineering.Copilot.Core.Services;
 

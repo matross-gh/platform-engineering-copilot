@@ -1,7 +1,7 @@
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Models.IntelligentChat;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces;
+namespace Platform.Engineering.Copilot.Core.Interfaces.Chat;
 
 /// <summary>
 /// Pure Multi-Agent Intelligent Chat Service

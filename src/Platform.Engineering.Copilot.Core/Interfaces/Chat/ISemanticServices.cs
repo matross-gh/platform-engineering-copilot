@@ -2,7 +2,7 @@ using Platform.Engineering.Copilot.Core.Models.SemanticParsing;
 using Platform.Engineering.Copilot.Core.Models;
 using Microsoft.SemanticKernel;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces;
+namespace Platform.Engineering.Copilot.Core.Interfaces.Chat;
 
 /// <summary>
 /// Service for advanced natural language processing and query parsing

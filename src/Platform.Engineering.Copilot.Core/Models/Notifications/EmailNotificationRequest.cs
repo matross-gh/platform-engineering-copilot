@@ -13,7 +13,7 @@ public abstract class EmailNotificationRequest
 }
 
 /// <summary>
-/// Email notification for onboarding request approval
+/// Email notification for ServiceCreation request approval
 /// </summary>
 public class ApprovalEmailRequest : EmailNotificationRequest
 {
@@ -24,7 +24,7 @@ public class ApprovalEmailRequest : EmailNotificationRequest
 }
 
 /// <summary>
-/// Email notification for onboarding request rejection
+/// Email notification for ServiceCreation request rejection
 /// </summary>
 public class RejectionEmailRequest : EmailNotificationRequest
 {

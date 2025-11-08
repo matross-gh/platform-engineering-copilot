@@ -1,32 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
-using Platform.Engineering.Copilot.Core.Interfaces;
-using Platform.Engineering.Copilot.Core.Models;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
+using Platform.Engineering.Copilot.Core.Models.Audits;
+using Platform.Engineering.Copilot.Core.Interfaces.Audits;
 
 namespace Platform.Engineering.Copilot.Core.Services.Audits;
-
-/// <summary>
-/// Interface for comprehensive audit logging
-/// </summary>
-public interface IAuditLoggingService
-{
-    Task<string> LogAsync(AuditLogEntry entry, CancellationToken cancellationToken = default);
-    Task<AuditSearchResult> SearchAsync(AuditSearchQuery query, CancellationToken cancellationToken = default);
-    Task<ResourceAuditTrail> GetResourceAuditTrailAsync(string resourceId, CancellationToken cancellationToken = default);
-    Task<AuditReport> GenerateReportAsync(string reportType, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
-    Task<List<AuditAnomaly>> DetectAnomaliesAsync(DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
-    Task<bool> ArchiveLogsAsync(DateTimeOffset olderThan, CancellationToken cancellationToken = default);
-    Task<AuditConfiguration> GetConfigurationAsync(CancellationToken cancellationToken = default);
-    Task UpdateConfigurationAsync(AuditConfiguration configuration, CancellationToken cancellationToken = default);
-}
 
 /// <summary>
 /// Comprehensive audit logging service with compliance and security features
@@ -250,7 +230,7 @@ public class AuditLoggingService : IAuditLoggingService
                 Summary = new Dictionary<string, object>(),
                 Insights = new List<AuditInsight>(),
                 Anomalies = new List<AuditAnomaly>(),
-                Violations = new List<ComplianceViolation>()
+                Violations = new List<AuditComplianceViolation>()
             };
 
             // Generate summary statistics
@@ -649,9 +629,9 @@ public class AuditLoggingService : IAuditLoggingService
         return anomalies;
     }
 
-    private async Task<List<ComplianceViolation>> FindComplianceViolationsAsync(List<AuditLogEntry> entries, CancellationToken cancellationToken)
+    private async Task<List<AuditComplianceViolation>> FindComplianceViolationsAsync(List<AuditLogEntry> entries, CancellationToken cancellationToken)
     {
-        var violations = new List<ComplianceViolation>();
+        var violations = new List<AuditComplianceViolation>();
 
         // Check for unauthorized access attempts
         var unauthorizedAccess = entries.Where(e => 
@@ -660,20 +640,15 @@ public class AuditLoggingService : IAuditLoggingService
 
         foreach (var entry in unauthorizedAccess)
         {
-            violations.Add(new ComplianceViolation
+            violations.Add(new AuditComplianceViolation
             {
                 OccurredAt = entry.Timestamp,
                 ControlId = "AC-2",
                 PolicyName = "Access Control",
                 Description = "Unauthorized access attempt detected",
-                Severity = ComplianceViolationSeverity.High,
+                Severity = "High",
                 ActorId = entry.ActorId,
-                ResourceId = entry.ResourceId,
-                Context = new Dictionary<string, object>
-                {
-                    ["EventType"] = entry.EventType,
-                    ["FailureReason"] = entry.FailureReason
-                }
+                ResourceId = entry.ResourceId
             });
         }
 
@@ -685,20 +660,15 @@ public class AuditLoggingService : IAuditLoggingService
 
         if (dataExports.Count > 50)
         {
-            violations.Add(new ComplianceViolation
+            violations.Add(new AuditComplianceViolation
             {
                 OccurredAt = DateTimeOffset.UtcNow,
                 ControlId = "AC-4",
                 PolicyName = "Information Flow Enforcement",
                 Description = "Potential data exfiltration pattern detected",
-                Severity = ComplianceViolationSeverity.Critical,
+                Severity = "Critical",
                 ActorId = string.Join(", ", dataExports.Select(e => e.ActorId).Distinct()),
-                ResourceId = "Multiple",
-                Context = new Dictionary<string, object>
-                {
-                    ["ExportCount"] = dataExports.Count,
-                    ["TimeRange"] = $"{dataExports.Min(e => e.Timestamp)} - {dataExports.Max(e => e.Timestamp)}"
-                }
+                ResourceId = "Multiple"
             });
         }
 

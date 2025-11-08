@@ -610,7 +610,7 @@ table tr {
   color: #ff6b7a;
 }
 
-/* Approval & Onboarding Workflow Panels */
+/* Approval & ServiceCreation Workflow Panels */
 [data-theme="dark"] .approval-panel {
   background: var(--surface-color);
   box-shadow: var(--card-shadow);

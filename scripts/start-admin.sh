@@ -3,11 +3,11 @@
 # Start Admin API and Admin Client
 echo "🚀 Starting Platform Admin System..."
 
-# Check if Admin API is already running on port 7002
-if lsof -Pi :7002 -sTCP:LISTEN -t >/dev/null ; then
-    echo "✅ Admin API already running on port 7002"
+# Check if Admin API is already running on port 5002
+if lsof -Pi :5002 -sTCP:LISTEN -t >/dev/null ; then
+    echo "✅ Admin API already running on port 5002"
 else
-    echo "📦 Starting Admin API on port 7002..."
+    echo "📦 Starting Admin API on port 5002..."
     cd /Users/johnspinella/platform-mcp-supervisor/src/Platform.Engineering.Copilot.Admin
     nohup dotnet run > /tmp/admin-api.log 2>&1 &
     echo "   Admin API PID: $!"
@@ -29,9 +29,9 @@ echo ""
 echo "==================================================="
 echo "🎉 Platform Admin System Started!"
 echo "==================================================="
-echo "Admin API:    http://localhost:7002"
+echo "Admin API:    http://localhost:5002"
 echo "Admin Client: http://localhost:3001"
-echo "Swagger UI:   http://localhost:7002/swagger"
+echo "Swagger UI:   http://localhost:5002/swagger"
 echo ""
 echo "Logs:"
 echo "  Admin API:    tail -f /tmp/admin-api.log"

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Configuration;
 using Platform.Engineering.Copilot.Core.Models.Notifications;
+using Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 using Azure.Communication.Email;
 using System.Text;
 
@@ -53,7 +54,7 @@ public class EmailService : IEmailService
             request.MissionName,
             request.RecipientEmail);
 
-        var subject = $"Navy Flankspeed Onboarding Approved - {request.MissionName}";
+        var subject = $"Navy Flankspeed ServiceCreation Approved - {request.MissionName}";
         var htmlContent = GenerateApprovalEmailHtml(request);
 
         return await SendEmailAsync(
@@ -74,7 +75,7 @@ public class EmailService : IEmailService
             request.MissionName,
             request.RecipientEmail);
 
-        var subject = $"Navy Flankspeed Onboarding Request Update - {request.MissionName}";
+        var subject = $"Navy Flankspeed ServiceCreation Request Update - {request.MissionName}";
         var htmlContent = GenerateRejectionEmailHtml(request);
 
         return await SendEmailAsync(
@@ -141,7 +142,7 @@ public class EmailService : IEmailService
             missionName,
             status);
 
-        var subject = $"Flankspeed Onboarding Update - {missionName} - {status}";
+        var subject = $"Flankspeed ServiceCreation Update - {missionName} - {status}";
         var htmlContent = GenerateNNWCTeamEmailHtml(missionName, requestId, status, details);
 
         return await SendEmailAsync(
@@ -293,7 +294,7 @@ public class EmailService : IEmailService
 <body>
     <div class=""container"">
         <div class=""header"">
-            <h1>🎉 Onboarding Request Approved</h1>
+            <h1>🎉 ServiceCreation Request Approved</h1>
         </div>
         <div class=""content"">
             <p>Dear {request.RecipientName},</p>
@@ -302,7 +303,7 @@ public class EmailService : IEmailService
                 ✓ APPROVED
             </div>
 
-            <p>Your Navy Flankspeed onboarding request for <strong>{request.MissionName}</strong> has been approved!</p>
+            <p>Your Navy Flankspeed ServiceCreation request for <strong>{request.MissionName}</strong> has been approved!</p>
 
             <div class=""info-box"">
                 <h3>Request Details</h3>
@@ -359,7 +360,7 @@ public class EmailService : IEmailService
 <body>
     <div class=""container"">
         <div class=""header"">
-            <h1>Onboarding Request Update</h1>
+            <h1>ServiceCreation Request Update</h1>
         </div>
         <div class=""content"">
             <p>Dear {request.RecipientName},</p>
@@ -368,7 +369,7 @@ public class EmailService : IEmailService
                 ⚠ REQUIRES ATTENTION
             </div>
 
-            <p>Your Navy Flankspeed onboarding request for <strong>{request.MissionName}</strong> requires additional review.</p>
+            <p>Your Navy Flankspeed ServiceCreation request for <strong>{request.MissionName}</strong> requires additional review.</p>
 
             <div class=""info-box"">
                 <h3>Request Details</h3>
@@ -611,7 +612,7 @@ public class EmailService : IEmailService
 <body>
     <div class=""container"">
         <div class=""header"">
-            <h1>Flankspeed Onboarding Update</h1>
+            <h1>Flankspeed ServiceCreation Update</h1>
         </div>
         <div class=""content"">
             <p>NNWC Operations Team,</p>

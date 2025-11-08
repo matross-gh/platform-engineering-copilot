@@ -1,15 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
 using Platform.Engineering.Copilot.Core.Interfaces;
-using Platform.Engineering.Copilot.Core.Models.Onboarding;
-using Platform.Engineering.Copilot.Data.Entities;
+using Platform.Engineering.Copilot.Core.Models.ServiceCreation;
+using Platform.Engineering.Copilot.Core.Data.Entities;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;
 
 /// <summary>
-/// API controller for managing Navy Flankspeed onboarding requests
+/// API controller for managing Navy Flankspeed ServiceCreation requests
 /// </summary>
 [ApiController]
-[Route("api/admin/onboarding")]
+[Route("api/admin/ServiceCreation")]
 [Produces("application/json")]
 public class OnboardingAdminController : ControllerBase
 {
@@ -25,11 +25,11 @@ public class OnboardingAdminController : ControllerBase
     }
 
     /// <summary>
-    /// Gets all pending onboarding requests awaiting NNWC review
+    /// Gets all pending ServiceCreation requests awaiting NNWC review
     /// </summary>
     [HttpGet("pending")]
-    [ProducesResponseType(typeof(List<OnboardingRequest>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<List<OnboardingRequest>>> GetPendingRequests(
+    [ProducesResponseType(typeof(List<ServiceCreationRequest>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<ServiceCreationRequest>>> GetPendingRequests(
         CancellationToken cancellationToken)
     {
         try
@@ -39,18 +39,18 @@ public class OnboardingAdminController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving pending onboarding requests");
+            _logger.LogError(ex, "Error retrieving pending ServiceCreation requests");
             return StatusCode(500, new { error = "Failed to retrieve pending requests" });
         }
     }
 
     /// <summary>
-    /// Gets a specific onboarding request by ID
+    /// Gets a specific ServiceCreation request by ID
     /// </summary>
     [HttpGet("{requestId}")]
-    [ProducesResponseType(typeof(OnboardingRequest), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ServiceCreationRequest), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<OnboardingRequest>> GetRequest(
+    public async Task<ActionResult<ServiceCreationRequest>> GetRequest(
         string requestId,
         CancellationToken cancellationToken)
     {
@@ -67,17 +67,17 @@ public class OnboardingAdminController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving onboarding request {RequestId}", requestId);
+            _logger.LogError(ex, "Error retrieving ServiceCreation request {RequestId}", requestId);
             return StatusCode(500, new { error = "Failed to retrieve request" });
         }
     }
 
     /// <summary>
-    /// Gets all onboarding requests for a specific mission owner
+    /// Gets all ServiceCreation requests for a specific mission owner
     /// </summary>
     [HttpGet("owner/{email}")]
-    [ProducesResponseType(typeof(List<OnboardingRequest>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<List<OnboardingRequest>>> GetRequestsByOwner(
+    [ProducesResponseType(typeof(List<ServiceCreationRequest>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<ServiceCreationRequest>>> GetRequestsByOwner(
         string email,
         CancellationToken cancellationToken)
     {
@@ -94,7 +94,7 @@ public class OnboardingAdminController : ControllerBase
     }
 
     /// <summary>
-    /// Approves an onboarding request and triggers automated provisioning
+    /// Approves an ServiceCreation request and triggers automated provisioning
     /// </summary>
     [HttpPost("{requestId}/approve")]
     [ProducesResponseType(typeof(OnboardingApprovalResponse), StatusCodes.Status200OK)]
@@ -107,7 +107,7 @@ public class OnboardingAdminController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Approving onboarding request {RequestId} by {ApprovedBy}",
+            _logger.LogInformation("Approving ServiceCreation request {RequestId} by {ApprovedBy}",
                 requestId, request.ApprovedBy);
 
             var result = await _onboardingService.ApproveRequestAsync(
@@ -129,14 +129,14 @@ public class OnboardingAdminController : ControllerBase
             return Ok(new OnboardingApprovalResponse
             {
                 Success = true,
-                Message = "Onboarding request approved. Provisioning will begin shortly.",
+                Message = "ServiceCreation request approved. Provisioning will begin shortly.",
                 RequestId = requestId,
                 ProvisioningJobId = result.JobId
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error approving onboarding request {RequestId}", requestId);
+            _logger.LogError(ex, "Error approving ServiceCreation request {RequestId}", requestId);
             return StatusCode(500, new OnboardingApprovalResponse
             {
                 Success = false,
@@ -147,7 +147,7 @@ public class OnboardingAdminController : ControllerBase
     }
 
     /// <summary>
-    /// Rejects an onboarding request
+    /// Rejects an ServiceCreation request
     /// </summary>
     [HttpPost("{requestId}/reject")]
     [ProducesResponseType(typeof(OnboardingApprovalResponse), StatusCodes.Status200OK)]
@@ -160,7 +160,7 @@ public class OnboardingAdminController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Rejecting onboarding request {RequestId} by {RejectedBy}",
+            _logger.LogInformation("Rejecting ServiceCreation request {RequestId} by {RejectedBy}",
                 requestId, request.RejectedBy);
 
             if (string.IsNullOrWhiteSpace(request.Reason))
@@ -192,13 +192,13 @@ public class OnboardingAdminController : ControllerBase
             return Ok(new OnboardingApprovalResponse
             {
                 Success = true,
-                Message = "Onboarding request rejected. Mission owner will be notified.",
+                Message = "ServiceCreation request rejected. Mission owner will be notified.",
                 RequestId = requestId
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error rejecting onboarding request {RequestId}", requestId);
+            _logger.LogError(ex, "Error rejecting ServiceCreation request {RequestId}", requestId);
             return StatusCode(500, new OnboardingApprovalResponse
             {
                 Success = false,
@@ -240,8 +240,8 @@ public class OnboardingAdminController : ControllerBase
     /// Gets all requests currently being provisioned
     /// </summary>
     [HttpGet("provisioning")]
-    [ProducesResponseType(typeof(List<OnboardingRequest>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<List<OnboardingRequest>>> GetProvisioningRequests(
+    [ProducesResponseType(typeof(List<ServiceCreationRequest>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<ServiceCreationRequest>>> GetProvisioningRequests(
         CancellationToken cancellationToken)
     {
         try
@@ -257,7 +257,7 @@ public class OnboardingAdminController : ControllerBase
     }
 
     /// <summary>
-    /// Gets onboarding statistics for the dashboard
+    /// Gets ServiceCreation statistics for the dashboard
     /// </summary>
     [HttpGet("stats")]
     [ProducesResponseType(typeof(OnboardingStats), StatusCodes.Status200OK)]
@@ -271,17 +271,17 @@ public class OnboardingAdminController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving onboarding statistics");
+            _logger.LogError(ex, "Error retrieving ServiceCreation statistics");
             return StatusCode(500, new { error = "Failed to retrieve statistics" });
         }
     }
 
     /// <summary>
-    /// Gets onboarding history for a specific time period
+    /// Gets ServiceCreation history for a specific time period
     /// </summary>
     [HttpGet("history")]
-    [ProducesResponseType(typeof(List<OnboardingRequest>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<List<OnboardingRequest>>> GetHistory(
+    [ProducesResponseType(typeof(List<ServiceCreationRequest>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<ServiceCreationRequest>>> GetHistory(
         [FromQuery] DateTime? startDate,
         [FromQuery] DateTime? endDate,
         CancellationToken cancellationToken)
@@ -296,7 +296,7 @@ public class OnboardingAdminController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving onboarding history");
+            _logger.LogError(ex, "Error retrieving ServiceCreation history");
             return StatusCode(500, new { error = "Failed to retrieve history" });
         }
     }
@@ -305,7 +305,7 @@ public class OnboardingAdminController : ControllerBase
 #region Request/Response DTOs
 
 /// <summary>
-/// Request to approve an onboarding
+/// Request to approve an ServiceCreation
 /// </summary>
 public class OnboardingApprovalRequest
 {
@@ -321,7 +321,7 @@ public class OnboardingApprovalRequest
 }
 
 /// <summary>
-/// Request to reject an onboarding
+/// Request to reject an ServiceCreation
 /// </summary>
 public class OnboardingRejectionRequest
 {

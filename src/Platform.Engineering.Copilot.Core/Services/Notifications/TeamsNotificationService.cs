@@ -1,13 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Platform.Engineering.Copilot.Core.Interfaces;
+using Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 
 namespace Platform.Engineering.Copilot.Core.Services.Notifications;
 
@@ -38,7 +33,7 @@ public class TeamsNotificationService : ITeamsNotificationService
         }
     }
 
-    public async Task SendOnboardingApprovedNotificationAsync(
+    public async Task SendServiceCreationApprovedNotificationAsync(
         string missionName,
         string missionOwner,
         string command,
@@ -55,7 +50,7 @@ public class TeamsNotificationService : ITeamsNotificationService
         };
 
         await SendAdaptiveCardAsync(
-            title: "🚀 Onboarding Request Approved",
+            title: "🚀 ServiceCreation Request Approved",
             text: $"Mission **{missionName}** has been approved and infrastructure generation is starting.",
             color: "good",
             facts: facts,

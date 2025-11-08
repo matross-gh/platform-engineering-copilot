@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
-import { PlatformApiClient } from './services/platformApiClient';
+import { McpClient } from './services/mcpClient';
 import { PlatformChatParticipant } from './chatParticipant';
 import { config } from './config';
+import { showShareMenu, copyToClipboard, exportReportWithPrompt } from './services/exportService';
 
-let apiClient: PlatformApiClient;
+let apiClient: McpClient;
 let chatParticipant: PlatformChatParticipant;
 
 /**
@@ -23,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         // Initialize API client
-        apiClient = new PlatformApiClient();
+        apiClient = new McpClient();
         config.info('✅ Platform API client initialized');
 
         // Initialize chat participant
@@ -78,16 +79,17 @@ function registerCommands(context: vscode.ExtensionContext) {
             try {
                 const health = await apiClient.healthCheck();
                 
-                if (health.healthy) {
+                if (health.status === 'healthy') {
                     vscode.window.showInformationMessage(
                         `✅ Platform API is healthy\n\n` +
                         `Version: ${health.version || 'Unknown'}\n` +
+                        `Server: ${health.server}\n` +
                         `URL: ${config.apiUrl}`
                     );
                 } else {
                     vscode.window.showWarningMessage(
                         `⚠️  Platform API health check failed\n\n` +
-                        `${health.message}\n` +
+                        `Status: ${health.status}\n` +
                         `URL: ${config.apiUrl}`
                     );
                 }
@@ -191,6 +193,120 @@ function registerCommands(context: vscode.ExtensionContext) {
         })
     );
 
+    // Share/Export commands for compliance reports
+    context.subscriptions.push(
+        vscode.commands.registerCommand('platform-copilot.shareReport', async (content: string) => {
+            await showShareMenu(content);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('platform-copilot.exportReport', async (content: string) => {
+            await exportReportWithPrompt(content);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('platform-copilot.copyToClipboard', async (content: string) => {
+            await copyToClipboard(content);
+        })
+    );
+
+    // Code analysis commands
+    context.subscriptions.push(
+        vscode.commands.registerCommand('platform.analyzeCurrentFile', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showWarningMessage('No file is currently open for analysis');
+                return;
+            }
+
+            const document = editor.document;
+            const codeContent = document.getText();
+            const fileName = document.fileName;
+            
+            if (codeContent.trim().length === 0) {
+                vscode.window.showWarningMessage('Current file is empty');
+                return;
+            }
+
+            const statusBarMessage = vscode.window.setStatusBarMessage('$(sync~spin) Analyzing code for compliance...');
+            
+            try {
+                const result = await apiClient.analyzeCodeForCompliance(
+                    codeContent,
+                    fileName,
+                    vscode.workspace.workspaceFolders?.[0]?.uri.toString()
+                );
+
+                if (result.success) {
+                    // Show results in a new document
+                    const resultsDoc = await vscode.workspace.openTextDocument({
+                        content: formatComplianceResults(result),
+                        language: 'markdown'
+                    });
+                    await vscode.window.showTextDocument(resultsDoc);
+                    
+                    vscode.window.showInformationMessage(
+                        `✅ Code analysis complete - Risk Level: ${result.riskLevel}`
+                    );
+                } else {
+                    vscode.window.showErrorMessage(
+                        `❌ Code analysis failed: ${result.errors.join(', ')}`
+                    );
+                }
+            } catch (error) {
+                vscode.window.showErrorMessage(
+                    `❌ Code analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                );
+            } finally {
+                statusBarMessage.dispose();
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('platform.analyzeWorkspace', async () => {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                vscode.window.showWarningMessage('No workspace is open for analysis');
+                return;
+            }
+
+            // Try to get repository URL from git
+            let repositoryUrl = workspaceFolder.uri.toString();
+            
+            const statusBarMessage = vscode.window.setStatusBarMessage('$(sync~spin) Analyzing workspace for compliance...');
+            
+            try {
+                const result = await apiClient.analyzeRepositoryForCompliance(repositoryUrl);
+
+                if (result.success) {
+                    // Show results in a new document
+                    const resultsDoc = await vscode.workspace.openTextDocument({
+                        content: formatRepositoryComplianceResults(result),
+                        language: 'markdown'
+                    });
+                    await vscode.window.showTextDocument(resultsDoc);
+                    
+                    vscode.window.showInformationMessage(
+                        `✅ Workspace analysis complete - Risk Level: ${result.overallRiskLevel}`
+                    );
+                } else {
+                    vscode.window.showErrorMessage(
+                        `❌ Workspace analysis failed: ${result.errors.join(', ')}`
+                    );
+                }
+            } catch (error) {
+                vscode.window.showErrorMessage(
+                    `❌ Workspace analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                );
+            } finally {
+                statusBarMessage.dispose();
+            }
+        })
+    );
+
     config.info('✅ Commands registered');
 }
 
@@ -200,12 +316,69 @@ function registerCommands(context: vscode.ExtensionContext) {
 async function performHealthCheck() {
     try {
         const health = await apiClient.healthCheck();
-        if (health.healthy) {
+        if (health.status === 'healthy') {
             config.info(`Platform API is healthy (version: ${health.version || 'unknown'})`);
         } else {
-            config.warn('Platform API health check failed:', health.message);
+            config.warn('Platform API health check failed. Status:', health.status);
         }
     } catch (error) {
         config.warn('Could not perform initial health check:', error);
     }
+}
+
+/**
+ * Format code compliance results for display
+ */
+function formatComplianceResults(result: any): string {
+    return `# Code Compliance Analysis Results
+
+## Analysis Summary
+- **File**: ${result.fileName || 'Unknown'}
+- **Framework**: ${result.framework}
+- **Risk Level**: ${result.riskLevel}
+- **Analysis ID**: ${result.analysisId}
+- **Analyzed At**: ${new Date(result.analyzedAt).toLocaleString()}
+
+## Compliance Report
+
+${result.complianceReport}
+
+## Key Findings
+
+${result.findings.length > 0 ? result.findings.map((f: string) => `- ${f}`).join('\n') : 'No specific findings reported.'}
+
+## Recommendations
+
+${result.recommendations.length > 0 ? result.recommendations.map((r: string) => `- ${r}`).join('\n') : 'No specific recommendations provided.'}
+
+${result.requiresFollowUp ? `\n## Follow-up Required\n\n${result.followUpPrompt}` : ''}
+
+---
+*Generated by Platform Engineering Copilot*
+`;
+}
+
+/**
+ * Format repository compliance results for display
+ */
+function formatRepositoryComplianceResults(result: any): string {
+    return `# Repository Compliance Analysis Results
+
+## Analysis Summary
+- **Repository**: ${result.repositoryUrl}
+- **Branch**: ${result.branch}
+- **Framework**: ${result.framework}
+- **Overall Risk Level**: ${result.overallRiskLevel}
+- **Analysis ID**: ${result.analysisId}
+- **Analyzed At**: ${new Date(result.analyzedAt).toLocaleString()}
+
+## Compliance Report
+
+${result.complianceReport}
+
+${result.requiresFollowUp ? `\n## Follow-up Required\n\n${result.followUpPrompt}` : ''}
+
+---
+*Generated by Platform Engineering Copilot*
+`;
 }

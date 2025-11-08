@@ -144,7 +144,7 @@
   border-left: 4px solid #ff9800;
 }
 
-.approval-card.onboarding {
+.approval-card.ServiceCreation {
   border-left: 4px solid #2196f3;
 }
 
@@ -177,7 +177,7 @@
   border-color: #ff9800;
 }
 
-.approval-card.onboarding .approval-type-badge {
+.approval-card.ServiceCreation .approval-type-badge {
   color: #2196f3;
   border-color: #2196f3;
 }

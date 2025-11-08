@@ -61,7 +61,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose }) => {
     setIsLoading(true);
 
     try {
-      // Call Platform API chat endpoint
+      // Call MCP chat endpoint
       const response = await adminApi.sendChatMessage(messageText);
       
       // Check if the response was successful
@@ -86,9 +86,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose }) => {
       
       // Provide more specific error messages
       if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
-        errorText = 'Unable to connect to the chat service. Please ensure the Platform API is running on port 7001.';
+        errorText = 'Unable to connect to the chat service. Please ensure the MCP server is running on port 5100.';
       } else if (error.response?.status === 404) {
-        errorText = 'Chat endpoint not found. The Platform API may not be configured correctly.';
+        errorText = 'Chat endpoint not found. The MCP HTTP endpoint may not be configured correctly.';
       } else if (error.response?.status === 500) {
         errorText = 'The chat service encountered an internal error. Please try again or check the logs.';
       }

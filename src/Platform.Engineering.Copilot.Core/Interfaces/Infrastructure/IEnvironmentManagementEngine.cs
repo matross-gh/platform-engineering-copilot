@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Platform.Engineering.Copilot.Core.Models.EnvironmentManagement;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces
+namespace Platform.Engineering.Copilot.Core.Interfaces.Infrastructure
 {
     /// <summary>
     /// Engine for managing Azure environment lifecycle operations (AKS, Web Apps, Function Apps, Container Apps).

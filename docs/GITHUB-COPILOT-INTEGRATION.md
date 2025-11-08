@@ -20,7 +20,7 @@ GitHub Copilot Extension API
     ↓
 Platform Engineering Copilot Agent
     ↓
-Platform Engineering Copilot API (:7001)
+Platform MCP Server (:5100 HTTP + stdio)
     ↓
 Azure Resources
 ```
@@ -34,7 +34,7 @@ Azure Resources
 1. **GitHub Copilot License** (Individual, Business, or Enterprise)
 2. **VS Code** with GitHub Copilot extensions installed
 3. **Node.js 18+** and npm
-4. **Platform Engineering Copilot API** running (http://localhost:7001 or deployed)
+4. **Platform MCP Server** running (http://localhost:5100 or deployed)
 5. **GitHub App** (for authentication)
 
 ### Installation
@@ -155,7 +155,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize API client
     const apiClient = new PlatformApiClient(
-        vscode.workspace.getConfiguration('platformCopilot').get('apiUrl') || 'http://localhost:7001'
+    vscode.workspace.getConfiguration('platformCopilot').get('apiUrl') || 'http://localhost:5100'
     );
 
     // Register GitHub Copilot Agent
@@ -621,7 +621,7 @@ export class PlatformApiClient {
       "properties": {
         "platformCopilot.apiUrl": {
           "type": "string",
-          "default": "http://localhost:7001",
+          "default": "http://localhost:5100",
           "description": "Platform Copilot API URL"
         },
         "platformCopilot.enableInlineCompletions": {

@@ -1,6 +1,6 @@
-using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.Compliance;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces;
+namespace Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 
 /// <summary>
 /// Central governance engine that orchestrates policy enforcement, approval workflows,
@@ -19,18 +19,7 @@ public interface IGovernanceEngine
         InfrastructureProvisioningRequest request,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Performs post-flight validation after infrastructure provisioning
-    /// Verifies resource creation, compliance tagging, security configuration, and audit logging
-    /// </summary>
-    /// <param name="request">Original provisioning request</param>
-    /// <param name="result">Provisioning result with resource details</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Post-flight governance result with compliance status</returns>
-    Task<PostFlightGovernanceResult> EvaluatePostFlightChecksAsync(
-        InfrastructureProvisioningRequest request,
-        InfrastructureProvisionResult result,
-        CancellationToken cancellationToken = default);
+
 
     /// <summary>
     /// Validates resource naming against organizational conventions

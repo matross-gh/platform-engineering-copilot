@@ -2,7 +2,7 @@
   "name": "platform-copilot-github",
   "displayName": "Platform Engineering Copilot for GitHub Copilot",
   "description": "GitHub Copilot Chat extension for Platform Engineering - AI-powered Azure infrastructure management",
-  "version": "1.0.0",
+  "version": "0.6.34",
   "publisher": "Microsoft",
   "repository": {
     "type": "git",
@@ -35,24 +35,40 @@
         "id": "platform",
         "name": "platform",
         "fullName": "Platform Engineering Copilot",
-        "description": "AI-powered Azure infrastructure management, compliance scanning, and cost analysis",
+        "description": "AI-powered Azure infrastructure with 7 specialized agents: Infrastructure, Compliance, Cost, Environment, Discovery, Service Creation, and Document",
         "isSticky": true,
         "commands": [
           {
             "name": "provision",
-            "description": "Provision Azure infrastructure resources"
+            "description": "Provision Azure infrastructure (Infrastructure Agent)"
           },
           {
             "name": "compliance",
-            "description": "Run NIST 800-53 compliance scans"
+            "description": "Run NIST 800-53 compliance scans and ATO assessments (Compliance Agent)"
           },
           {
             "name": "cost",
-            "description": "Analyze and estimate Azure costs"
+            "description": "Analyze costs and find optimization opportunities (Cost Management Agent)"
           },
           {
             "name": "deploy",
-            "description": "Deploy applications and infrastructure"
+            "description": "Deploy Bicep/Terraform templates (Infrastructure Agent)"
+          },
+          {
+            "name": "environment",
+            "description": "Clone, scale, and manage environments (Environment Agent)"
+          },
+          {
+            "name": "discover",
+            "description": "Find resources and analyze dependencies (Discovery Agent)"
+          },
+          {
+            "name": "service",
+            "description": "Design microservice architectures (Service Creation Agent)"
+          },
+          {
+            "name": "document",
+            "description": "Generate technical documentation and diagrams (Document Agent)"
           }
         ]
       }
@@ -74,8 +90,8 @@
       "properties": {
         "platform-copilot.apiUrl": {
           "type": "string",
-          "default": "http://localhost:7001",
-          "description": "Platform Copilot API URL"
+          "default": "http://localhost:5100",
+          "description": "MCP HTTP endpoint (legacy label)"
         },
         "platform-copilot.apiKey": {
           "type": "string",

@@ -84,7 +84,7 @@ var sqlDatabaseName = '${resourcePrefix}-db'
 var keyVaultName = '${resourcePrefix}-kv-${uniqueSuffix}'
 var storageAccountName = replace('${resourcePrefix}st${uniqueSuffix}', '-', '')
 var appServicePlanName = '${resourcePrefix}-asp'
-var apiAppServiceName = '${resourcePrefix}-api'
+var adminApiAppServiceName = '${resourcePrefix}-admin-api'
 var mcpAppServiceName = '${resourcePrefix}-mcp'
 var applicationInsightsName = '${resourcePrefix}-ai'
 var logAnalyticsWorkspaceName = '${resourcePrefix}-law'
@@ -165,12 +165,12 @@ module database 'modules/sql.bicep' = {
   }
 }
 
-// App Services (API and MCP Server)
+// App Services (Admin API and MCP Server)
 module appServices 'modules/appservice.bicep' = {
   name: 'appservices-deployment'
   params: {
     appServicePlanName: appServicePlanName
-    apiAppServiceName: apiAppServiceName
+    apiAppServiceName: adminApiAppServiceName
     mcpAppServiceName: mcpAppServiceName
     location: location
     environment: environment
@@ -228,7 +228,7 @@ resource appInsightsConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-
 
 // Grant App Services access to Key Vault
 resource apiKeyVaultAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, apiAppServiceName, 'KeyVaultSecretsUser')
+  name: guid(resourceGroup().id, adminApiAppServiceName, 'KeyVaultSecretsUser')
   scope: resourceGroup()
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6') // Key Vault Secrets User
@@ -251,8 +251,8 @@ resource mcpKeyVaultAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' 
 // OUTPUTS
 // ===============================
 
-@description('API App Service URL')
-output apiUrl string = 'https://${appServices.outputs.apiAppServiceHostName}'
+@description('Admin API App Service URL')
+output adminApiUrl string = 'https://${appServices.outputs.apiAppServiceHostName}'
 
 @description('MCP Server URL')
 output mcpUrl string = 'https://${appServices.outputs.mcpAppServiceHostName}'
@@ -280,7 +280,7 @@ output deploymentSummary object = {
   projectName: projectName
   environment: environment
   location: location
-  apiAppService: appServices.outputs.apiAppServiceName
+  adminApiAppService: appServices.outputs.apiAppServiceName
   mcpAppService: appServices.outputs.mcpAppServiceName
   sqlServer: database.outputs.sqlServerName
   sqlDatabase: database.outputs.sqlDatabaseName

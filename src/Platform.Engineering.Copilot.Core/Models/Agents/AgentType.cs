@@ -36,7 +36,7 @@ public enum AgentType
     Discovery,
     
     /// <summary>
-    /// New mission onboarding and requirement gathering
+    /// Service creation, mission ServiceCreation and requirement gathering
     /// </summary>
-    Onboarding
+    ServiceCreation
 }

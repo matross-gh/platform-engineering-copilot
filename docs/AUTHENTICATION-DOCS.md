@@ -287,7 +287,7 @@ export AZURE_SUBSCRIPTION_ID="default-subscription-id"
    - Deploy to Azure App Service / Container Apps
    - Set up monitoring and alerts
 
-4. **Team Onboarding**
+4. **Team ServiceCreation**
    - Share [QUICKSTART-AUTHENTICATION.md](./QUICKSTART-AUTHENTICATION.md) with team
    - Ensure everyone runs `az login`
    - Set up team subscriptions and RBAC

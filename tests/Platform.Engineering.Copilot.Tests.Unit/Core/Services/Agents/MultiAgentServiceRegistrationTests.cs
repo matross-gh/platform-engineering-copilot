@@ -71,7 +71,7 @@ public class MultiAgentServiceRegistrationTests
         Assert.Contains(AgentType.CostManagement, agentTypes);
         Assert.Contains(AgentType.Environment, agentTypes);
         Assert.Contains(AgentType.Discovery, agentTypes);
-        Assert.Contains(AgentType.Onboarding, agentTypes);
+        Assert.Contains(AgentType.ServiceCreation, agentTypes);
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public class MultiAgentServiceRegistrationTests
     {
         // Act
         var agents = _serviceProvider.GetServices<ISpecializedAgent>().ToList();
-        var onboardingAgent = agents.FirstOrDefault(a => a.AgentType == AgentType.Onboarding);
+        var onboardingAgent = agents.FirstOrDefault(a => a.AgentType == AgentType.ServiceCreation);
 
         // Assert
         Assert.NotNull(onboardingAgent);

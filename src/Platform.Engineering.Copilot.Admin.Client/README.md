@@ -14,9 +14,9 @@ The Platform Engineering Admin Console provides a user-friendly interface for pl
 ## Architecture
 
 ```
-Port 7003: Admin Console UI (React)
+Port 5003: Admin Console UI (React)
     ↓ HTTP
-Port 7002: Admin API (ASP.NET Core)
+Port 5002: Admin API (ASP.NET Core)
     ↓
 Platform Services (Template Generator, Storage, etc.)
 ```
@@ -27,7 +27,7 @@ Platform Services (Template Generator, Storage, etc.)
 
 - Node.js 16+ and npm
 - .NET 9 SDK
-- Admin API running on port 7002
+- Admin API running on port 5002
 
 ### Installation
 
@@ -40,7 +40,7 @@ npm install
 npm start
 ```
 
-The app will open at http://localhost:3001 and proxy API requests to http://localhost:7002.
+The app will open at http://localhost:3001 and proxy API requests to http://localhost:5002.
 
 ### Running with .NET
 
@@ -49,7 +49,7 @@ The app will open at http://localhost:3001 and proxy API requests to http://loca
 dotnet run
 ```
 
-The app will be served at http://localhost:7003 with the React app integrated.
+The app will be served at http://localhost:5003 with the React app integrated.
 
 ## Features
 
@@ -73,7 +73,7 @@ The app will be served at http://localhost:7003 with the React app integrated.
 
 ## API Integration
 
-The Admin Console integrates with the Admin API at `http://localhost:7002`:
+The Admin Console integrates with the Admin API at `http://localhost:5002`:
 
 - **GET** `/api/admin/templates` - List templates
 - **POST** `/api/admin/templates` - Create template
@@ -88,7 +88,7 @@ The Admin Console integrates with the Admin API at `http://localhost:7002`:
 Create a `.env` file in `ClientApp/`:
 
 ```bash
-REACT_APP_ADMIN_API_URL=http://localhost:7002
+REACT_APP_ADMIN_API_URL=http://localhost:5002
 ```
 
 ## Build for Production
@@ -106,13 +106,13 @@ The optimized production build will be created in `ClientApp/build/`.
 - **HTTP Client**: Axios
 - **Routing**: React Router v6
 - **Backend**: ASP.NET Core 9
-- **API**: RESTful Admin API (port 7002)
+- **API**: RESTful Admin API (port 5002)
 
 ## Related Services
 
-- **Admin API**: http://localhost:7002 (Swagger UI)
-- **Platform API**: http://localhost:7001
-- **Chat App**: http://localhost:7000
+- **Admin API**: http://localhost:5002 (Swagger UI)
+- **MCP Server**: http://localhost:5100
+- **Chat App**: http://localhost:5001
 
 ## Development
 
@@ -149,6 +149,6 @@ ClientApp/
 ## Support
 
 For issues or questions:
-- Check Admin API Swagger UI: http://localhost:7002
+- Check Admin API Swagger UI: http://localhost:5002
 - Review Admin API README: `../Platform.Engineering.Copilot.Admin/README.md`
 - Check platform documentation: `/docs/`

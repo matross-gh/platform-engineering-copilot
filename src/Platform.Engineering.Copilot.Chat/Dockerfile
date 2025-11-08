@@ -17,7 +17,7 @@ COPY src/Platform.Engineering.Copilot.Core/*.csproj ./src/Platform.Engineering.C
 COPY src/Platform.Engineering.Copilot.Data/*.csproj ./src/Platform.Engineering.Copilot.Data/
 
 # Restore dependencies
-RUN dotnet restore ./src/Platform.Engineering.Copilot.Chat/Platform.Engineering.Copilot.Chat.App.csproj
+RUN dotnet restore ./src/Platform.Engineering.Copilot.Chat/Platform.Engineering.Copilot.Chat.csproj
 
 # Copy all source code
 COPY src/Platform.Engineering.Copilot.Chat/. ./src/Platform.Engineering.Copilot.Chat/
@@ -26,7 +26,7 @@ COPY src/Platform.Engineering.Copilot.Data/. ./src/Platform.Engineering.Copilot.
 
 # Build and publish
 WORKDIR /src/src/Platform.Engineering.Copilot.Chat
-RUN dotnet publish Platform.Engineering.Copilot.Chat.App.csproj \
+RUN dotnet publish Platform.Engineering.Copilot.Chat.csproj \
     -c Release \
     -o /app/publish \
     --no-restore

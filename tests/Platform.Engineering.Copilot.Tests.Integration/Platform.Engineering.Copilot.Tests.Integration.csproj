@@ -22,7 +22,7 @@
     <PackageReference Include="Moq" Version="4.20.69" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
@@ -35,7 +35,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Platform.Engineering.Copilot.Core\Platform.Engineering.Copilot.Core.csproj" />
-    <ProjectReference Include="..\..\src\Platform.Engineering.Copilot.Data\Platform.Engineering.Copilot.Data.csproj" />
     <ProjectReference Include="..\..\src\Platform.Engineering.Copilot.API\Platform.Engineering.Copilot.API.csproj" />
   </ItemGroup>
 

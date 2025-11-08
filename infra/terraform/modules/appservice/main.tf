@@ -17,9 +17,9 @@ resource "azurerm_service_plan" "main" {
   tags = var.tags
 }
 
-# API App Service
+# Admin API App Service
 resource "azurerm_linux_web_app" "api" {
-  name                = "${var.project_name}-api-${var.environment}"
+  name                = "${var.project_name}-admin-api-${var.environment}"
   resource_group_name = var.resource_group_name
   location            = var.location
   service_plan_id     = azurerm_service_plan.main.id

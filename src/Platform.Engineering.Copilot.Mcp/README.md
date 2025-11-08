@@ -114,7 +114,7 @@ External AI Tools (GitHub Copilot, Claude, Cline)
 │   - CostManagement                  │
 │   - Discovery                       │
 │   - Environment                     │
-│   - Onboarding                      │
+│   - ServiceCreation                      │
 └─────────────────────────────────────┘
   ↑
   ↑ HTTP (REST endpoints)

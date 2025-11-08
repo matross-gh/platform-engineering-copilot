@@ -6,7 +6,7 @@ using Microsoft.SemanticKernel;
 using Moq;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Plugins;
-using Platform.Engineering.Copilot.Data.Entities;
+using Platform.Engineering.Copilot.Core.Data.Entities;
 using Xunit;
 
 namespace Platform.Engineering.Copilot.Tests.Unit.Core.Plugins
@@ -38,7 +38,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Plugins
             var requestId = "11111111-1111-1111-1111-111111111111";
             var onboardingServiceMock = new Mock<IOnboardingService>();
             onboardingServiceMock.Setup(s => s.GetRequestAsync(requestId, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new OnboardingRequest { Id = requestId, Status = OnboardingStatus.Draft, MissionName = "Test" });
+                .ReturnsAsync(new ServiceCreationRequest { Id = requestId, Status = OnboardingStatus.Draft, MissionName = "Test" });
             onboardingServiceMock.Setup(s => s.ValidateForSubmissionAsync(requestId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new System.Collections.Generic.List<string>());
             onboardingServiceMock.Setup(s => s.SubmitRequestAsync(requestId, null, It.IsAny<CancellationToken>())).ReturnsAsync(true);
@@ -53,7 +53,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Plugins
         public async Task SubmitForApprovalAsync_InvalidRequest_ReturnsError()
         {
             var onboardingServiceMock = new Mock<IOnboardingService>();
-            onboardingServiceMock.Setup(s => s.GetRequestAsync("bad-id", It.IsAny<CancellationToken>())).ReturnsAsync((OnboardingRequest?)null);
+            onboardingServiceMock.Setup(s => s.GetRequestAsync("bad-id", It.IsAny<CancellationToken>())).ReturnsAsync((ServiceCreationRequest?)null);
             var plugin = CreatePlugin(onboardingServiceMock);
 
             var response = await plugin.SubmitForApprovalAsync("bad-id");

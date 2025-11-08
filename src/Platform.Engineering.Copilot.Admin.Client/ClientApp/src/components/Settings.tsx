@@ -36,7 +36,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
       defaultResourceGroup: '',
       defaultSku: 'Standard_D2s_v3'
     },
-    apiEndpoint: 'http://localhost:7002',
+    apiEndpoint: 'http://localhost:5002',
     theme: 'auto',
     autoSave: true
   });
@@ -404,7 +404,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 <label>Admin API Endpoint</label>
                 <input
                   type="text"
-                  placeholder="http://localhost:7002"
+                  placeholder="http://localhost:5002"
                   value={settings.apiEndpoint}
                   onChange={(e) => handleApiEndpointChange(e.target.value)}
                 />

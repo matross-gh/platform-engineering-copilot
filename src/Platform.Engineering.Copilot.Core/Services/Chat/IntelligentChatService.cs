@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Services.Agents;
-using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models.IntelligentChat;
 using Platform.Engineering.Copilot.Core.Models.Agents;
+using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 
 namespace Platform.Engineering.Copilot.Core.Services.Chat;
 
@@ -221,7 +221,7 @@ public class IntelligentChatService : IIntelligentChatService
                 {
                     new() { Title = "Discover Resource Utilization", Description = "Find underutilized resources to optimize costs", ToolName = "DiscoveryAgent", Priority = "medium" }
                 },
-                ["Onboarding"] = new()
+                ["ServiceCreation"] = new()
                 {
                     new() { Title = "Provision Infrastructure", Description = "Provision infrastructure for your onboarded mission", ToolName = "InfrastructureAgent", Priority = "high" }
                 }

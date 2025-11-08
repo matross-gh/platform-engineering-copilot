@@ -10,12 +10,12 @@ using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Services.Notifications;
-using Platform.Engineering.Copilot.Core.Services.Onboarding;
-using Platform.Engineering.Copilot.Data.Context;
-using Platform.Engineering.Copilot.Data.Entities;
+using Platform.Engineering.Copilot.Core.Services.ServiceCreation;
+using Platform.Engineering.Copilot.Core.Data.Context;
+using Platform.Engineering.Copilot.Core.Data.Entities;
 using Xunit;
 
-namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.Onboarding;
+namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.ServiceCreation;
 
 /// <summary>
 /// Unit tests for FlankspeedOnboardingService helper methods
@@ -75,13 +75,13 @@ public class FlankspeedOnboardingServiceHelperMethodsTests : IDisposable
         return result is null ? default! : (T)result;
     }
 
-    private OnboardingRequest CreateRequest(
+    private ServiceCreationRequest CreateRequest(
         string classification,
         string requiredServices,
         int? estimatedUsers = null,
         string? vnetCidr = null)
     {
-        return new OnboardingRequest
+        return new ServiceCreationRequest
         {
             Id = Guid.NewGuid().ToString(),
             MissionName = "fleet-ops",

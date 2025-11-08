@@ -2,10 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Models.EnvironmentManagement;
-using Platform.Engineering.Copilot.Data.Entities;
+using Platform.Engineering.Copilot.Core.Data.Entities;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Admin.Models;
 using Platform.Engineering.Copilot.Core.Services.Infrastructure;
+using Platform.Engineering.Copilot.Compliance.Core.Interfaces;
+using Platform.Engineering.Copilot.Infrastructure.Core.Services;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;
 

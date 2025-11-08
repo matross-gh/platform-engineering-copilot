@@ -11,24 +11,24 @@ PROJECT_ROOT="$SCRIPT_DIR/.."
 export INTELLIGENT_CHAT_MOCK_MODE=true
 
 echo ""
-echo "Step 1: Starting Platform API on port 7001..."
-echo "----------------------------------------------"
+echo "Step 1: Starting MCP Server (HTTP mode) on port 5100..."
+echo "-------------------------------------------------------"
 cd "$PROJECT_ROOT"
 
-# Start Platform API in background
-dotnet run --project src/Platform.Engineering.Copilot.API > /tmp/platform-api.log 2>&1 &
-API_PID=$!
-echo "✅ Platform API started with PID: $API_PID"
-echo "   Logs: tail -f /tmp/platform-api.log"
+# Start MCP server in HTTP mode
+dotnet run --project src/Platform.Engineering.Copilot.Mcp -- --http > /tmp/mcp-http.log 2>&1 &
+MCP_PID=$!
+echo "✅ MCP server started with PID: $MCP_PID"
+echo "   Logs: tail -f /tmp/mcp-http.log"
 
 echo ""
-echo "⏳ Waiting for Platform API to initialize (10 seconds)..."
+echo "⏳ Waiting for MCP server to initialize (10 seconds)..."
 sleep 10
 
 echo ""
 echo "Step 2: Starting Chat App Backend on port 5001..."
 echo "--------------------------------------------------"
-cd "$PROJECT_ROOT/src/Platform.Engineering.Copilot.Chat.App"
+cd "$PROJECT_ROOT/src/Platform.Engineering.Copilot.Chat"
 
 # Start Chat App backend in background
 dotnet run > /tmp/chat-backend.log 2>&1 &
@@ -43,7 +43,7 @@ sleep 10
 echo ""
 echo "Step 3: Starting Chat App Frontend (React)..."
 echo "---------------------------------------------"
-cd "$PROJECT_ROOT/src/Platform.Engineering.Copilot.Chat.App/ClientApp"
+cd "$PROJECT_ROOT/src/Platform.Engineering.Copilot.Chat/ClientApp"
 
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then
@@ -56,12 +56,12 @@ echo "==========================================================="
 echo "🎉 All Services Started!"
 echo "==========================================================="
 echo ""
-echo "Platform API:    http://localhost:7001"
+echo "MCP Server:      http://localhost:5100"
 echo "Chat Backend:    http://localhost:5001"
 echo "Chat Frontend:   http://localhost:3000 (will open automatically)"
 echo ""
 echo "Logs:"
-echo "  Platform API:  tail -f /tmp/platform-api.log"
+echo "  MCP Server:    tail -f /tmp/mcp-http.log"
 echo "  Chat Backend:  tail -f /tmp/chat-backend.log"
 echo ""
 echo "Press Ctrl+C to stop all services"
@@ -75,8 +75,8 @@ npm run start
 cleanup() {
     echo ""
     echo "🛑 Shutting down all services..."
-    echo "  Stopping Platform API (PID: $API_PID)..."
-    kill $API_PID 2>/dev/null
+    echo "  Stopping MCP server (PID: $MCP_PID)..."
+    kill $MCP_PID 2>/dev/null
     echo "  Stopping Chat Backend (PID: $CHAT_BACKEND_PID)..."
     kill $CHAT_BACKEND_PID 2>/dev/null
     echo "✅ All services stopped"

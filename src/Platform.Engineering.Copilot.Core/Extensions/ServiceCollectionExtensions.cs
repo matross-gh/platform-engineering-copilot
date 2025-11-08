@@ -4,23 +4,27 @@ using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Azure.Identity;
 using Platform.Engineering.Copilot.Core.Interfaces;
+using Platform.Engineering.Copilot.Core.Interfaces.Azure;
+using Platform.Engineering.Copilot.Core.Interfaces.Audits;
+using Platform.Engineering.Copilot.Core.Interfaces.Chat;
+using Platform.Engineering.Copilot.Core.Interfaces.Notifications;
+using Platform.Engineering.Copilot.Core.Interfaces.GitHub;
+using Platform.Engineering.Copilot.Core.Interfaces.Jobs;
+using Platform.Engineering.Copilot.Core.Interfaces.Cache;
+using Platform.Engineering.Copilot.Core.Interfaces.ServiceCreation;
 using Platform.Engineering.Copilot.Core.Services;
-using Platform.Engineering.Copilot.Core.Services.Deployment;
 using Platform.Engineering.Copilot.Core.Services.Cache;
-using Platform.Engineering.Copilot.Core.Services.Compliance;
 using Platform.Engineering.Copilot.Core.Services.Jobs;
-using Platform.Engineering.Copilot.Core.Plugins;
-using Platform.Engineering.Copilot.Core.Services.Infrastructure;
-using Platform.Engineering.Copilot.Core.Services.Onboarding;
 using Platform.Engineering.Copilot.Core.Services.Chat;
 using Platform.Engineering.Copilot.Core.Services.Azure;
-using Platform.Engineering.Copilot.Core.Services.Azure.Cost;
 using Platform.Engineering.Copilot.Core.Services.Azure.ResourceHealth;
 using Platform.Engineering.Copilot.Core.Services.Azure.Security;
 using Platform.Engineering.Copilot.Core.Services.Agents;
-using Platform.Engineering.Copilot.Core.Interfaces.Agents;
+using Platform.Engineering.Copilot.Core.Services.Audits;
+using Platform.Engineering.Copilot.Core.Services.Notifications;
 using Platform.Engineering.Copilot.Core.Services.Validation;
 using Platform.Engineering.Copilot.Core.Services.Validation.Validators;
+using Platform.Engineering.Copilot.Core.Services.ServiceCreation;
 using Platform.Engineering.Copilot.Core.Interfaces.Validation;
 
 namespace Platform.Engineering.Copilot.Core.Extensions;
@@ -100,37 +104,14 @@ public static class ServiceCollectionExtensions
         // Register IntelligentChatService (pure multi-agent - delegates to OrchestratorAgent)
         services.AddScoped<IIntelligentChatService, IntelligentChatService>();
         
-        // Register Azure resource service (stub implementation for DI resolution)
-        services.AddScoped<IAzureResourceService, AzureResourceService>();
+        // Register Azure resource service - Singleton (no DbContext dependency)
+        services.AddSingleton<IAzureResourceService, AzureResourceService>();
         
-        // Register Azure resource health service (stub implementation for DI resolution)
-        services.AddScoped<IAzureResourceHealthService, AzureResourceHealthService>();
-        
-        // Register cost management services
-        services.AddHttpClient<AzureCostManagementService>();
-        services.AddScoped<AzureCostManagementService>();
-        services.AddScoped<IAzureCostManagementService>(sp => sp.GetRequiredService<AzureCostManagementService>());
-
-        // Register cost optimization engine
-        services.AddScoped<ICostOptimizationEngine, CostOptimizationEngine>();
-        
-        // Register environment management engine
-        services.AddScoped<IEnvironmentManagementEngine, EnvironmentManagementEngine>();
-        
-        // Register environment storage service (required by EnvironmentManagementPlugin)
-        services.AddScoped<EnvironmentStorageService>();
-        
-        // Register onboarding services
-        services.AddScoped<IOnboardingService, FlankspeedOnboardingService>();
-        
-        // Register deployment orchestration service (required by EnvironmentManagementEngine)
-        services.AddScoped<IDeploymentOrchestrationService, DeploymentOrchestrationService>();
-        
-        // Register Azure metrics service (required by CostOptimizationEngine)
-        services.AddScoped<IAzureMetricsService, AzureMetricsService>();
-
-        // Register dynamic template generator
-        services.AddScoped<IDynamicTemplateGenerator, DynamicTemplateGeneratorService>();
+        // Register Azure resource health service - Singleton (no DbContext dependency)
+        services.AddSingleton<IAzureResourceHealthService, AzureResourceHealthService>();
+                
+        // Register audit logging service - Singleton (no DbContext dependency, uses in-memory store)
+        services.AddSingleton<IAuditLoggingService, AuditLoggingService>();
         
         // Register configuration validation service and validators
         services.AddScoped<ConfigurationValidationService>();
@@ -144,59 +125,30 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IConfigurationValidator, CloudRunConfigValidator>();
         services.AddScoped<IConfigurationValidator, VMConfigValidator>();
         
-        // Register template generation enhancements
-        services.AddScoped<Services.TemplateGeneration.IComplianceAwareTemplateEnhancer,
-            Services.TemplateGeneration.ComplianceAwareTemplateEnhancer>();
-        services.AddScoped<INetworkTopologyDesignService,
-            NetworkTopologyDesignService>();
-        services.AddScoped<IPredictiveScalingEngine,
-            PredictiveScalingEngine>();
         services.AddScoped<IAzureSecurityConfigurationService, AzureSecurityConfigurationService>();
         
-        // Register Azure Policy Service (required by ComplianceAwareTemplateEnhancer)
-        services.AddScoped<IAzurePolicyService, AzurePolicyEngine>();
+        // Register Template Storage Service (required by domain services)
+        services.AddScoped<ITemplateStorageService, Data.Services.TemplateStorageService>();
         
-        // Register infrastructure provisioning service (AI-powered, requires Kernel)
-        services.AddScoped<IInfrastructureProvisioningService>(serviceProvider =>
-        {
-            var logger = serviceProvider.GetRequiredService<ILogger<InfrastructureProvisioningService>>();
-            var azureResourceService = serviceProvider.GetRequiredService<IAzureResourceService>();
-            
-            return new InfrastructureProvisioningService(logger, azureResourceService);
-        });
-
-        // Register compliance service (AI-powered, requires Kernel)
-        services.AddScoped(serviceProvider =>
-        {
-            var logger = serviceProvider.GetRequiredService<ILogger<ComplianceService>>();
-            var kernel = serviceProvider.GetRequiredService<Kernel>();
-            
-            return new ComplianceService(logger, kernel);
-        });
+        // Register GitHub Services - Singleton (no DbContext dependency)
+        services.AddSingleton<IGitHubServices, GitHubGatewayService>();
+        
+        // Register Notification Services - Singleton (no DbContext dependency)
+        services.AddSingleton<IEmailService, EmailService>();
+        services.AddSingleton<ISlackService, SlackService>();
+        services.AddSingleton<ITeamsNotificationService, TeamsNotificationService>();
+        
+        // Register Service Creation Service
+        services.AddScoped<IServiceCreationService, FlankspeedServiceCreationService>();
 
         // ========================================
         // MULTI-AGENT SYSTEM REGISTRATION
         // ========================================
         
-        // Register plugins (required by specialized agents)
-        services.AddScoped<CompliancePlugin>();
-        services.AddScoped<CostManagementPlugin>();
-        services.AddScoped<EnvironmentManagementPlugin>();
-        services.AddScoped<ResourceDiscoveryPlugin>();
-        services.AddScoped<OnboardingPlugin>();
-        // Note: InfrastructurePlugin and DeploymentPlugin are already registered by IntelligentChatService
-        
+        // Note: Agents and plugins are now registered in their respective domain projects:
+                
         // Register SharedMemory as singleton (shared across all agents for context)
         services.AddSingleton<SharedMemory>();
-
-        // Register all specialized agents as ISpecializedAgent
-        // Each agent is registered as a singleton since they are stateless (state is in SharedMemory)
-        services.AddSingleton<ISpecializedAgent, InfrastructureAgent>();
-        services.AddSingleton<ISpecializedAgent, ComplianceAgent>();
-        services.AddSingleton<ISpecializedAgent, CostManagementAgent>();
-        services.AddSingleton<ISpecializedAgent, EnvironmentAgent>();
-        services.AddSingleton<ISpecializedAgent, DiscoveryAgent>();
-        services.AddSingleton<ISpecializedAgent, OnboardingAgent>();
 
         // Register execution plan validator
         services.AddSingleton<ExecutionPlanValidator>();
@@ -204,10 +156,10 @@ public static class ServiceCollectionExtensions
         // OPTIMIZATION: Register execution plan cache
         services.AddSingleton<ExecutionPlanCache>();
 
-        // Register OrchestratorAgent (coordinates all specialized agents)
-        services.AddSingleton<OrchestratorAgent>();
+        // Register OrchestratorAgent (coordinates all specialized agents) - Scoped to match agents
+        services.AddScoped<OrchestratorAgent>();
 
-        // Register SemanticKernelService (creates kernels for agents)
+        // Register SemanticKernelService (creates kernels for agents) - Scoped to match agents
         services.AddScoped<ISemanticKernelService, SemanticKernelService>();
         
         // Register Background Job Service for long-running operations

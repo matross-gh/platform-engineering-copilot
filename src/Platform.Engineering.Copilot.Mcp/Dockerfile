@@ -6,6 +6,14 @@ WORKDIR /src
 COPY ["Platform.Engineering.Copilot.sln", "./"]
 COPY ["src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj", "src/Platform.Engineering.Copilot.Mcp/"]
 COPY ["src/Platform.Engineering.Copilot.Core/Platform.Engineering.Copilot.Core.csproj", "src/Platform.Engineering.Copilot.Core/"]
+COPY ["src/Platform.Engineering.Copilot.Compliance.Agent/Platform.Engineering.Copilot.Compliance.Agent.csproj", "src/Platform.Engineering.Copilot.Compliance.Agent/"]
+COPY ["src/Platform.Engineering.Copilot.Infrastructure.Agent/Platform.Engineering.Copilot.Infrastructure.Agent.csproj", "src/Platform.Engineering.Copilot.Infrastructure.Agent/"]
+COPY ["src/Platform.Engineering.Copilot.CostManagement.Agent/Platform.Engineering.Copilot.CostManagement.Agent.csproj", "src/Platform.Engineering.Copilot.CostManagement.Agent/"]
+COPY ["src/Platform.Engineering.Copilot.Security.Agent/Platform.Engineering.Copilot.Security.Agent.csproj", "src/Platform.Engineering.Copilot.Security.Agent/"]
+COPY ["src/Platform.Engineering.Copilot.Document.Agent/Platform.Engineering.Copilot.Document.Agent.csproj", "src/Platform.Engineering.Copilot.Document.Agent/"]
+COPY ["src/Platform.Engineering.Copilot.Environment.Agent/Platform.Engineering.Copilot.Environment.Agent.csproj", "src/Platform.Engineering.Copilot.Environment.Agent/"]
+COPY ["src/Platform.Engineering.Copilot.ServiceCreation.Agent/Platform.Engineering.Copilot.ServiceCreation.Agent.csproj", "src/Platform.Engineering.Copilot.ServiceCreation.Agent/"]
+COPY ["src/Platform.Engineering.Copilot.Discovery.Agent/Platform.Engineering.Copilot.Discovery.Agent.csproj", "src/Platform.Engineering.Copilot.Discovery.Agent/"]
 
 # Restore dependencies
 RUN dotnet restore "src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj"

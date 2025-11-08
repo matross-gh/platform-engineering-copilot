@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using Platform.Engineering.Copilot.Data.Context;
+using Platform.Engineering.Copilot.Core.Data.Context;
 using Platform.Engineering.Copilot.Core.Interfaces;
-using DataEntities = Platform.Engineering.Copilot.Data.Entities;
+using Platform.Engineering.Copilot.Core.Models.EnvironmentManagement;
+using DataEntities = Platform.Engineering.Copilot.Core.Data.Entities;
 using CoreModels = Platform.Engineering.Copilot.Core.Models;
 
 namespace Platform.Engineering.Copilot.Core.Data.Services;
@@ -601,7 +602,7 @@ public class TemplateStorageService : ITemplateStorageService
             FilesCount = entity.FilesCount,
             MainFileType = entity.MainFileType,
             Summary = entity.Summary,
-            Files = entity.Files?.Select(f => new CoreModels.EnvironmentManagement.ServiceTemplateFile
+            Files = entity.Files?.Select(f => new ServiceTemplateFile
             {
                 FileName = f.FileName,
                 Content = f.Content,

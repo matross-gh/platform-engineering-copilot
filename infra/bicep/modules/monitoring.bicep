@@ -139,7 +139,7 @@ resource availabilityTest 'Microsoft.Insights/webtests@2022-06-15' = {
   properties: {
     SyntheticMonitorId: '${applicationInsightsName}-availability-test'
     Name: '${applicationInsightsName}-availability-test'
-    Description: 'Platform API availability test'
+    Description: 'MCP Server availability test'
     Enabled: true
     Frequency: 300 // 5 minutes
     Timeout: 30

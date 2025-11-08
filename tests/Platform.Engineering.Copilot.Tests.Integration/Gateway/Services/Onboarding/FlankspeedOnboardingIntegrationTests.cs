@@ -10,19 +10,19 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models;
-using Platform.Engineering.Copilot.Data.Entities;
+using Platform.Engineering.Copilot.Core.Data.Entities;
 using Platform.Engineering.Copilot.Core.Models.EnvironmentManagement;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Services.Notifications;
-using Platform.Engineering.Copilot.Core.Services.Onboarding;
-using Platform.Engineering.Copilot.Data.Context;
+using Platform.Engineering.Copilot.Core.Services.ServiceCreation;
+using Platform.Engineering.Copilot.Core.Data.Context;
 using Xunit;
 using CoreEnvironmentTemplate = Platform.Engineering.Copilot.Core.Models.EnvironmentTemplate;
 
-namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.Onboarding
+namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCreation
 {
     /// <summary>
-    /// Integration tests for Flankspeed onboarding end-to-end workflows
+    /// Integration tests for Flankspeed ServiceCreation end-to-end workflows
     /// Tests complete lifecycle from draft creation through provisioning
     /// </summary>
     public class FlankspeedOnboardingIntegrationTests : IAsyncLifetime
@@ -95,7 +95,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.Onboardin
             services.AddSingleton(mockTemplateGenerator.Object);
             services.AddSingleton(mockTeamsNotification.Object);
 
-            // Add the actual onboarding service
+            // Add the actual ServiceCreation service
             services.AddScoped<IOnboardingService, FlankspeedOnboardingService>();
 
             _serviceProvider = services.BuildServiceProvider();

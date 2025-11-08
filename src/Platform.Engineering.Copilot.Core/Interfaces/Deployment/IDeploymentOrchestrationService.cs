@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Platform.Engineering.Copilot.Core.Interfaces
+namespace Platform.Engineering.Copilot.Core.Interfaces.Deployment
 {
     /// <summary>
     /// Service responsible for orchestrating actual infrastructure deployments.

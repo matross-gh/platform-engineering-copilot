@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Http;
-using Platform.Engineering.Copilot.DocumentProcessing.Models;
-using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.DocumentProcessing;
+using Platform.Engineering.Copilot.Core.Models.Compliance;
 
-namespace Platform.Engineering.Copilot.DocumentProcessing.Services;
+namespace Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 
 /// <summary>
 /// Service interface for document processing and compliance analysis operations.

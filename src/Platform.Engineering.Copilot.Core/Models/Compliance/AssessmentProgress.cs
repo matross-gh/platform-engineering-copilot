@@ -1,6 +1,6 @@
 using System;
 
-namespace Platform.Engineering.Copilot.Core.Models;
+namespace Platform.Engineering.Copilot.Core.Models.Compliance;
 
 /// <summary>
 /// Represents the progress of an ATO compliance assessment

@@ -1,6 +1,6 @@
 using Platform.Engineering.Copilot.Core.Models.Notifications;
 
-namespace Platform.Engineering.Copilot.Core.Services.Notifications;
+namespace Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 
 /// <summary>
 /// Service for sending Slack notifications to NNWC operations team
@@ -9,22 +9,22 @@ namespace Platform.Engineering.Copilot.Core.Services.Notifications;
 public interface ISlackService
 {
     /// <summary>
-    /// Send Slack notification when onboarding request is approved
+    /// Send Slack notification when ServiceCreation request is approved
     /// </summary>
     /// <param name="request">Approval details</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Slack send result</returns>
-    Task<SlackNotificationResult> SendOnboardingApprovedAsync(
+    Task<SlackNotificationResult> SendServiceCreationApprovedAsync(
         SlackApprovalRequest request,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Send Slack notification when onboarding request is rejected
+    /// Send Slack notification when ServiceCreation request is rejected
     /// </summary>
     /// <param name="request">Rejection details</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Slack send result</returns>
-    Task<SlackNotificationResult> SendOnboardingRejectedAsync(
+    Task<SlackNotificationResult> SendServiceCreationRejectedAsync(
         SlackRejectionRequest request,
         CancellationToken cancellationToken = default);
 

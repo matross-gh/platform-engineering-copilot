@@ -22,7 +22,7 @@ Complete guide for integrating Platform Engineering Copilot with GitHub Copilot,
 
 Full Node.js/TypeScript project for Microsoft 365 Copilot integration with:
 - Express.js webhook server
-- Platform API client
+- MCP HTTP client
 - Adaptive Cards builder
 - Message handler with intent routing
 - Teams app manifest
@@ -55,7 +55,8 @@ nano .env
 
 Required configuration:
 ```bash
-PLATFORM_API_URL=http://localhost:7001
+# MCP HTTP endpoint (legacy env name)
+PLATFORM_API_URL=http://localhost:5100
 PORT=3978
 NODE_ENV=development
 ```
@@ -82,7 +83,7 @@ You should see:
 ║  Platform Engineering Copilot - M365 Extension     ║
 ║                                                    ║
 ║  🚀 Server running on port 3978                    ║
-║  🔗 Platform API: http://localhost:7001            ║
+║  🔗 MCP Server: http://localhost:5100              ║
 ║  🎯 Environment: development                       ║
 ║                                                    ║
 ║  📡 Endpoints:                                     ║
@@ -267,7 +268,7 @@ az webapp config appsettings set \
   --name platform-copilot-m365 \
   --resource-group rg-platform-copilot \
   --settings \
-    PLATFORM_API_URL="https://your-api.azurewebsites.us" \
+  PLATFORM_API_URL="https://mcp.yourdomain.com" \
     NODE_ENV="production" \
     PORT="8080"
 
@@ -379,7 +380,7 @@ Before deploying to production:
 
 - [ ] Replace placeholder Azure AD App ID in manifest.json
 - [ ] Configure proper OAuth authentication
-- [ ] Set up API key authentication for Platform API
+- [ ] Set up API key authentication for MCP server
 - [ ] Enable HTTPS only
 - [ ] Configure CORS policies
 - [ ] Add rate limiting
@@ -397,7 +398,7 @@ Before deploying to production:
 **Problem**: M365 Copilot doesn't respond to commands
 
 **Solutions**:
-1. Check Platform API is running: `curl http://localhost:7001/health`
+1. Check MCP server is running: `curl http://localhost:5100/health`
 2. Verify M365 extension is running: `curl http://localhost:3978/health`
 3. Check ngrok tunnel is active (for local development)
 4. Review logs for errors
@@ -461,7 +462,7 @@ platform-copilot-m365/
 │   ├── index.ts              # Main server entry point
 │   ├── config.ts             # Configuration management
 │   ├── services/
-│   │   ├── platformApiClient.ts      # Platform API client
+│   │   ├── platformApiClient.ts      # MCP HTTP client (legacy name)
 │   │   ├── adaptiveCardBuilder.ts    # Builds Teams cards
 │   │   └── messageHandler.ts         # Message processing
 │   ├── appPackage/

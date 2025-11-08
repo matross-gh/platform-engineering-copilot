@@ -1,8 +1,8 @@
-// App Service module for hosting the Platform API and MCP Server
+// App Service module for hosting the Admin API and MCP Server
 @description('Name of the App Service Plan')
 param appServicePlanName string
 
-@description('Name of the App Service for the API')
+@description('Name of the App Service for the Admin API')
 param apiAppServiceName string
 
 @description('Name of the App Service for the MCP Server')
@@ -113,7 +113,7 @@ resource apiAppService 'Microsoft.Web/sites@2023-01-01' = {
   }
   tags: {
     Environment: environment
-    Purpose: 'PlatformAPI'
+    Purpose: 'AdminAPI'
   }
 }
 
