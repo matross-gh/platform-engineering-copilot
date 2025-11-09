@@ -27,7 +27,7 @@ public class DiscoveryAgent : ISpecializedAgent
     public DiscoveryAgent(
         ISemanticKernelService semanticKernelService,
         ILogger<DiscoveryAgent> logger,
-        ResourceDiscoveryPlugin resourceDiscoveryPlugin,
+        AzureResourceDiscoveryPlugin AzureResourceDiscoveryPlugin,
         AzureMcpClient azureMcpClient)
     {
         _logger = logger;
@@ -38,7 +38,7 @@ public class DiscoveryAgent : ISpecializedAgent
         _chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
 
         // Register resource discovery plugin
-        _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(resourceDiscoveryPlugin, "ResourceDiscoveryPlugin"));
+        _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(AzureResourceDiscoveryPlugin, "AzureResourceDiscoveryPlugin"));
 
         _logger.LogInformation("✅ Discovery Agent initialized with specialized kernel + Azure MCP integration");
     }
@@ -286,7 +286,7 @@ Always provide structured data with resource counts, types, and key findings.";
         // Extract tool calls if any
         if (result.Metadata != null && result.Metadata.ContainsKey("ChatCompletionMessage"))
         {
-            metadata["toolsInvoked"] = "ResourceDiscoveryPlugin functions";
+            metadata["toolsInvoked"] = "AzureResourceDiscoveryPlugin functions";
         }
 
         return metadata;

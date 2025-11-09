@@ -558,7 +558,7 @@ Core/
 ├── Extensions/            # DI registration (ServiceCollectionExtensions)
 ├── Interfaces/            # Service interfaces (40+ interfaces)
 │   ├── IInfrastructureProvisioningService
-│   ├── IOnboardingService
+│   ├── IServiceCreationService
 │   ├── IComplianceService
 │   ├── ICostManagementService
 │   └── [35+ more interfaces]
@@ -567,15 +567,15 @@ Core/
 │   ├── Cost/             # CostEstimate, CostBreakdown
 │   ├── EnvironmentManagement/  # EnvironmentRequest, DeploymentStatus
 │   ├── Notifications/    # NotificationRequest, EmailTemplate
-│   └── ServiceCreation/       # OnboardingFlowRequest, StepDefinition
+│   └── ServiceCreation/       # ServiceCreationFlowRequest, StepDefinition
 ├── Plugins/              # Semantic Kernel plugins (8)
 │   ├── BaseSupervisorPlugin.cs       # Base class for all plugins
 │   ├── CompliancePlugin.cs           # AI-powered (Option C)
 │   ├── CostManagementPlugin.cs
 │   ├── DocumentPlugin.cs
 │   ├── InfrastructurePlugin.cs       # AI-powered (Option C)
-│   ├── OnboardingPlugin.cs
-│   ├── ResourceDiscoveryPlugin.cs
+│   ├── ServiceCreationPlugin.cs
+│   ├── AzureResourceDiscoveryPlugin.cs
 │   └── SecurityPlugin.cs
 └── Services/             # Domain-organized services
     ├── Cache/            # Redis caching services
@@ -706,7 +706,7 @@ Data/
 │   └── AdminContext.cs        # Admin and configuration data
 ├── Entities/                            # Database entities
 │   ├── ServiceCreationRequest.cs             # Complete entity (343 lines)
-│   ├── OnboardingStatus.cs              # Enum (Draft → Completed)
+│   ├── ServiceCreationStatus.cs              # Enum (Draft → Completed)
 │   ├── EnvironmentTemplate.cs
 │   ├── DeploymentRecord.cs
 │   ├── ChatSession.cs
@@ -790,7 +790,7 @@ Data/
 - **DeploymentAdminController** - Deployment operations
 - **EnvironmentAdminController** - Environment lifecycle
 - **GovernanceAdminController** - Policy and compliance
-- **OnboardingAdminController** - User ServiceCreation management
+- **ServiceCreationAdminController** - User ServiceCreation management
 - **TemplateAdminController** - Template CRUD operations
 
 ---
@@ -1092,10 +1092,10 @@ The platform uses **Semantic Kernel plugins exclusively** for AI-powered operati
 | **BaseSupervisorPlugin** | N/A | Base class | ✅ Base |
 | **CompliancePlugin** | 1 (`process_compliance_query`) | Option C | ✅ Refactored |
 | **InfrastructurePlugin** | 4 | Option C | ✅ Refactored |
-| **OnboardingPlugin** | Multiple | Legacy | ✅ Active |
+| **ServiceCreationPlugin** | Multiple | Legacy | ✅ Active |
 | **CostManagementPlugin** | Multiple | Legacy | ✅ Active |
 | **EnvironmentManagementPlugin** | Multiple | Legacy | ✅ Active |
-| **ResourceDiscoveryPlugin** | Multiple | Legacy | ✅ Active |
+| **AzureResourceDiscoveryPlugin** | Multiple | Legacy | ✅ Active |
 | **DocumentPlugin** | 5 | Direct Service | ✅ Active |
 
 **Note**: SecurityPlugin was removed (stub with no implementation).

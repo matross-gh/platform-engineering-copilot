@@ -6,8 +6,11 @@ using Polly;
 using Polly.Extensions.Http;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 using Platform.Engineering.Copilot.Core.Interfaces.Audits;
+using Platform.Engineering.Copilot.Core.Interfaces.KnowledgeBase;
 using Platform.Engineering.Copilot.Core.Configuration;
 using Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
+using Platform.Engineering.Copilot.Compliance.Agent.Services.KnowledgeBase;
+using Platform.Engineering.Copilot.Compliance.Agent.Plugins;
 using Platform.Engineering.Copilot.Core.Services.Audits;
 
 namespace Platform.Engineering.Copilot.Compliance.Agent.Extensions;
@@ -46,6 +49,15 @@ public static class ComplianceAgentCollectionExtensions
         // Core services - using Singleton to match Platform expectations
         services.AddSingleton<INistControlsService, NistControlsService>();
         services.AddSingleton<ComplianceMetricsService>();
+        
+        // Knowledge Base Services (RMF, STIG, DoD Instructions, Workflows)
+        services.AddSingleton<IRmfKnowledgeService, RmfKnowledgeService>();
+        services.AddSingleton<IStigKnowledgeService, StigKnowledgeService>();
+        services.AddSingleton<IDoDInstructionService, DoDInstructionService>();
+        services.AddSingleton<IDoDWorkflowService, DoDWorkflowService>();
+        
+        // Knowledge Base Plugin for Semantic Kernel
+        services.AddSingleton<KnowledgeBasePlugin>();
         
         // ATO Compliance Engine and supporting services
         services.AddSingleton<IAtoComplianceEngine, AtoComplianceEngine>();

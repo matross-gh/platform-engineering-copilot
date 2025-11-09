@@ -679,7 +679,7 @@ Swagger UI is available at `http://localhost:5002` (development). Core controlle
 | `DeploymentAdminController` | `api/admin/deployments` | Trigger redeployments, fetch history, retrieve artifacts. |
 | `GovernanceAdminController` | `api/admin/governance` | Policy evaluation, approval workflows, compliance snapshots. |
 | `CostAdminController` | `api/admin/cost` | Cost trend reports, budget status, optimization insights. |
-| `OnboardingAdminController` | `api/admin/ServiceCreation` | Navy Flankspeed ServiceCreation workflows. |
+| `ServiceCreationAdminController` | `api/admin/ServiceCreation` | Navy Flankspeed ServiceCreation workflows. |
 
 #### Create Template
 

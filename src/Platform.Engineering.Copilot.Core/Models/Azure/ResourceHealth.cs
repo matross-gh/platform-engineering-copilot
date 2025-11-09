@@ -216,3 +216,90 @@ public class HealthTrendDataPoint
     /// </summary>
     public int HealthyResources { get; set; }
 }
+
+/// <summary>
+/// Result of resource discovery operation
+/// </summary>
+public class ResourceDiscoveryResult
+{
+    public bool Success { get; set; }
+    public int TotalCount { get; set; }
+    public List<DiscoveredResource> Resources { get; set; } = new();
+    public Dictionary<string, int>? GroupByType { get; set; }
+    public Dictionary<string, int>? GroupByLocation { get; set; }
+    public Dictionary<string, int>? GroupByResourceGroup { get; set; }
+    public string? Message { get; set; }
+    public string? ErrorDetails { get; set; }
+}
+
+/// <summary>
+/// Discovered resource information
+/// </summary>
+public class DiscoveredResource
+{
+    public string ResourceId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Location { get; set; } = string.Empty;
+    public string ResourceGroup { get; set; } = string.Empty;
+    public Dictionary<string, string>? Tags { get; set; }
+    public Dictionary<string, object>? Properties { get; set; }
+}
+
+/// <summary>
+/// Detailed resource information result
+/// </summary>
+public class ResourceDetailsResult
+{
+    public bool Success { get; set; }
+    public DiscoveredResource? Resource { get; set; }
+    public Dictionary<string, object>? Configuration { get; set; }
+    public List<string>? Dependencies { get; set; }
+    public string? HealthStatus { get; set; }
+    public string? Message { get; set; }
+    public string? ErrorDetails { get; set; }
+}
+
+/// <summary>
+/// Resource inventory summary
+/// </summary>
+public class ResourceInventoryResult
+{
+    public bool Success { get; set; }
+    public string Scope { get; set; } = string.Empty; // Subscription or ResourceGroup
+    public int TotalResources { get; set; }
+    public Dictionary<string, int> ResourcesByType { get; set; } = new();
+    public Dictionary<string, int> ResourcesByLocation { get; set; } = new();
+    public Dictionary<string, int> ResourcesByResourceGroup { get; set; } = new();
+    public List<string>? Locations { get; set; }
+    public string? Message { get; set; }
+    public string? ErrorDetails { get; set; }
+}
+
+/// <summary>
+/// Resource health status result
+/// </summary>
+public class ResourceHealthResult
+{
+    public bool Success { get; set; }
+    public int TotalResources { get; set; }
+    public int HealthyCount { get; set; }
+    public int UnhealthyCount { get; set; }
+    public int UnknownCount { get; set; }
+    public List<ResourceHealthInfo> ResourceHealth { get; set; } = new();
+    public string? Message { get; set; }
+    public string? ErrorDetails { get; set; }
+}
+
+    /// <summary>
+    /// Individual resource health information
+    /// </summary>
+    public class ResourceHealthInfo
+    {
+        public string ResourceId { get; set; } = string.Empty;
+        public string ResourceName { get; set; } = string.Empty;
+        public string ResourceType { get; set; } = string.Empty;
+        public string HealthStatus { get; set; } = string.Empty; // Healthy, Unhealthy, Unknown
+        public string? StatusDetails { get; set; }
+        public DateTime? LastUpdated { get; set; }
+    }

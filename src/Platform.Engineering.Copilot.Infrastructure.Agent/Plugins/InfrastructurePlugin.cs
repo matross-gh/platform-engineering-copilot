@@ -115,33 +115,6 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
         }
     }
 
-    [KernelFunction("list_resource_groups")]
-    [Description("List all resource groups in the Azure subscription")]
-    public async Task<string> ListResourceGroupsAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("Listing resource groups");
-
-            var resourceGroups = await _infrastructureService.ListResourceGroupsAsync(cancellationToken);
-
-            if (resourceGroups.Any())
-            {
-                return $"📦 Found {resourceGroups.Count} resource groups:\n" +
-                       string.Join("\n", resourceGroups.Select(rg => $"  • {rg}"));
-            }
-            else
-            {
-                return "📦 No resource groups found";
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error listing resource groups");
-            return $"❌ Error: {ex.Message}";
-        }
-    }
-
     [KernelFunction("delete_resource_group")]
     [Description("Delete a resource group and all its resources")]
     public async Task<string> DeleteResourceGroupAsync(

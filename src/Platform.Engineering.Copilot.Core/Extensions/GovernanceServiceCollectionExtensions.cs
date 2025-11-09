@@ -19,7 +19,7 @@ public static class GovernanceServiceCollectionExtensions
 {
     /// <summary>
     /// Add enhanced ATO compliance services with NIST integration
-    /// DEPRECATED: Use Platform.Engineering.Copilot.Compliance.Core.Extensions.AddComplianceCore() instead
+    /// DEPRECATED: Use Platform.Engineering.Copilot.Compliance.Core.Extensions.AddComplianceAgent() instead
     /// </summary>
     [Obsolete("Compliance services have been moved to Platform.Engineering.Copilot.Compliance.Core")]
     public static IServiceCollection AddEnhancedAtoCompliance(
@@ -27,13 +27,13 @@ public static class GovernanceServiceCollectionExtensions
         IConfiguration configuration)
     {
         // This method is deprecated - compliance services are now in the Compliance.Core domain project
-        // Consumers should call services.AddComplianceCore() instead
+        // Consumers should call services.AddComplianceAgent() instead
         return services;
     }
 
     /// <summary>
     /// Add ATO compliance background services
-    /// DEPRECATED: Use Platform.Engineering.Copilot.Compliance.Core.Extensions.AddComplianceCore() instead
+    /// DEPRECATED: Use Platform.Engineering.Copilot.Compliance.Core.Extensions.AddComplianceAgent() instead
     /// </summary>
     [Obsolete("Compliance services have been moved to Platform.Engineering.Copilot.Compliance.Core")]
     public static IServiceCollection AddAtoComplianceBackgroundServices(

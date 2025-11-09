@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { McpClient, McpChatResponse } from './services/mcpClient';
 import { config } from './config';
 import { showShareMenu } from './services/exportService';
+import { WorkspaceService } from './services/workspaceService';
 
 /**
  * Platform Chat Participant Handler
@@ -11,11 +12,15 @@ export class PlatformChatParticipant implements vscode.Disposable {
     private participant: vscode.ChatParticipant;
     private conversationHistory: Map<string, string[]> = new Map();
     private chatSessionIds: Map<string, string> = new Map();
+    private workspaceService: WorkspaceService;
 
     constructor(
         private context: vscode.ExtensionContext,
         private apiClient: McpClient
     ) {
+        // Initialize workspace service
+        this.workspaceService = new WorkspaceService();
+
         // Create chat participant
         this.participant = vscode.chat.createChatParticipant(
             'platform',
@@ -137,6 +142,29 @@ export class PlatformChatParticipant implements vscode.Disposable {
                 title: '📋 Copy to Clipboard',
                 arguments: [response.response]
             });
+        }
+
+        // Add workspace creation button for infrastructure templates
+        if (response.intentType === 'infrastructure' || this.containsInfrastructureTemplates(response.response)) {
+            const templates = this.extractInfrastructureTemplates(response.response);
+            
+            if (templates.size > 0) {
+                stream.markdown('\n---\n\n');
+                stream.markdown('### 💾 Save to Workspace\n\n');
+                stream.markdown('The response contains infrastructure templates. Click below to save them to your workspace:\n\n');
+                
+                stream.button({
+                    command: 'platform-copilot.createWorkspace',
+                    title: '📁 Create Project in Workspace',
+                    arguments: [templates, this.detectTemplateType(response.response)]
+                });
+                
+                stream.button({
+                    command: 'platform-copilot.saveTemplate',
+                    title: '💾 Save Single File',
+                    arguments: [templates]
+                });
+            }
         }
     }
 
@@ -371,6 +399,130 @@ export class PlatformChatParticipant implements vscode.Disposable {
             case 'low': return '🟢';
             default: return '⚪';
         }
+    }
+
+    /**
+     * Check if response contains infrastructure templates (Bicep, Terraform, Kubernetes)
+     */
+    private containsInfrastructureTemplates(response: string): boolean {
+        const templatePatterns = [
+            /```bicep/i,
+            /```terraform/i,
+            /```hcl/i,
+            /```yaml[\s\S]*?apiVersion:/i,
+            /```yml[\s\S]*?apiVersion:/i,
+            /```json[\s\S]*?"type":\s*"Microsoft\./i, // ARM templates
+        ];
+
+        return templatePatterns.some(pattern => pattern.test(response));
+    }
+
+    /**
+     * Detect the primary template type from response
+     */
+    private detectTemplateType(response: string): 'bicep' | 'terraform' | 'kubernetes' | 'arm' | null {
+        if (/```bicep/i.test(response)) {
+            return 'bicep';
+        }
+        if (/```terraform/i.test(response) || /```hcl/i.test(response)) {
+            return 'terraform';
+        }
+        if (/```(yaml|yml)[\s\S]*?apiVersion:/i.test(response)) {
+            return 'kubernetes';
+        }
+        if (/```json[\s\S]*?"type":\s*"Microsoft\./i.test(response)) {
+            return 'arm';
+        }
+        return null;
+    }
+
+    /**
+     * Extract infrastructure templates from markdown code blocks
+     * Returns a map of filename -> content
+     */
+    private extractInfrastructureTemplates(response: string): Map<string, string> {
+        const templates = new Map<string, string>();
+        
+        // Regex to match code blocks with language identifier
+        const codeBlockRegex = /```(\w+)\n([\s\S]*?)```/g;
+        
+        let match;
+        let bicepCount = 0;
+        let terraformCount = 0;
+        let k8sCount = 0;
+        let jsonCount = 0;
+
+        while ((match = codeBlockRegex.exec(response)) !== null) {
+            const lang = match[1].toLowerCase();
+            const content = match[2].trim();
+
+            if (!content) {
+                continue;
+            }
+
+            // Extract Bicep templates
+            if (lang === 'bicep') {
+                const filename = bicepCount === 0 ? 'main.bicep' : `module${bicepCount}.bicep`;
+                templates.set(filename, content);
+                bicepCount++;
+            }
+            // Extract Terraform templates
+            else if (lang === 'terraform' || lang === 'hcl') {
+                const filename = terraformCount === 0 ? 'main.tf' : `${this.inferTerraformFilename(content, terraformCount)}.tf`;
+                templates.set(filename, content);
+                terraformCount++;
+            }
+            // Extract Kubernetes manifests
+            else if ((lang === 'yaml' || lang === 'yml') && content.includes('apiVersion:')) {
+                const resourceKind = this.extractK8sKind(content) || 'resource';
+                const filename = k8sCount === 0 
+                    ? `${resourceKind.toLowerCase()}.yaml` 
+                    : `${resourceKind.toLowerCase()}-${k8sCount}.yaml`;
+                templates.set(filename, content);
+                k8sCount++;
+            }
+            // Extract ARM templates (JSON)
+            else if (lang === 'json' && content.includes('"type": "Microsoft.')) {
+                const filename = jsonCount === 0 ? 'azuredeploy.json' : `template${jsonCount}.json`;
+                templates.set(filename, content);
+                jsonCount++;
+            }
+            // Extract parameter files
+            else if (lang === 'json' && (content.includes('"parameters":') || content.includes('"$schema":') && content.includes('deploymentParameters'))) {
+                const filename = 'parameters.json';
+                templates.set(filename, content);
+                jsonCount++;
+            }
+        }
+
+        return templates;
+    }
+
+    /**
+     * Infer Terraform filename from content (variables.tf, outputs.tf, providers.tf, etc.)
+     */
+    private inferTerraformFilename(content: string, index: number): string {
+        if (content.includes('variable "')) {
+            return 'variables';
+        }
+        if (content.includes('output "')) {
+            return 'outputs';
+        }
+        if (content.includes('provider "')) {
+            return 'providers';
+        }
+        if (content.includes('terraform {')) {
+            return 'versions';
+        }
+        return `main${index > 0 ? index : ''}`;
+    }
+
+    /**
+     * Extract Kubernetes resource kind from YAML content
+     */
+    private extractK8sKind(content: string): string | null {
+        const kindMatch = content.match(/kind:\s*(\w+)/);
+        return kindMatch ? kindMatch[1] : null;
     }
 
     dispose(): void {

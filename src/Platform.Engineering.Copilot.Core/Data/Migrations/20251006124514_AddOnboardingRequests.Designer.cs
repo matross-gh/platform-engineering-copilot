@@ -12,8 +12,8 @@ using Platform.Engineering.Copilot.Core.Data.Context;
 namespace Platform.Engineering.Copilot.Core.Data.Migrations
 {
     [DbContext(typeof(PlatformEngineeringCopilotContext))]
-    [Migration("20251006124514_AddOnboardingRequests")]
-    partial class AddOnboardingRequests
+    [Migration("20251006124514_AddServiceCreationRequests")]
+    partial class AddServiceCreationRequests
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -217,24 +217,24 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ClassificationLevel")
-                        .HasDatabaseName("IX_OnboardingRequests_ClassificationLevel");
+                        .HasDatabaseName("IX_ServiceCreationRequests_ClassificationLevel");
 
                     b.HasIndex("Command")
-                        .HasDatabaseName("IX_OnboardingRequests_Command");
+                        .HasDatabaseName("IX_ServiceCreationRequests_Command");
 
                     b.HasIndex("CreatedAt")
-                        .HasDatabaseName("IX_OnboardingRequests_CreatedAt");
+                        .HasDatabaseName("IX_ServiceCreationRequests_CreatedAt");
 
                     b.HasIndex("MissionOwnerEmail")
-                        .HasDatabaseName("IX_OnboardingRequests_MissionOwnerEmail");
+                        .HasDatabaseName("IX_ServiceCreationRequests_MissionOwnerEmail");
 
                     b.HasIndex("Status")
-                        .HasDatabaseName("IX_OnboardingRequests_Status");
+                        .HasDatabaseName("IX_ServiceCreationRequests_Status");
 
                     b.HasIndex("Status", "Priority", "CreatedAt")
-                        .HasDatabaseName("IX_OnboardingRequests_Status_Priority_CreatedAt");
+                        .HasDatabaseName("IX_ServiceCreationRequests_Status_Priority_CreatedAt");
 
-                    b.ToTable("OnboardingRequests");
+                    b.ToTable("ServiceCreationRequests");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.ComplianceFinding", b =>

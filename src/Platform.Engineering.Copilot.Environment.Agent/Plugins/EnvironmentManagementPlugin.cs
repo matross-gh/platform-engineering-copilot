@@ -244,6 +244,41 @@ public class EnvironmentManagementPlugin : BaseSupervisorPlugin
                     "Ensure SetConversationId() is called before CreateEnvironmentAsync()");
             }
 
+            // Get Azure best practices for environment configuration via MCP
+            object? mcpBestPractices = null;
+            try
+            {
+                await _azureMcpClient.InitializeAsync(cancellationToken);
+                
+                _logger.LogInformation("Fetching environment best practices via Azure MCP for type: {Type}", 
+                    creationRequest.Type);
+                
+                var resourceType = creationRequest.Type switch
+                {
+                    EnvironmentType.AKS => "Microsoft.ContainerService/managedClusters",
+                    EnvironmentType.WebApp => "Microsoft.Web/sites",
+                    EnvironmentType.FunctionApp => "Microsoft.Web/sites",
+                    EnvironmentType.ContainerApp => "Microsoft.App/containerApps",
+                    _ => "environment-configuration"
+                };
+
+                var bestPractices = await _azureMcpClient.CallToolAsync("get_bestpractices", 
+                    new Dictionary<string, object?>
+                    {
+                        ["resourceType"] = resourceType
+                    }, cancellationToken);
+
+                if (bestPractices.Success)
+                {
+                    mcpBestPractices = bestPractices.Result;
+                    _logger.LogInformation("Retrieved Azure best practices for {Type}", creationRequest.Type);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not retrieve environment best practices from Azure MCP");
+            }
+
             // Execute environment creation via EnvironmentManagementEngine
             var result = await _environmentEngine.CreateEnvironmentAsync(creationRequest, cancellationToken);
 
@@ -298,12 +333,20 @@ public class EnvironmentManagementPlugin : BaseSupervisorPlugin
                     message = $"Environment '{result.EnvironmentName}' provisioning initiated. Deployment typically takes 45-60 minutes.",
                     ServiceCreationRequestId = ServiceCreationRequestId,
                     createdResources = result.CreatedResources,
+                    azureBestPractices = new
+                    {
+                        available = mcpBestPractices != null,
+                        source = mcpBestPractices != null ? "Azure MCP Server" : null,
+                        guidance = mcpBestPractices
+                    },
                     nextSteps = new[]
                     {
                         $"Monitor deployment progress by checking Azure Portal deployment ID: {result.DeploymentId}",
+                        mcpBestPractices != null ? "Review the Azure best practices above to optimize your environment configuration." : null,
                         "Say 'show me the status of environment {result.EnvironmentName}' once deployment completes to verify everything is healthy.",
-                        "Access your environment's credentials and secrets in Azure Key Vault after the deployment finishes."
-                    }
+                        "Access your environment's credentials and secrets in Azure Key Vault after the deployment finishes.",
+                        creationRequest.Type == EnvironmentType.AKS ? "Say 'get AKS best practices' for Kubernetes-specific optimization guidance." : null
+                    }.Where(s => s != null)
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
             else
@@ -1783,6 +1826,82 @@ public class EnvironmentManagementPlugin : BaseSupervisorPlugin
                 environmentId,
                 error = ex.Message
             });
+        }
+    }
+
+    // ========== AZURE MCP ENHANCED FUNCTIONS ==========
+
+    [KernelFunction("get_aks_best_practices")]
+    [Description("Get Azure Kubernetes Service (AKS) best practices and configuration guidance from Microsoft. " +
+                 "Covers node pools, networking, scaling, security, monitoring, and operations. " +
+                 "Use when creating or optimizing AKS environments.")]
+    public async Task<string> GetAksBestPracticesAsync(
+        [Description("Specific topic to focus on (optional): 'networking', 'security', 'scaling', 'monitoring', 'operations'")] string? topic = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Getting AKS best practices via Azure MCP. Topic: {Topic}", topic ?? "all");
+
+            await _azureMcpClient.InitializeAsync(cancellationToken);
+
+            var aksBestPractices = await _azureMcpClient.CallToolAsync("aks", 
+                new Dictionary<string, object?>
+                {
+                    ["operation"] = "get-best-practices",
+                    ["topic"] = topic ?? "general"
+                }, cancellationToken);
+
+            // Also get general AKS documentation
+            var aksDocumentation = await _azureMcpClient.CallToolAsync("documentation", 
+                new Dictionary<string, object?>
+                {
+                    ["query"] = topic != null 
+                        ? $"AKS {topic} best practices" 
+                        : "Azure Kubernetes Service best practices"
+                }, cancellationToken);
+
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = true,
+                topic = topic ?? "general",
+                aksBestPractices = new
+                {
+                    available = aksBestPractices.Success,
+                    source = "Azure MCP AKS Tool",
+                    guidance = aksBestPractices.Success ? aksBestPractices.Result : "AKS best practices unavailable"
+                },
+                documentation = new
+                {
+                    available = aksDocumentation.Success,
+                    source = "Microsoft Learn",
+                    content = aksDocumentation.Success ? aksDocumentation.Result : "Documentation unavailable"
+                },
+                commonTopics = new[]
+                {
+                    "networking - Network policies, CNI, ingress controllers",
+                    "security - RBAC, pod security, Azure AD integration",
+                    "scaling - Cluster autoscaler, HPA, VPA, node pools",
+                    "monitoring - Azure Monitor, Container Insights, logging",
+                    "operations - Upgrades, maintenance windows, disaster recovery"
+                },
+                nextSteps = new[]
+                {
+                    "Review the best practices and documentation above for your specific use case.",
+                    "Say 'get AKS best practices for <topic>' to focus on a specific area.",
+                    "Apply recommended configurations during environment creation.",
+                    "Visit https://learn.microsoft.com/azure/aks/best-practices for comprehensive guides."
+                }
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting AKS best practices");
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = $"Failed to retrieve AKS best practices: {ex.Message}"
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
         }
     }
 

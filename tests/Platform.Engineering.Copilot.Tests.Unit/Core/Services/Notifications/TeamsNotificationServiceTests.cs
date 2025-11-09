@@ -84,10 +84,10 @@ public class TeamsNotificationServiceTests
 
     #endregion
 
-    #region SendOnboardingApprovedNotificationAsync Tests
+    #region SendServiceCreationApprovedNotificationAsync Tests
 
     [Fact]
-    public async Task SendOnboardingApprovedNotificationAsync_WithValidInput_SendsWebhookRequestAsync()
+    public async Task SendServiceCreationApprovedNotificationAsync_WithValidInput_SendsWebhookRequestAsync()
     {
         // Arrange
         var service = CreateService();
@@ -99,7 +99,7 @@ public class TeamsNotificationServiceTests
             .ReturnsAsync(new HttpResponseMessage { StatusCode = HttpStatusCode.OK });
 
         // Act
-        await service.SendOnboardingApprovedNotificationAsync(
+        await service.SendServiceCreationApprovedNotificationAsync(
             "AEGIS Integration",
             "CDR Sarah Chen",
             "SPAWAR",
@@ -118,13 +118,13 @@ public class TeamsNotificationServiceTests
     }
 
     [Fact]
-    public async Task SendOnboardingApprovedNotificationAsync_WithDisabledWebhook_DoesNotSendRequestAsync()
+    public async Task SendServiceCreationApprovedNotificationAsync_WithDisabledWebhook_DoesNotSendRequestAsync()
     {
         // Arrange
         var service = CreateService(webhookUrl: null);
 
         // Act
-        await service.SendOnboardingApprovedNotificationAsync(
+        await service.SendServiceCreationApprovedNotificationAsync(
             "AEGIS Integration",
             "CDR Sarah Chen",
             "SPAWAR",
@@ -274,7 +274,7 @@ public class TeamsNotificationServiceTests
             });
 
         // Act
-        await service.SendOnboardingApprovedNotificationAsync(
+        await service.SendServiceCreationApprovedNotificationAsync(
             "AEGIS Integration",
             "CDR Sarah Chen",
             "SPAWAR",
@@ -305,7 +305,7 @@ public class TeamsNotificationServiceTests
             .ThrowsAsync(new HttpRequestException("Network error"));
 
         // Act
-        await service.SendOnboardingApprovedNotificationAsync(
+        await service.SendServiceCreationApprovedNotificationAsync(
             "AEGIS Integration",
             "CDR Sarah Chen",
             "SPAWAR",

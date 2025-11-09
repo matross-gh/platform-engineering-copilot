@@ -8,7 +8,7 @@ namespace Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddInfrastructureCore(this IServiceCollection services)
+    public static IServiceCollection AddInfrastructureAgent(this IServiceCollection services)
     {
         // Register Infrastructure Agent and Plugin
         services.AddScoped<InfrastructureAgent>();

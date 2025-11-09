@@ -5,7 +5,7 @@ namespace Platform.Engineering.Copilot.ServiceCreation.Core.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddServiceCreationCore(this IServiceCollection services)
+    public static IServiceCollection AddServiceCreationAgent(this IServiceCollection services)
     {
         // Register Service Creation Agent and Plugin
         services.AddScoped<ServiceCreationAgent>();

@@ -11,8 +11,8 @@ using Platform.Engineering.Copilot.Core.Data.Context;
 namespace Platform.Engineering.Copilot.Core.Data.Migrations
 {
     [DbContext(typeof(PlatformEngineeringCopilotContext))]
-    [Migration("20251011123919_AddOnboardingApprovalTimestamps")]
-    partial class AddOnboardingApprovalTimestamps
+    [Migration("20251011123919_AddServiceCreationApprovalTimestamps")]
+    partial class AddServiceCreationApprovalTimestamps
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -1127,7 +1127,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("OnboardingRequests");
+                    b.ToTable("ServiceCreationRequests");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.ScalingEvent", b =>

@@ -25,11 +25,11 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
     /// Integration tests for Flankspeed ServiceCreation end-to-end workflows
     /// Tests complete lifecycle from draft creation through provisioning
     /// </summary>
-    public class FlankspeedOnboardingIntegrationTests : IAsyncLifetime
+    public class FlankspeedServiceCreationIntegrationTests : IAsyncLifetime
     {
         private ServiceProvider? _serviceProvider;
         private PlatformEngineeringCopilotContext? _context;
-        private IOnboardingService? _onboardingService;
+        private IServiceCreationService? _ServiceCreationService;
 
         public async Task InitializeAsync()
         {
@@ -38,7 +38,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
 
             // Add in-memory database
             services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
-                options.UseInMemoryDatabase($"FlankspeedOnboarding_{Guid.NewGuid()}"));
+                options.UseInMemoryDatabase($"FlankspeedServiceCreation_{Guid.NewGuid()}"));
 
             // Add logging
             services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
@@ -96,11 +96,11 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
             services.AddSingleton(mockTeamsNotification.Object);
 
             // Add the actual ServiceCreation service
-            services.AddScoped<IOnboardingService, FlankspeedOnboardingService>();
+            services.AddScoped<IServiceCreationService, FlankspeedServiceCreationService>();
 
             _serviceProvider = services.BuildServiceProvider();
             _context = _serviceProvider.GetRequiredService<PlatformEngineeringCopilotContext>();
-            _onboardingService = _serviceProvider.GetRequiredService<IOnboardingService>();
+            _ServiceCreationService = _serviceProvider.GetRequiredService<IServiceCreationService>();
 
             await Task.CompletedTask;
         }
@@ -122,18 +122,18 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         #region Complete Workflow Tests
 
         [Fact]
-        public async Task CompleteOnboardingWorkflow_SuccessPath_CompletesAllStages()
+        public async Task CompleteServiceCreationWorkflow_SuccessPath_CompletesAllStages()
         {
             // Arrange
             var cancellationToken = CancellationToken.None;
 
             // Act & Assert - Stage 1: Create Draft
-            var requestId = await _onboardingService!.CreateDraftRequestAsync(cancellationToken);
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync(cancellationToken);
             requestId.Should().NotBeNullOrEmpty();
 
-            var draft = await _onboardingService.GetRequestAsync(requestId, cancellationToken);
+            var draft = await _ServiceCreationService.GetRequestAsync(requestId, cancellationToken);
             draft.Should().NotBeNull();
-            draft!.Status.Should().Be(OnboardingStatus.Draft);
+            draft!.Status.Should().Be(ServiceCreationStatus.Draft);
 
             // Act & Assert - Stage 2: Update Draft with Mission Details
             var updates = new Dictionary<string, object>
@@ -149,22 +149,22 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
                 { "Region", "usgovvirginia" }
             };
 
-            var updateSuccess = await _onboardingService.UpdateDraftAsync(requestId, updates, cancellationToken);
+            var updateSuccess = await _ServiceCreationService.UpdateDraftAsync(requestId, updates, cancellationToken);
             updateSuccess.Should().BeTrue();
 
-            var updatedDraft = await _onboardingService.GetRequestAsync(requestId, cancellationToken);
+            var updatedDraft = await _ServiceCreationService.GetRequestAsync(requestId, cancellationToken);
             updatedDraft!.MissionName.Should().Be("Test Mission Alpha");
             updatedDraft.Command.Should().Be("NAVWAR");
 
             // Act & Assert - Stage 3: Submit for Review
-            var submitSuccess = await _onboardingService.SubmitRequestAsync(requestId, submittedBy: null, cancellationToken);
+            var submitSuccess = await _ServiceCreationService.SubmitRequestAsync(requestId, submittedBy: null, cancellationToken);
             submitSuccess.Should().BeTrue();
 
-            var submittedRequest = await _onboardingService.GetRequestAsync(requestId, cancellationToken);
-            submittedRequest!.Status.Should().Be(OnboardingStatus.PendingReview);
+            var submittedRequest = await _ServiceCreationService.GetRequestAsync(requestId, cancellationToken);
+            submittedRequest!.Status.Should().Be(ServiceCreationStatus.PendingReview);
 
             // Act & Assert - Stage 4: Approve Request
-            var approveResult = await _onboardingService.ApproveRequestAsync(
+            var approveResult = await _ServiceCreationService.ApproveRequestAsync(
                 requestId,
                 "Integration Test Approver",
                 "Approved for testing",
@@ -174,19 +174,19 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
             // Wait a bit for background provisioning to start
             await Task.Delay(500, cancellationToken);
 
-            var approvedRequest = await _onboardingService.GetRequestAsync(requestId, cancellationToken);
-            approvedRequest!.Status.Should().BeOneOf(OnboardingStatus.Approved, OnboardingStatus.Provisioning, OnboardingStatus.Completed);
+            var approvedRequest = await _ServiceCreationService.GetRequestAsync(requestId, cancellationToken);
+            approvedRequest!.Status.Should().BeOneOf(ServiceCreationStatus.Approved, ServiceCreationStatus.Provisioning, ServiceCreationStatus.Completed);
             approvedRequest.ApprovedBy.Should().Be("Integration Test Approver");
         }
 
         [Fact]
-        public async Task OnboardingWorkflow_WithRejection_StopsAtRejectedStage()
+        public async Task ServiceCreationWorkflow_WithRejection_StopsAtRejectedStage()
         {
             // Arrange
             var cancellationToken = CancellationToken.None;
 
             // Act - Create and submit request
-            var requestId = await _onboardingService!.CreateDraftRequestAsync(cancellationToken);
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync(cancellationToken);
             
             var updates = new Dictionary<string, object>
             {
@@ -197,11 +197,11 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
                 { "RequestedSubscriptionName", "navair-rejected" },
                 { "RequestedVNetCidr", "10.101.0.0/16" }
             };
-            await _onboardingService.UpdateDraftAsync(requestId, updates, cancellationToken);
-            await _onboardingService.SubmitRequestAsync(requestId, submittedBy: null, cancellationToken);
+            await _ServiceCreationService.UpdateDraftAsync(requestId, updates, cancellationToken);
+            await _ServiceCreationService.SubmitRequestAsync(requestId, submittedBy: null, cancellationToken);
 
             // Act - Reject the request
-            var rejectSuccess = await _onboardingService.RejectRequestAsync(
+            var rejectSuccess = await _ServiceCreationService.RejectRequestAsync(
                 requestId,
                 "Test Reviewer",
                 "Insufficient justification",
@@ -210,8 +210,8 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
             // Assert
             rejectSuccess.Should().BeTrue();
 
-            var rejectedRequest = await _onboardingService.GetRequestAsync(requestId, cancellationToken);
-            rejectedRequest!.Status.Should().Be(OnboardingStatus.Rejected);
+            var rejectedRequest = await _ServiceCreationService.GetRequestAsync(requestId, cancellationToken);
+            rejectedRequest!.Status.Should().Be(ServiceCreationStatus.Rejected);
             rejectedRequest.RejectedBy.Should().Be("Test Reviewer");
             rejectedRequest.RejectionReason.Should().Be("Insufficient justification");
         }
@@ -224,14 +224,14 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task CreateDraftRequest_CreatesNewDraftWithDefaultStatus()
         {
             // Act
-            var requestId = await _onboardingService!.CreateDraftRequestAsync();
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync();
 
             // Assert
             requestId.Should().NotBeNullOrEmpty();
 
-            var request = await _onboardingService.GetRequestAsync(requestId);
+            var request = await _ServiceCreationService.GetRequestAsync(requestId);
             request.Should().NotBeNull();
-            request!.Status.Should().Be(OnboardingStatus.Draft);
+            request!.Status.Should().Be(ServiceCreationStatus.Draft);
             request.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
         }
 
@@ -239,7 +239,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task UpdateDraft_WithValidData_UpdatesRequestFields()
         {
             // Arrange
-            var requestId = await _onboardingService!.CreateDraftRequestAsync();
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync();
             var updates = new Dictionary<string, object>
             {
                 { "MissionName", "Updated Mission" },
@@ -248,12 +248,12 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
             };
 
             // Act
-            var success = await _onboardingService.UpdateDraftAsync(requestId, updates);
+            var success = await _ServiceCreationService.UpdateDraftAsync(requestId, updates);
 
             // Assert
             success.Should().BeTrue();
 
-            var request = await _onboardingService.GetRequestAsync(requestId);
+            var request = await _ServiceCreationService.GetRequestAsync(requestId);
             request!.MissionName.Should().Be("Updated Mission");
             request.Command.Should().Be("NAVSEA");
             request.ClassificationLevel.Should().Be("TOP SECRET");
@@ -263,7 +263,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task UpdateDraft_WithValidData_UpdatesMultipleRequestFields()
         {
             // Arrange
-            var requestId = await _onboardingService!.CreateDraftRequestAsync();
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync();
             var updates = new Dictionary<string, object>
             {
                 { "MissionName", "Updated Mission" },
@@ -274,12 +274,12 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
             };
 
             // Act
-            var success = await _onboardingService.UpdateDraftAsync(requestId, updates);
+            var success = await _ServiceCreationService.UpdateDraftAsync(requestId, updates);
 
             // Assert
             success.Should().BeTrue();
 
-            var request = await _onboardingService.GetRequestAsync(requestId);
+            var request = await _ServiceCreationService.GetRequestAsync(requestId);
             request!.MissionName.Should().Be("Updated Mission");
             request.Command.Should().Be("NAVSEA");
             request.ClassificationLevel.Should().Be("TOP SECRET");
@@ -291,7 +291,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task UpdateDraft_AfterSubmit_DisallowsUpdates()
         {
             // Arrange - The service restricts updates after submission (status != Draft)
-            var requestId = await _onboardingService!.CreateDraftRequestAsync();
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync();
             var initialUpdates = new Dictionary<string, object>
             {
                 { "MissionName", "Test Mission" },
@@ -301,8 +301,8 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
                 { "RequestedSubscriptionName", "no-update-mission" },
                 { "RequestedVNetCidr", "10.108.0.0/16" }
             };
-            await _onboardingService.UpdateDraftAsync(requestId, initialUpdates);
-            await _onboardingService.SubmitRequestAsync(requestId);
+            await _ServiceCreationService.UpdateDraftAsync(requestId, initialUpdates);
+            await _ServiceCreationService.SubmitRequestAsync(requestId);
 
             var newUpdates = new Dictionary<string, object>
             {
@@ -310,12 +310,12 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
             };
 
             // Act
-            var success = await _onboardingService.UpdateDraftAsync(requestId, newUpdates);
+            var success = await _ServiceCreationService.UpdateDraftAsync(requestId, newUpdates);
 
             // Assert - UpdateDraftAsync checks status and rejects updates if not Draft
             success.Should().BeFalse();
 
-            var request = await _onboardingService.GetRequestAsync(requestId);
+            var request = await _ServiceCreationService.GetRequestAsync(requestId);
             request!.MissionName.Should().Be("Test Mission"); // Should not have changed
         }
 
@@ -327,7 +327,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task SubmitRequest_WithValidDraft_ChangesStatusToSubmitted()
         {
             // Arrange
-            var requestId = await _onboardingService!.CreateDraftRequestAsync();
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync();
             var updates = new Dictionary<string, object>
             {
                 { "MissionName", "Submittable Mission" },
@@ -337,33 +337,33 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
                 { "RequestedSubscriptionName", "navwar-submittable" },
                 { "RequestedVNetCidr", "10.102.0.0/16" }
             };
-            await _onboardingService.UpdateDraftAsync(requestId, updates);
+            await _ServiceCreationService.UpdateDraftAsync(requestId, updates);
 
             // Act
-            var success = await _onboardingService.SubmitRequestAsync(requestId);
+            var success = await _ServiceCreationService.SubmitRequestAsync(requestId);
 
             // Assert
             success.Should().BeTrue();
 
-            var request = await _onboardingService.GetRequestAsync(requestId);
-            request!.Status.Should().Be(OnboardingStatus.PendingReview);
+            var request = await _ServiceCreationService.GetRequestAsync(requestId);
+            request!.Status.Should().Be(ServiceCreationStatus.PendingReview);
         }
 
         [Fact]
         public async Task SubmitRequest_WithInvalidRequest_ReturnsFalse()
         {
             // Arrange
-            var requestId = await _onboardingService!.CreateDraftRequestAsync();
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync();
             // Don't update with required fields
 
             // Act
-            var success = await _onboardingService.SubmitRequestAsync(requestId);
+            var success = await _ServiceCreationService.SubmitRequestAsync(requestId);
 
             // Assert
             success.Should().BeFalse();
 
-            var request = await _onboardingService.GetRequestAsync(requestId);
-            request!.Status.Should().Be(OnboardingStatus.Draft);
+            var request = await _ServiceCreationService.GetRequestAsync(requestId);
+            request!.Status.Should().Be(ServiceCreationStatus.Draft);
         }
 
         #endregion
@@ -374,7 +374,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task ApproveRequest_WithValidSubmission_ApprovestAndStartsProvisioning()
         {
             // Arrange
-            var requestId = await _onboardingService!.CreateDraftRequestAsync();
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync();
             var updates = new Dictionary<string, object>
             {
                 { "MissionName", "Approvable Mission" },
@@ -385,25 +385,25 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
                 { "RequestedSubscriptionName", "spawar-approvable" },
                 { "RequestedVNetCidr", "10.103.0.0/16" }
             };
-            await _onboardingService.UpdateDraftAsync(requestId, updates);
-            await _onboardingService.SubmitRequestAsync(requestId);
+            await _ServiceCreationService.UpdateDraftAsync(requestId, updates);
+            await _ServiceCreationService.SubmitRequestAsync(requestId);
 
             // Act
-            var result = await _onboardingService.ApproveRequestAsync(requestId, "Test Approver", "Test approval");
+            var result = await _ServiceCreationService.ApproveRequestAsync(requestId, "Test Approver", "Test approval");
 
             // Assert
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
 
-            var request = await _onboardingService.GetRequestAsync(requestId);
-            request!.Status.Should().BeOneOf(OnboardingStatus.Approved, OnboardingStatus.Provisioning);
+            var request = await _ServiceCreationService.GetRequestAsync(requestId);
+            request!.Status.Should().BeOneOf(ServiceCreationStatus.Approved, ServiceCreationStatus.Provisioning);
         }
 
         [Fact]
         public async Task RejectRequest_WithReason_UpdatesStatusAndStoresReason()
         {
             // Arrange
-            var requestId = await _onboardingService!.CreateDraftRequestAsync();
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync();
             var updates = new Dictionary<string, object>
             {
                 { "MissionName", "Rejectable Mission" },
@@ -413,11 +413,11 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
                 { "RequestedSubscriptionName", "rejectable-mission" },
                 { "RequestedVNetCidr", "10.104.0.0/16" }
             };
-            await _onboardingService.UpdateDraftAsync(requestId, updates);
-            await _onboardingService.SubmitRequestAsync(requestId);
+            await _ServiceCreationService.UpdateDraftAsync(requestId, updates);
+            await _ServiceCreationService.SubmitRequestAsync(requestId);
 
             // Act
-            var success = await _onboardingService.RejectRequestAsync(
+            var success = await _ServiceCreationService.RejectRequestAsync(
                 requestId,
                 "Security Reviewer",
                 "Does not meet security requirements");
@@ -425,8 +425,8 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
             // Assert
             success.Should().BeTrue();
 
-            var request = await _onboardingService.GetRequestAsync(requestId);
-            request!.Status.Should().Be(OnboardingStatus.Rejected);
+            var request = await _ServiceCreationService.GetRequestAsync(requestId);
+            request!.Status.Should().Be(ServiceCreationStatus.Rejected);
         }
 
         #endregion
@@ -437,9 +437,9 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task GetPendingRequests_ReturnsOnlySubmittedRequests()
         {
             // Arrange
-            var draftId = await _onboardingService!.CreateDraftRequestAsync();
+            var draftId = await _ServiceCreationService!.CreateDraftRequestAsync();
             
-            var submittedId = await _onboardingService.CreateDraftRequestAsync();
+            var submittedId = await _ServiceCreationService.CreateDraftRequestAsync();
             var updates = new Dictionary<string, object>
             {
                 { "MissionName", "Submitted Mission" },
@@ -449,23 +449,23 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
                 { "RequestedSubscriptionName", "submitted-mission" },
                 { "RequestedVNetCidr", "10.105.0.0/16" }
             };
-            await _onboardingService.UpdateDraftAsync(submittedId, updates);
-            await _onboardingService.SubmitRequestAsync(submittedId);
+            await _ServiceCreationService.UpdateDraftAsync(submittedId, updates);
+            await _ServiceCreationService.SubmitRequestAsync(submittedId);
 
             // Act
-            var pendingRequests = await _onboardingService.GetPendingRequestsAsync();
+            var pendingRequests = await _ServiceCreationService.GetPendingRequestsAsync();
 
             // Assert
             pendingRequests.Should().HaveCount(1);
             pendingRequests[0].Id.Should().Be(submittedId);
-            pendingRequests[0].Status.Should().Be(OnboardingStatus.PendingReview);
+            pendingRequests[0].Status.Should().Be(ServiceCreationStatus.PendingReview);
         }
 
         [Fact]
         public async Task GetProvisioningRequests_AfterApproval_ReturnsRequestsInProvisioningState()
         {
             // Arrange - Create a request and approve it to start provisioning
-            var requestId = await _onboardingService!.CreateDraftRequestAsync();
+            var requestId = await _ServiceCreationService!.CreateDraftRequestAsync();
             var updates = new Dictionary<string, object>
             {
                 { "MissionName", "Provisioning Mission" },
@@ -476,9 +476,9 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
                 { "RequestedSubscriptionName", "navwar-provisioning" },
                 { "RequestedVNetCidr", "10.106.0.0/16" }
             };
-            await _onboardingService.UpdateDraftAsync(requestId, updates);
-            await _onboardingService.SubmitRequestAsync(requestId);
-            var result = await _onboardingService.ApproveRequestAsync(requestId, "Approver", "Test");
+            await _ServiceCreationService.UpdateDraftAsync(requestId, updates);
+            await _ServiceCreationService.SubmitRequestAsync(requestId);
+            var result = await _ServiceCreationService.ApproveRequestAsync(requestId, "Approver", "Test");
 
             // Assert result should be successful
             result.Should().NotBeNull();
@@ -488,12 +488,12 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
             await Task.Delay(200);
 
             // Act
-            var provisioningRequests = await _onboardingService.GetProvisioningRequestsAsync();
+            var provisioningRequests = await _ServiceCreationService.GetProvisioningRequestsAsync();
 
             // Assert - Request should be in Approved, Provisioning, or potentially Completed state
-            var request = await _onboardingService.GetRequestAsync(requestId);
+            var request = await _ServiceCreationService.GetRequestAsync(requestId);
             request.Should().NotBeNull();
-            request!.Status.Should().BeOneOf(OnboardingStatus.Approved, OnboardingStatus.Provisioning, OnboardingStatus.Completed);
+            request!.Status.Should().BeOneOf(ServiceCreationStatus.Approved, ServiceCreationStatus.Provisioning, ServiceCreationStatus.Completed);
         }
 
         #endregion
@@ -504,9 +504,9 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task GetStats_ReturnsAccurateCountsByStatus()
         {
             // Arrange - Create requests in various states
-            var draftId = await _onboardingService!.CreateDraftRequestAsync();
+            var draftId = await _ServiceCreationService!.CreateDraftRequestAsync();
             
-            var submittedId = await _onboardingService.CreateDraftRequestAsync();
+            var submittedId = await _ServiceCreationService.CreateDraftRequestAsync();
             var updates = new Dictionary<string, object>
             {
                 { "MissionName", "Submitted" },
@@ -516,10 +516,10 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
                 { "RequestedSubscriptionName", "stats-mission" },
                 { "RequestedVNetCidr", "10.107.0.0/16" }
             };
-            await _onboardingService.UpdateDraftAsync(submittedId, updates);
-            await _onboardingService.SubmitRequestAsync(submittedId);
+            await _ServiceCreationService.UpdateDraftAsync(submittedId, updates);
+            await _ServiceCreationService.SubmitRequestAsync(submittedId);
 
-            var rejectedId = await _onboardingService.CreateDraftRequestAsync();
+            var rejectedId = await _ServiceCreationService.CreateDraftRequestAsync();
             var rejectUpdates = new Dictionary<string, object>
             {
                 { "MissionName", "Rejected" },
@@ -529,12 +529,12 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
                 { "RequestedSubscriptionName", "reject-mission" },
                 { "RequestedVNetCidr", "10.108.0.0/16" }
             };
-            await _onboardingService.UpdateDraftAsync(rejectedId, rejectUpdates);
-            await _onboardingService.SubmitRequestAsync(rejectedId);
-            await _onboardingService.RejectRequestAsync(rejectedId, "Reviewer", "Test");
+            await _ServiceCreationService.UpdateDraftAsync(rejectedId, rejectUpdates);
+            await _ServiceCreationService.SubmitRequestAsync(rejectedId);
+            await _ServiceCreationService.RejectRequestAsync(rejectedId, "Reviewer", "Test");
 
             // Act
-            var stats = await _onboardingService.GetStatsAsync();
+            var stats = await _ServiceCreationService.GetStatsAsync();
 
             // Assert
             stats.Should().NotBeNull();
@@ -560,7 +560,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
             var tasks = new List<Task<string>>();
             for (int i = 0; i < 5; i++)
             {
-                tasks.Add(_onboardingService!.CreateDraftRequestAsync());
+                tasks.Add(_ServiceCreationService!.CreateDraftRequestAsync());
             }
 
             // Act
@@ -572,9 +572,9 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
 
             foreach (var requestId in requestIds)
             {
-                var request = await _onboardingService!.GetRequestAsync(requestId);
+                var request = await _ServiceCreationService!.GetRequestAsync(requestId);
                 request.Should().NotBeNull();
-                request!.Status.Should().Be(OnboardingStatus.Draft);
+                request!.Status.Should().Be(ServiceCreationStatus.Draft);
             }
         }
 
@@ -582,23 +582,23 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task SequentialRequestProcessing_MaintainsDataIntegrity()
         {
             // Arrange & Act
-            var request1Id = await _onboardingService!.CreateDraftRequestAsync();
-            await _onboardingService.UpdateDraftAsync(request1Id, new Dictionary<string, object>
+            var request1Id = await _ServiceCreationService!.CreateDraftRequestAsync();
+            await _ServiceCreationService.UpdateDraftAsync(request1Id, new Dictionary<string, object>
             {
                 { "MissionName", "Mission 1" },
                 { "Command", "Command 1" }
             });
 
-            var request2Id = await _onboardingService.CreateDraftRequestAsync();
-            await _onboardingService.UpdateDraftAsync(request2Id, new Dictionary<string, object>
+            var request2Id = await _ServiceCreationService.CreateDraftRequestAsync();
+            await _ServiceCreationService.UpdateDraftAsync(request2Id, new Dictionary<string, object>
             {
                 { "MissionName", "Mission 2" },
                 { "Command", "Command 2" }
             });
 
             // Assert
-            var req1 = await _onboardingService.GetRequestAsync(request1Id);
-            var req2 = await _onboardingService.GetRequestAsync(request2Id);
+            var req1 = await _ServiceCreationService.GetRequestAsync(request1Id);
+            var req2 = await _ServiceCreationService.GetRequestAsync(request2Id);
 
             req1!.MissionName.Should().Be("Mission 1");
             req1.Command.Should().Be("Command 1");
@@ -615,7 +615,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task GetRequest_WithInvalidId_ReturnsNull()
         {
             // Act
-            var request = await _onboardingService!.GetRequestAsync("invalid-id-123");
+            var request = await _ServiceCreationService!.GetRequestAsync("invalid-id-123");
 
             // Assert
             request.Should().BeNull();
@@ -625,7 +625,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task UpdateDraft_WithNonExistentId_ReturnsFalse()
         {
             // Act
-            var success = await _onboardingService!.UpdateDraftAsync("non-existent", new Dictionary<string, object>());
+            var success = await _ServiceCreationService!.UpdateDraftAsync("non-existent", new Dictionary<string, object>());
 
             // Assert
             success.Should().BeFalse();
@@ -635,7 +635,7 @@ namespace Platform.Engineering.Copilot.Tests.Integration.Core.Services.ServiceCr
         public async Task ApproveRequest_WithInvalidId_ReturnsFailedResult()
         {
             // Act
-            var result = await _onboardingService!.ApproveRequestAsync("invalid-id", "Approver", "Test");
+            var result = await _ServiceCreationService!.ApproveRequestAsync("invalid-id", "Approver", "Test");
 
             // Assert
             result.Should().NotBeNull();

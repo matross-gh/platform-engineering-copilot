@@ -9,7 +9,7 @@ namespace Platform.Engineering.Copilot.Environment.Core.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddEnvironmentCore(this IServiceCollection services)
+    public static IServiceCollection AddEnvironmentAgent(this IServiceCollection services)
     {
         // Register Environment Agent and Plugin
         services.AddScoped<EnvironmentAgent>();

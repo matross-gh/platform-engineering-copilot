@@ -3,8 +3,8 @@ using Platform.Engineering.Copilot.Core.Models.ServiceCreation;
 using Platform.Engineering.Copilot.Core.Data.Entities;
 using Platform.Engineering.Copilot.ServiceCreation.Core.Interfaces;
 using ServiceCreationRequest = Platform.Engineering.Copilot.Data.Entities.ServiceCreationRequest;
-using ServiceCreationValidationResult = Platform.Engineering.Copilot.Core.Models.ServiceCreation.OnboardingPhase;
-using ServiceCreationWorkflowConfig = Platform.Engineering.Copilot.Core.Models.ServiceCreation.OnboardingPhase;
+using ServiceCreationValidationResult = Platform.Engineering.Copilot.Core.Models.ServiceCreation.ServiceCreationPhase;
+using ServiceCreationWorkflowConfig = Platform.Engineering.Copilot.Core.Models.ServiceCreation.ServiceCreationPhase;
 
 namespace Platform.Engineering.Copilot.ServiceCreation.Core.Services;
 

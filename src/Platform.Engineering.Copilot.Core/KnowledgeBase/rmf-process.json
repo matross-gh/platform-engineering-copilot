@@ -1,0 +1,170 @@
+{
+  "rmfSteps": [
+    {
+      "step": "1",
+      "title": "Categorize",
+      "description": "Categorize the system and information processed, stored, and transmitted based on impact analysis",
+      "activities": [
+        "Identify system boundaries and authorization boundaries",
+        "Conduct FIPS 199 impact analysis (Confidentiality, Integrity, Availability)",
+        "Determine system impact level (Low, Moderate, High)",
+        "Document categorization in System Security Plan (SSP)",
+        "Obtain approval from Authorizing Official (AO)"
+      ],
+      "outputs": [
+        "System categorization document",
+        "FIPS 199 impact analysis",
+        "System identification",
+        "Authorization boundary definition"
+      ],
+      "roles": [
+        "System Owner",
+        "Information System Security Officer (ISSO)",
+        "Authorizing Official (AO)",
+        "Information Owner"
+      ],
+      "dodInstruction": "DoD 8510.01 - Risk Management Framework (RMF) for DoD IT"
+    },
+    {
+      "step": "2",
+      "title": "Select",
+      "description": "Select appropriate security controls based on system categorization and tailoring guidance",
+      "activities": [
+        "Select initial security control baseline (NIST 800-53B)",
+        "Apply tailoring guidance based on organizational requirements",
+        "Apply overlay for specific environments (e.g., IL5/IL6, Cloud)",
+        "Supplement controls based on risk assessment",
+        "Document control selection in SSP"
+      ],
+      "outputs": [
+        "Security control baseline",
+        "Tailored security controls",
+        "Control overlays applied",
+        "Updated System Security Plan (SSP)"
+      ],
+      "roles": [
+        "System Owner",
+        "ISSO",
+        "Information System Security Manager (ISSM)",
+        "Control Assessor"
+      ],
+      "dodInstruction": "DoD 8510.01, CNSSI 1253 (for classified systems)"
+    },
+    {
+      "step": "3",
+      "title": "Implement",
+      "description": "Implement security controls and document implementation details",
+      "activities": [
+        "Implement selected security controls",
+        "Document control implementation in SSP",
+        "Configure security settings per STIGs",
+        "Apply security configurations and baselines",
+        "Document deviations and compensating controls"
+      ],
+      "outputs": [
+        "Implemented security controls",
+        "Updated SSP with implementation details",
+        "STIG compliance documentation",
+        "Configuration baselines"
+      ],
+      "roles": [
+        "System Owner",
+        "System Administrator",
+        "ISSO",
+        "Security Engineers"
+      ],
+      "dodInstruction": "DoD 8500.01, STIGs, SRGs"
+    },
+    {
+      "step": "4",
+      "title": "Assess",
+      "description": "Assess security controls to determine effectiveness",
+      "activities": [
+        "Develop Security Assessment Plan (SAP)",
+        "Conduct security control assessment",
+        "Vulnerability scanning and penetration testing",
+        "Review control implementation evidence",
+        "Document findings in Security Assessment Report (SAR)"
+      ],
+      "outputs": [
+        "Security Assessment Plan (SAP)",
+        "Security Assessment Report (SAR)",
+        "Vulnerability scan results",
+        "Penetration test results",
+        "Plan of Action and Milestones (POA&M)"
+      ],
+      "roles": [
+        "Security Control Assessor (SCA)",
+        "Independent Assessor",
+        "ISSO",
+        "Penetration Testers"
+      ],
+      "dodInstruction": "DoD 8510.01, NIST 800-53A"
+    },
+    {
+      "step": "5",
+      "title": "Authorize",
+      "description": "Authorize system operation based on risk determination",
+      "activities": [
+        "Prepare authorization package (SSP, SAP, SAR, POA&M)",
+        "Submit package to Authorizing Official (AO)",
+        "AO reviews risk and makes authorization decision",
+        "Issue Authority to Operate (ATO), Interim ATO (IATO), or Denial",
+        "Document authorization decision and terms/conditions"
+      ],
+      "outputs": [
+        "Authorization package",
+        "Authorization decision document",
+        "Authority to Operate (ATO) or IATO",
+        "Terms and conditions",
+        "Approved POA&M"
+      ],
+      "roles": [
+        "Authorizing Official (AO)",
+        "Authorizing Official Designated Representative (AODR)",
+        "ISSO",
+        "System Owner"
+      ],
+      "dodInstruction": "DoD 8510.01"
+    },
+    {
+      "step": "6",
+      "title": "Monitor",
+      "description": "Continuously monitor security controls and system changes",
+      "activities": [
+        "Implement continuous monitoring strategy",
+        "Track POA&M items and remediation progress",
+        "Conduct ongoing security control assessments",
+        "Track configuration changes",
+        "Report security status to AO",
+        "Update security documentation as needed"
+      ],
+      "outputs": [
+        "Continuous monitoring reports",
+        "Updated POA&M",
+        "Security status reports",
+        "Change requests and approvals",
+        "Updated security documentation"
+      ],
+      "roles": [
+        "ISSO",
+        "System Administrator",
+        "Security Operations Center (SOC)",
+        "AO/AODR"
+      ],
+      "dodInstruction": "DoD 8510.01, NIST 800-137"
+    }
+  ],
+  "rmfOverview": {
+    "description": "The Risk Management Framework (RMF) provides a disciplined and structured process that integrates information security and risk management activities into the system development life cycle.",
+    "purpose": "To ensure that managing information system-related security risks is consistent with the mission and business objectives of the organization.",
+    "applicability": "All DoD information systems, including cloud systems, weapon systems, and platform IT systems.",
+    "keyPrinciples": [
+      "Risk-based approach to security control selection",
+      "Continuous monitoring and assessment",
+      "Integration with SDLC",
+      "Authorization as ongoing activity",
+      "Flexibility for mission/business needs"
+    ]
+  }
+}

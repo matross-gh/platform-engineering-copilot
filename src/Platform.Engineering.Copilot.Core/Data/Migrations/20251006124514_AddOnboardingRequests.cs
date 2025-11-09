@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Platform.Engineering.Copilot.Core.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AddOnboardingRequests : Migration
+    public partial class AddServiceCreationRequests : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -546,7 +546,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "Status",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(50)",
                 maxLength: 50,
                 nullable: false,
@@ -556,7 +556,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "SecurityContactEmail",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(200)",
                 maxLength: 200,
                 nullable: false,
@@ -566,7 +566,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<DateTime>(
                 name: "ReviewedAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "datetime2",
                 nullable: true,
                 oldClrType: typeof(string),
@@ -575,7 +575,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<bool>(
                 name: "RequiresPki",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "bit",
                 nullable: false,
                 oldClrType: typeof(bool),
@@ -583,7 +583,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<bool>(
                 name: "RequiresCac",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "bit",
                 nullable: false,
                 defaultValue: true,
@@ -593,7 +593,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<bool>(
                 name: "RequiresAto",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "bit",
                 nullable: false,
                 oldClrType: typeof(bool),
@@ -601,7 +601,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "RequestedVNetCidr",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(50)",
                 maxLength: 50,
                 nullable: false,
@@ -611,7 +611,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "RequestedSubscriptionName",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(200)",
                 maxLength: 200,
                 nullable: false,
@@ -621,7 +621,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<DateTime>(
                 name: "RequestedStartDate",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "datetime2",
                 nullable: false,
                 oldClrType: typeof(string),
@@ -629,7 +629,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "RejectedBy",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(200)",
                 maxLength: 200,
                 nullable: true,
@@ -640,7 +640,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "Region",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(50)",
                 maxLength: 50,
                 nullable: false,
@@ -652,7 +652,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ProvisioningJobId",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(100)",
                 maxLength: 100,
                 nullable: true,
@@ -663,7 +663,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ProvisionedVNetId",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(500)",
                 maxLength: 500,
                 nullable: true,
@@ -674,7 +674,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ProvisionedSubscriptionId",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(100)",
                 maxLength: 100,
                 nullable: true,
@@ -685,7 +685,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ProvisionedResourceGroupId",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(500)",
                 maxLength: 500,
                 nullable: true,
@@ -696,7 +696,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<DateTime>(
                 name: "ProvisionedAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "datetime2",
                 nullable: true,
                 oldClrType: typeof(string),
@@ -705,7 +705,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<int>(
                 name: "Priority",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "int",
                 nullable: false,
                 defaultValue: 3,
@@ -715,7 +715,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<DateTime>(
                 name: "NotificationSentAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "datetime2",
                 nullable: true,
                 oldClrType: typeof(string),
@@ -724,7 +724,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<bool>(
                 name: "NotificationSent",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "bit",
                 nullable: false,
                 oldClrType: typeof(bool),
@@ -732,7 +732,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "MissionOwnerRank",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(50)",
                 maxLength: 50,
                 nullable: false,
@@ -742,7 +742,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "MissionOwnerEmail",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(200)",
                 maxLength: 200,
                 nullable: false,
@@ -752,7 +752,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "MissionOwner",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(200)",
                 maxLength: 200,
                 nullable: false,
@@ -762,7 +762,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "MissionName",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(200)",
                 maxLength: 200,
                 nullable: false,
@@ -772,7 +772,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<int>(
                 name: "MissionDurationMonths",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "int",
                 nullable: false,
                 oldClrType: typeof(int),
@@ -780,7 +780,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<DateTime>(
                 name: "LastUpdatedAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "datetime2",
                 nullable: false,
                 defaultValueSql: "datetime('now')",
@@ -790,7 +790,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "FundingSource",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(100)",
                 maxLength: 100,
                 nullable: false,
@@ -800,7 +800,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<int>(
                 name: "EstimatedUserCount",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "int",
                 nullable: false,
                 oldClrType: typeof(int),
@@ -808,7 +808,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<decimal>(
                 name: "EstimatedMonthlyCost",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "decimal(18,2)",
                 nullable: false,
                 oldClrType: typeof(string),
@@ -816,7 +816,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<decimal>(
                 name: "EstimatedDataVolumeTB",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "decimal(18,2)",
                 nullable: false,
                 oldClrType: typeof(string),
@@ -824,7 +824,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "DataResidency",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(50)",
                 maxLength: 50,
                 nullable: false,
@@ -836,7 +836,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<DateTime>(
                 name: "CreatedAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "datetime2",
                 nullable: false,
                 defaultValueSql: "datetime('now')",
@@ -846,7 +846,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<DateTime>(
                 name: "CompletedAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "datetime2",
                 nullable: true,
                 oldClrType: typeof(string),
@@ -855,7 +855,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "Command",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(200)",
                 maxLength: 200,
                 nullable: false,
@@ -865,7 +865,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ClassificationLevel",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(20)",
                 maxLength: 20,
                 nullable: false,
@@ -877,7 +877,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ApprovedBy",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(200)",
                 maxLength: 200,
                 nullable: true,
@@ -888,7 +888,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "Id",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "nvarchar(450)",
                 nullable: false,
                 oldClrType: typeof(string),
@@ -3106,7 +3106,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "Status",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 50,
                 nullable: false,
@@ -3116,7 +3116,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "SecurityContactEmail",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 200,
                 nullable: false,
@@ -3126,7 +3126,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ReviewedAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 nullable: true,
                 oldClrType: typeof(DateTime),
@@ -3135,7 +3135,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<bool>(
                 name: "RequiresPki",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "INTEGER",
                 nullable: false,
                 oldClrType: typeof(bool),
@@ -3143,7 +3143,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<bool>(
                 name: "RequiresCac",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "INTEGER",
                 nullable: false,
                 defaultValue: true,
@@ -3153,7 +3153,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<bool>(
                 name: "RequiresAto",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "INTEGER",
                 nullable: false,
                 oldClrType: typeof(bool),
@@ -3161,7 +3161,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "RequestedVNetCidr",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 50,
                 nullable: false,
@@ -3171,7 +3171,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "RequestedSubscriptionName",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 200,
                 nullable: false,
@@ -3181,7 +3181,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "RequestedStartDate",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 nullable: false,
                 oldClrType: typeof(DateTime),
@@ -3189,7 +3189,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "RejectedBy",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 200,
                 nullable: true,
@@ -3200,7 +3200,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "Region",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 50,
                 nullable: false,
@@ -3212,7 +3212,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ProvisioningJobId",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 100,
                 nullable: true,
@@ -3223,7 +3223,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ProvisionedVNetId",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 500,
                 nullable: true,
@@ -3234,7 +3234,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ProvisionedSubscriptionId",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 100,
                 nullable: true,
@@ -3245,7 +3245,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ProvisionedResourceGroupId",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 500,
                 nullable: true,
@@ -3256,7 +3256,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ProvisionedAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 nullable: true,
                 oldClrType: typeof(DateTime),
@@ -3265,7 +3265,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<int>(
                 name: "Priority",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "INTEGER",
                 nullable: false,
                 defaultValue: 3,
@@ -3275,7 +3275,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "NotificationSentAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 nullable: true,
                 oldClrType: typeof(DateTime),
@@ -3284,7 +3284,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<bool>(
                 name: "NotificationSent",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "INTEGER",
                 nullable: false,
                 oldClrType: typeof(bool),
@@ -3292,7 +3292,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "MissionOwnerRank",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 50,
                 nullable: false,
@@ -3302,7 +3302,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "MissionOwnerEmail",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 200,
                 nullable: false,
@@ -3312,7 +3312,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "MissionOwner",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 200,
                 nullable: false,
@@ -3322,7 +3322,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "MissionName",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 200,
                 nullable: false,
@@ -3332,7 +3332,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<int>(
                 name: "MissionDurationMonths",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "INTEGER",
                 nullable: false,
                 oldClrType: typeof(int),
@@ -3340,7 +3340,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "LastUpdatedAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 nullable: false,
                 defaultValueSql: "datetime('now')",
@@ -3350,7 +3350,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "FundingSource",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 100,
                 nullable: false,
@@ -3360,7 +3360,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<int>(
                 name: "EstimatedUserCount",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "INTEGER",
                 nullable: false,
                 oldClrType: typeof(int),
@@ -3368,7 +3368,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "EstimatedMonthlyCost",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 nullable: false,
                 oldClrType: typeof(decimal),
@@ -3376,7 +3376,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "EstimatedDataVolumeTB",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 nullable: false,
                 oldClrType: typeof(decimal),
@@ -3384,7 +3384,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "DataResidency",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 50,
                 nullable: false,
@@ -3396,7 +3396,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "CreatedAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 nullable: false,
                 defaultValueSql: "datetime('now')",
@@ -3406,7 +3406,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "CompletedAt",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 nullable: true,
                 oldClrType: typeof(DateTime),
@@ -3415,7 +3415,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "Command",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 200,
                 nullable: false,
@@ -3425,7 +3425,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ClassificationLevel",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 20,
                 nullable: false,
@@ -3437,7 +3437,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "ApprovedBy",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 maxLength: 200,
                 nullable: true,
@@ -3448,7 +3448,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
             migrationBuilder.AlterColumn<string>(
                 name: "Id",
-                table: "OnboardingRequests",
+                table: "ServiceCreationRequests",
                 type: "TEXT",
                 nullable: false,
                 oldClrType: typeof(string),

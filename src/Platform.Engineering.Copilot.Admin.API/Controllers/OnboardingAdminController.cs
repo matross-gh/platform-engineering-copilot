@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models.ServiceCreation;
 using Platform.Engineering.Copilot.Core.Data.Entities;
+using Platform.Engineering.Copilot.Core.Interfaces.ServiceCreation;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;
 
@@ -11,16 +12,16 @@ namespace Platform.Engineering.Copilot.Admin.Controllers;
 [ApiController]
 [Route("api/admin/ServiceCreation")]
 [Produces("application/json")]
-public class OnboardingAdminController : ControllerBase
+public class ServiceCreationAdminController : ControllerBase
 {
-    private readonly IOnboardingService _onboardingService;
-    private readonly ILogger<OnboardingAdminController> _logger;
+    private readonly IServiceCreationService _ServiceCreationService;
+    private readonly ILogger<ServiceCreationAdminController> _logger;
 
-    public OnboardingAdminController(
-        IOnboardingService onboardingService,
-        ILogger<OnboardingAdminController> logger)
+    public ServiceCreationAdminController(
+        IServiceCreationService ServiceCreationService,
+        ILogger<ServiceCreationAdminController> logger)
     {
-        _onboardingService = onboardingService;
+        _ServiceCreationService = ServiceCreationService;
         _logger = logger;
     }
 
@@ -34,7 +35,7 @@ public class OnboardingAdminController : ControllerBase
     {
         try
         {
-            var requests = await _onboardingService.GetPendingRequestsAsync(cancellationToken);
+            var requests = await _ServiceCreationService.GetPendingRequestsAsync(cancellationToken);
             return Ok(requests);
         }
         catch (Exception ex)
@@ -56,7 +57,7 @@ public class OnboardingAdminController : ControllerBase
     {
         try
         {
-            var request = await _onboardingService.GetRequestAsync(requestId, cancellationToken);
+            var request = await _ServiceCreationService.GetRequestAsync(requestId, cancellationToken);
             
             if (request == null)
             {
@@ -83,7 +84,7 @@ public class OnboardingAdminController : ControllerBase
     {
         try
         {
-            var requests = await _onboardingService.GetRequestsByOwnerAsync(email, cancellationToken);
+            var requests = await _ServiceCreationService.GetRequestsByOwnerAsync(email, cancellationToken);
             return Ok(requests);
         }
         catch (Exception ex)
@@ -97,12 +98,12 @@ public class OnboardingAdminController : ControllerBase
     /// Approves an ServiceCreation request and triggers automated provisioning
     /// </summary>
     [HttpPost("{requestId}/approve")]
-    [ProducesResponseType(typeof(OnboardingApprovalResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ServiceCreationApprovalResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<OnboardingApprovalResponse>> ApproveRequest(
+    public async Task<ActionResult<ServiceCreationApprovalResponse>> ApproveRequest(
         string requestId,
-        [FromBody] OnboardingApprovalRequest request,
+        [FromBody] ServiceCreationApprovalRequest request,
         CancellationToken cancellationToken)
     {
         try
@@ -110,7 +111,7 @@ public class OnboardingAdminController : ControllerBase
             _logger.LogInformation("Approving ServiceCreation request {RequestId} by {ApprovedBy}",
                 requestId, request.ApprovedBy);
 
-            var result = await _onboardingService.ApproveRequestAsync(
+            var result = await _ServiceCreationService.ApproveRequestAsync(
                 requestId,
                 request.ApprovedBy,
                 request.Comments,
@@ -118,7 +119,7 @@ public class OnboardingAdminController : ControllerBase
 
             if (!result.Success)
             {
-                return BadRequest(new OnboardingApprovalResponse
+                return BadRequest(new ServiceCreationApprovalResponse
                 {
                     Success = false,
                     Message = result.Message ?? "Failed to approve request",
@@ -126,7 +127,7 @@ public class OnboardingAdminController : ControllerBase
                 });
             }
 
-            return Ok(new OnboardingApprovalResponse
+            return Ok(new ServiceCreationApprovalResponse
             {
                 Success = true,
                 Message = "ServiceCreation request approved. Provisioning will begin shortly.",
@@ -137,7 +138,7 @@ public class OnboardingAdminController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error approving ServiceCreation request {RequestId}", requestId);
-            return StatusCode(500, new OnboardingApprovalResponse
+            return StatusCode(500, new ServiceCreationApprovalResponse
             {
                 Success = false,
                 Message = $"Error approving request: {ex.Message}",
@@ -150,12 +151,12 @@ public class OnboardingAdminController : ControllerBase
     /// Rejects an ServiceCreation request
     /// </summary>
     [HttpPost("{requestId}/reject")]
-    [ProducesResponseType(typeof(OnboardingApprovalResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ServiceCreationApprovalResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<OnboardingApprovalResponse>> RejectRequest(
+    public async Task<ActionResult<ServiceCreationApprovalResponse>> RejectRequest(
         string requestId,
-        [FromBody] OnboardingRejectionRequest request,
+        [FromBody] ServiceCreationRejectionRequest request,
         CancellationToken cancellationToken)
     {
         try
@@ -165,7 +166,7 @@ public class OnboardingAdminController : ControllerBase
 
             if (string.IsNullOrWhiteSpace(request.Reason))
             {
-                return BadRequest(new OnboardingApprovalResponse
+                return BadRequest(new ServiceCreationApprovalResponse
                 {
                     Success = false,
                     Message = "Rejection reason is required",
@@ -173,7 +174,7 @@ public class OnboardingAdminController : ControllerBase
                 });
             }
 
-            var success = await _onboardingService.RejectRequestAsync(
+            var success = await _ServiceCreationService.RejectRequestAsync(
                 requestId,
                 request.RejectedBy,
                 request.Reason,
@@ -181,7 +182,7 @@ public class OnboardingAdminController : ControllerBase
 
             if (!success)
             {
-                return BadRequest(new OnboardingApprovalResponse
+                return BadRequest(new ServiceCreationApprovalResponse
                 {
                     Success = false,
                     Message = "Failed to reject request. It may not exist or may already be processed.",
@@ -189,7 +190,7 @@ public class OnboardingAdminController : ControllerBase
                 });
             }
 
-            return Ok(new OnboardingApprovalResponse
+            return Ok(new ServiceCreationApprovalResponse
             {
                 Success = true,
                 Message = "ServiceCreation request rejected. Mission owner will be notified.",
@@ -199,7 +200,7 @@ public class OnboardingAdminController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error rejecting ServiceCreation request {RequestId}", requestId);
-            return StatusCode(500, new OnboardingApprovalResponse
+            return StatusCode(500, new ServiceCreationApprovalResponse
             {
                 Success = false,
                 Message = $"Error rejecting request: {ex.Message}",
@@ -220,7 +221,7 @@ public class OnboardingAdminController : ControllerBase
     {
         try
         {
-            var status = await _onboardingService.GetProvisioningStatusAsync(jobId, cancellationToken);
+            var status = await _ServiceCreationService.GetProvisioningStatusAsync(jobId, cancellationToken);
             
             if (status.Status == "NotFound")
             {
@@ -246,7 +247,7 @@ public class OnboardingAdminController : ControllerBase
     {
         try
         {
-            var requests = await _onboardingService.GetProvisioningRequestsAsync(cancellationToken);
+            var requests = await _ServiceCreationService.GetProvisioningRequestsAsync(cancellationToken);
             return Ok(requests);
         }
         catch (Exception ex)
@@ -260,13 +261,13 @@ public class OnboardingAdminController : ControllerBase
     /// Gets ServiceCreation statistics for the dashboard
     /// </summary>
     [HttpGet("stats")]
-    [ProducesResponseType(typeof(OnboardingStats), StatusCodes.Status200OK)]
-    public async Task<ActionResult<OnboardingStats>> GetStats(
+    [ProducesResponseType(typeof(ServiceCreationStats), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ServiceCreationStats>> GetStats(
         CancellationToken cancellationToken)
     {
         try
         {
-            var stats = await _onboardingService.GetStatsAsync(cancellationToken);
+            var stats = await _ServiceCreationService.GetStatsAsync(cancellationToken);
             return Ok(stats);
         }
         catch (Exception ex)
@@ -291,7 +292,7 @@ public class OnboardingAdminController : ControllerBase
             var start = startDate ?? DateTime.UtcNow.AddMonths(-1);
             var end = endDate ?? DateTime.UtcNow;
 
-            var history = await _onboardingService.GetHistoryAsync(start, end, cancellationToken);
+            var history = await _ServiceCreationService.GetHistoryAsync(start, end, cancellationToken);
             return Ok(history);
         }
         catch (Exception ex)
@@ -307,7 +308,7 @@ public class OnboardingAdminController : ControllerBase
 /// <summary>
 /// Request to approve an ServiceCreation
 /// </summary>
-public class OnboardingApprovalRequest
+public class ServiceCreationApprovalRequest
 {
     /// <summary>
     /// Name/ID of the person approving
@@ -323,7 +324,7 @@ public class OnboardingApprovalRequest
 /// <summary>
 /// Request to reject an ServiceCreation
 /// </summary>
-public class OnboardingRejectionRequest
+public class ServiceCreationRejectionRequest
 {
     /// <summary>
     /// Name/ID of the person rejecting
@@ -339,7 +340,7 @@ public class OnboardingRejectionRequest
 /// <summary>
 /// Response from approval/rejection action
 /// </summary>
-public class OnboardingApprovalResponse
+public class ServiceCreationApprovalResponse
 {
     /// <summary>
     /// Whether the operation succeeded

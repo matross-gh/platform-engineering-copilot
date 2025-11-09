@@ -14,7 +14,6 @@ WORKDIR /src
 COPY Platform.Engineering.Copilot.sln ./
 COPY src/Platform.Engineering.Copilot.Admin.Client/*.csproj ./src/Platform.Engineering.Copilot.Admin.Client/
 COPY src/Platform.Engineering.Copilot.Core/*.csproj ./src/Platform.Engineering.Copilot.Core/
-COPY src/Platform.Engineering.Copilot.Data/*.csproj ./src/Platform.Engineering.Copilot.Data/
 
 # Restore dependencies
 RUN dotnet restore ./src/Platform.Engineering.Copilot.Admin.Client/Platform.Engineering.Copilot.Admin.Client.csproj
@@ -22,7 +21,6 @@ RUN dotnet restore ./src/Platform.Engineering.Copilot.Admin.Client/Platform.Engi
 # Copy all source code
 COPY src/Platform.Engineering.Copilot.Admin.Client/. ./src/Platform.Engineering.Copilot.Admin.Client/
 COPY src/Platform.Engineering.Copilot.Core/. ./src/Platform.Engineering.Copilot.Core/
-COPY src/Platform.Engineering.Copilot.Data/. ./src/Platform.Engineering.Copilot.Data/
 
 # Build and publish
 WORKDIR /src/src/Platform.Engineering.Copilot.Admin.Client

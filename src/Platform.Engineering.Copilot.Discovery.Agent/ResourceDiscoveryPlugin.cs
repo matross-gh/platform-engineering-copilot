@@ -21,13 +21,13 @@ namespace Platform.Engineering.Copilot.Discovery.Core;
 /// Enhanced with Azure MCP Server integration for best practices, diagnostics, and documentation.
 /// Provides comprehensive resource querying, filtering, and analysis capabilities.
 /// </summary>
-public class ResourceDiscoveryPlugin : BaseSupervisorPlugin
+public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
 {
     private readonly IAzureResourceService _azureResourceService;
     private readonly AzureMcpClient _azureMcpClient;
 
-    public ResourceDiscoveryPlugin(
-        ILogger<ResourceDiscoveryPlugin> logger,
+    public AzureResourceDiscoveryPlugin(
+        ILogger<AzureResourceDiscoveryPlugin> logger,
         Kernel kernel,
         IAzureResourceService azureResourceService,
         AzureMcpClient azureMcpClient) : base(logger, kernel)

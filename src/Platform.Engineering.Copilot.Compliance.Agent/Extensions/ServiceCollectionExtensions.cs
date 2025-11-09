@@ -32,7 +32,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Add Compliance domain services (ComplianceAgent, CompliancePlugin) to the dependency injection container
     /// </summary>
-    public static IServiceCollection AddComplianceCore(this IServiceCollection services)
+    public static IServiceCollection AddComplianceAgent(this IServiceCollection services)
     {
         // Register caching services
         services.AddMemoryCache(); // Required for IMemoryCache
@@ -203,7 +203,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddSemanticProcessing(this IServiceCollection services)
     {
-        return services.AddComplianceCore();
+        return services.AddComplianceAgent();
     }
 
     /// <summary>

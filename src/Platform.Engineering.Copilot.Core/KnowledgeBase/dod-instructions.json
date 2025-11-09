@@ -1,0 +1,193 @@
+{
+  "dodInstructions": [
+    {
+      "instructionId": "DoDI 8500.01",
+      "title": "Cybersecurity",
+      "description": "Establishes policy and assigns responsibilities for implementing cybersecurity within the DoD information enterprise",
+      "publicationDate": "2014-03-14",
+      "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/850001_2014.pdf",
+      "relatedNistControls": ["All AC, IA, SC, SI, AU controls"],
+      "relatedStigIds": ["All Azure STIGs"],
+      "applicability": "All DoD information systems including cloud platforms"
+    },
+    {
+      "instructionId": "DoDI 8510.01",
+      "title": "Risk Management Framework (RMF) for DoD IT",
+      "description": "Implements the Risk Management Framework (RMF) for all DoD information technology, including cloud and weapon systems",
+      "publicationDate": "2014-03-12",
+      "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/851001_2014.pdf",
+      "relatedNistControls": ["CA-1", "CA-2", "CA-5", "CA-6", "CA-7", "RA-3", "RA-5", "PM-9"],
+      "relatedStigIds": [],
+      "applicability": "All DoD IT systems requiring ATO"
+    },
+    {
+      "instructionId": "DoDI 8520.02",
+      "title": "Public Key Infrastructure (PKI) and Public Key (PK) Enabling",
+      "description": "Establishes policy for PKI implementation and CAC/PIV credential usage",
+      "publicationDate": "2011-05-24",
+      "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/852002p.pdf",
+      "relatedNistControls": ["IA-2(1)", "IA-2(12)", "IA-5(2)", "SC-8(1)", "SC-17"],
+      "relatedStigIds": ["V-219153"],
+      "applicability": "All systems requiring user authentication"
+    },
+    {
+      "instructionId": "DoDI 8140.01",
+      "title": "Cyberspace Workforce Management",
+      "description": "Establishes policy and assigns responsibilities for management of the DoD cyberspace workforce",
+      "publicationDate": "2020-04-29",
+      "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/814001p.pdf",
+      "relatedNistControls": ["AT-1", "AT-2", "AT-3", "PS-2", "PS-3"],
+      "relatedStigIds": [],
+      "applicability": "Personnel performing cybersecurity functions"
+    },
+    {
+      "instructionId": "CNSSI 1253",
+      "title": "Security Categorization and Control Selection for National Security Systems",
+      "description": "Provides security control overlays for classified national security systems",
+      "publicationDate": "2014-03-27",
+      "url": "https://www.cnss.gov/CNSS/issuances/Instructions.cfm",
+      "relatedNistControls": ["All controls with classified overlays"],
+      "relatedStigIds": [],
+      "applicability": "Secret and Top Secret systems"
+    }
+  ],
+  "impactLevels": [
+    {
+      "level": "IL2",
+      "name": "Impact Level 2 - DoD Controlled Unclassified Information (CUI) Low",
+      "description": "Systems processing low-sensitivity CUI with limited impact if compromised",
+      "requirements": [
+        "NIST 800-171 compliance (110 controls)",
+        "FedRAMP Moderate baseline subset",
+        "Basic cloud security controls"
+      ],
+      "nistBaseline": ["NIST 800-171"],
+      "mandatoryControls": ["AC-2", "AC-3", "IA-2", "SC-28", "AU-2"],
+      "azureConfigurations": {
+        "encryption": "Platform-managed keys acceptable",
+        "networking": "Public endpoints allowed with NSG restrictions",
+        "identity": "Azure AD MFA required",
+        "logging": "30 days minimum retention"
+      }
+    },
+    {
+      "level": "IL4",
+      "name": "Impact Level 4 - DoD CUI Moderate",
+      "description": "Systems processing CUI with moderate impact if compromised",
+      "requirements": [
+        "NIST 800-171 + additional controls",
+        "FedRAMP Moderate baseline",
+        "Enhanced logging and monitoring"
+      ],
+      "nistBaseline": ["NIST 800-53 Moderate"],
+      "mandatoryControls": ["All IL2 + SC-7", "SC-8", "AU-6", "SI-4"],
+      "azureConfigurations": {
+        "encryption": "Customer-managed keys recommended",
+        "networking": "Private endpoints preferred",
+        "identity": "Azure AD MFA + PIM required",
+        "logging": "90 days minimum retention"
+      }
+    },
+    {
+      "level": "IL5",
+      "name": "Impact Level 5 - DoD CUI High / Secret",
+      "description": "Systems processing high-sensitivity CUI or classified information up to Secret",
+      "requirements": [
+        "NIST 800-53 High baseline",
+        "FedRAMP High compliance",
+        "Complete network isolation",
+        "Dedicated infrastructure",
+        "FIPS 140-2 cryptography"
+      ],
+      "nistBaseline": ["NIST 800-53 High", "CNSSI 1253"],
+      "mandatoryControls": ["All IL4 + SC-7(3)", "SC-7(5)", "SC-28(1)", "AU-9", "IA-2(1)", "IA-2(12)"],
+      "azureConfigurations": {
+        "encryption": "Customer-managed keys REQUIRED (FIPS 140-2)",
+        "networking": "No public endpoints, dedicated ExpressRoute",
+        "identity": "CAC/PIV authentication mandatory",
+        "logging": "365 days minimum retention, immutable logs",
+        "region": "USGov Virginia, USGov Arizona only",
+        "isolation": "Dedicated tenants, no multi-tenancy"
+      }
+    },
+    {
+      "level": "IL6",
+      "name": "Impact Level 6 - Classified Secret / Top Secret",
+      "description": "Systems processing classified information at Secret or Top Secret levels",
+      "requirements": [
+        "NIST 800-53 High + classified overlays",
+        "CNSSI 1253 controls",
+        "Complete air-gapped infrastructure",
+        "NSA-approved cryptography (Suite B)",
+        "Continuous monitoring and logging"
+      ],
+      "nistBaseline": ["NIST 800-53 High", "CNSSI 1253", "Intelligence Community Directive 503"],
+      "mandatoryControls": ["All IL5 + SC-8(1)", "MA-4(6)", "PE-3", "PE-6", "PS-3"],
+      "azureConfigurations": {
+        "encryption": "NSA Suite B cryptography REQUIRED",
+        "networking": "Dedicated isolated network, no internet connectivity",
+        "identity": "CAC/PIV with hardware token mandatory",
+        "logging": "Indefinite retention, air-gapped SIEM",
+        "region": "Secret/Top Secret regions only (Azure Government Secret)",
+        "isolation": "Physically separated infrastructure",
+        "personnel": "Cleared personnel only (Secret/TS/SCI)"
+      }
+    }
+  ],
+  "boundaryProtection": [
+    {
+      "impactLevel": "IL5",
+      "requirementId": "BP-IL5-001",
+      "description": "Complete network isolation from internet",
+      "mandatoryControls": ["SC-7", "SC-7(3)", "SC-7(5)", "SC-7(8)"],
+      "networkRequirements": [
+        "No public IP addresses on VMs",
+        "Private endpoints for all PaaS services",
+        "Dedicated ExpressRoute or VPN",
+        "Network Security Groups with default deny",
+        "Azure Firewall for egress filtering",
+        "No direct internet connectivity"
+      ],
+      "encryptionRequirements": [
+        "TLS 1.2 minimum for all connections",
+        "IPSec for site-to-site VPN",
+        "Customer-managed keys in Key Vault",
+        "FIPS 140-2 validated modules"
+      ],
+      "azureImplementation": {
+        "virtualNetwork": "Dedicated VNet with no internet gateway",
+        "subnets": "Separate subnets for each tier with NSGs",
+        "privateEndpoints": "Required for Storage, SQL, Key Vault, etc.",
+        "firewall": "Azure Firewall for outbound inspection",
+        "dns": "Private DNS zones only",
+        "connectivity": "ExpressRoute with private peering"
+      }
+    },
+    {
+      "impactLevel": "IL6",
+      "requirementId": "BP-IL6-001",
+      "description": "Air-gapped network with physical isolation",
+      "mandatoryControls": ["SC-7", "SC-7(3)", "SC-7(5)", "SC-7(8)", "SC-7(13)", "SC-7(18)"],
+      "networkRequirements": [
+        "Physically isolated infrastructure",
+        "No connection to internet or commercial networks",
+        "Dedicated cross-domain solutions for controlled transfers",
+        "All communications through approved gateways",
+        "Continuous monitoring of all network flows"
+      ],
+      "encryptionRequirements": [
+        "NSA Suite B cryptography",
+        "Type 1 encryption for Top Secret",
+        "Hardware security modules (HSM)",
+        "Dedicated key management infrastructure"
+      ],
+      "azureImplementation": {
+        "infrastructure": "Azure Government Secret regions",
+        "networking": "Isolated network fabric",
+        "encryption": "FIPS 140-2 Level 3 HSMs",
+        "monitoring": "Dedicated Security Operations Center (SOC)",
+        "access": "Cleared personnel with physical access controls"
+      }
+    }
+  ]
+}

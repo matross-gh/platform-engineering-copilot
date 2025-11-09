@@ -35,9 +35,9 @@ const PendingApprovalsPanel: React.FC = () => {
       setLoading(true);
       
       // Load both infrastructure approvals and ServiceCreation requests in parallel
-      const [infraApprovals, onboardingRequests] = await Promise.all([
+      const [infraApprovals, ServiceCreationRequests] = await Promise.all([
         adminApi.getPendingApprovals().catch(() => []),
-        adminApi.getPendingOnboardingRequests().catch(() => [])
+        adminApi.getPendingServiceCreationRequests().catch(() => [])
       ]);
 
       // Unify the data structure
@@ -51,7 +51,7 @@ const PendingApprovalsPanel: React.FC = () => {
           status: workflow.status,
           data: workflow
         })),
-        ...onboardingRequests.map((request: ServiceCreationRequest) => ({
+        ...ServiceCreationRequests.map((request: ServiceCreationRequest) => ({
           id: request.id,
           type: 'ServiceCreation' as ApprovalType,
           title: `${request.missionName || 'Mission'} - Flankspeed ServiceCreation`,
@@ -117,12 +117,12 @@ const PendingApprovalsPanel: React.FC = () => {
     }
   };
 
-  const handleApproveOnboarding = async (requestId: string) => {
+  const handleApproveServiceCreation = async (requestId: string) => {
     const comments = window.prompt('Optional: Add approval comments (or press OK to continue without comments):');
     
     setActionInProgress(requestId);
     try {
-      const response = await adminApi.approveOnboardingRequest(requestId, currentUser, comments || undefined);
+      const response = await adminApi.approveServiceCreationRequest(requestId, currentUser, comments || undefined);
       if (response.success) {
         window.alert(`✅ ServiceCreation request approved successfully!\n\n${response.message}\n\nProvisioning Job ID: ${response.provisioningJobId || 'N/A'}`);
         await loadAllApprovals();
@@ -136,7 +136,7 @@ const PendingApprovalsPanel: React.FC = () => {
     }
   };
 
-  const handleRejectOnboarding = async (requestId: string) => {
+  const handleRejectServiceCreation = async (requestId: string) => {
     const reason = window.prompt('⚠️ Please provide a reason for rejection (required):');
     
     if (!reason || reason.trim() === '') {
@@ -146,7 +146,7 @@ const PendingApprovalsPanel: React.FC = () => {
 
     setActionInProgress(requestId);
     try {
-      const response = await adminApi.rejectOnboardingRequest(requestId, currentUser, reason);
+      const response = await adminApi.rejectServiceCreationRequest(requestId, currentUser, reason);
       if (response.success) {
         window.alert('❌ ServiceCreation request rejected. Mission owner will be notified.');
         await loadAllApprovals();
@@ -225,7 +225,7 @@ const PendingApprovalsPanel: React.FC = () => {
   }
 
   const infraCount = approvals.filter(a => a.type === 'infrastructure').length;
-  const onboardingCount = approvals.filter(a => a.type === 'ServiceCreation').length;
+  const ServiceCreationCount = approvals.filter(a => a.type === 'ServiceCreation').length;
 
   if (approvals.length === 0) {
     return (
@@ -266,7 +266,7 @@ const PendingApprovalsPanel: React.FC = () => {
               className={filterType === 'ServiceCreation' ? 'active' : ''}
               onClick={() => setFilterType('ServiceCreation')}
             >
-              ⚓ ServiceCreation ({onboardingCount})
+              ⚓ ServiceCreation ({ServiceCreationCount})
             </button>
           </div>
           <button onClick={loadAllApprovals} className="refresh-btn" disabled={loading}>
@@ -312,10 +312,10 @@ const PendingApprovalsPanel: React.FC = () => {
                       isInProgress={isInProgress}
                     />
                   ) : (
-                    <OnboardingDetails 
+                    <ServiceCreationDetails 
                       request={approval.data as ServiceCreationRequest}
-                      onApprove={() => handleApproveOnboarding(approval.id)}
-                      onReject={() => handleRejectOnboarding(approval.id)}
+                      onApprove={() => handleApproveServiceCreation(approval.id)}
+                      onReject={() => handleRejectServiceCreation(approval.id)}
                       isInProgress={isInProgress}
                     />
                   )}
@@ -409,7 +409,7 @@ const InfrastructureDetails: React.FC<{
 };
 
 // Sub-component for ServiceCreation Request Details
-const OnboardingDetails: React.FC<{
+const ServiceCreationDetails: React.FC<{
   request: ServiceCreationRequest;
   onApprove: () => void;
   onReject: () => void;

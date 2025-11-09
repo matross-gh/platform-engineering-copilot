@@ -1275,7 +1275,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("OnboardingRequests");
+                    b.ToTable("ServiceCreationRequests");
                 });
 
             modelBuilder.Entity("Platform.Engineering.Copilot.Data.Entities.ScalingEvent", b =>

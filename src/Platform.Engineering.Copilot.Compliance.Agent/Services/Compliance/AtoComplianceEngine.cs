@@ -9,6 +9,8 @@ using System.Text.Json;
 using Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 using Platform.Engineering.Copilot.Core.Models.Azure;
+using Platform.Engineering.Copilot.Core.Interfaces.KnowledgeBase;
+using Platform.Engineering.Copilot.Core.Models.KnowledgeBase;
 
 namespace Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
 
@@ -28,6 +30,12 @@ public class AtoComplianceEngine : IAtoComplianceEngine
     private readonly Dictionary<string, IComplianceScanner> _scanners;
     private readonly Dictionary<string, IEvidenceCollector> _evidenceCollectors;
     
+    // Knowledge Base Services for enhanced compliance assessment
+    private readonly IRmfKnowledgeService _rmfKnowledgeService;
+    private readonly IStigKnowledgeService _stigKnowledgeService;
+    private readonly IDoDInstructionService _dodInstructionService;
+    private readonly IDoDWorkflowService _dodWorkflowService;
+    
     // Cache configuration
     private static readonly TimeSpan ResourceCacheDuration = TimeSpan.FromMinutes(5);
     private const string ResourceCacheKeyPrefix = "AzureResources_";
@@ -39,7 +47,11 @@ public class AtoComplianceEngine : IAtoComplianceEngine
         IMemoryCache cache,
         // IAtoComplianceReportService reportService, // TODO: Implement this service
         ComplianceMetricsService metricsService,
-        IOptions<ComplianceAgentOptions> options)
+        IOptions<ComplianceAgentOptions> options,
+        IRmfKnowledgeService rmfKnowledgeService,
+        IStigKnowledgeService stigKnowledgeService,
+        IDoDInstructionService dodInstructionService,
+        IDoDWorkflowService dodWorkflowService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _nistControlsService = nistControlsService ?? throw new ArgumentNullException(nameof(nistControlsService));
@@ -49,6 +61,11 @@ public class AtoComplianceEngine : IAtoComplianceEngine
         // _reportService = reportService ?? throw new ArgumentNullException(nameof(reportService));
         _metricsService = metricsService ?? throw new ArgumentNullException(nameof(metricsService));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        
+        _rmfKnowledgeService = rmfKnowledgeService ?? throw new ArgumentNullException(nameof(rmfKnowledgeService));
+        _stigKnowledgeService = stigKnowledgeService ?? throw new ArgumentNullException(nameof(stigKnowledgeService));
+        _dodInstructionService = dodInstructionService ?? throw new ArgumentNullException(nameof(dodInstructionService));
+        _dodWorkflowService = dodWorkflowService ?? throw new ArgumentNullException(nameof(dodWorkflowService));
 
         _scanners = InitializeScanners();
         _evidenceCollectors = InitializeEvidenceCollectors();
@@ -778,6 +795,22 @@ public class AtoComplianceEngine : IAtoComplianceEngine
                 : await scanner.ScanControlAsync(subscriptionId, resourceGroupName, control, cancellationToken);
             assessment.Findings.AddRange(findings);
         }
+
+        // STIG validation integration
+        _logger.LogDebug("Running STIG validation for family {Family}", family);
+        var stigFindings = await ValidateFamilyStigsAsync(
+            subscriptionId,
+            resourceGroupName,
+            family,
+            cancellationToken);
+
+        assessment.Findings.AddRange(stigFindings);
+
+        _logger.LogInformation(
+            "Family {Family} assessment complete: {NistFindings} NIST findings, {StigFindings} STIG findings",
+            family,
+            assessment.Findings.Count - stigFindings.Count,
+            stigFindings.Count);
 
         // Calculate family compliance score
         assessment.TotalControls = controls.Count;
@@ -1523,6 +1556,604 @@ public class AtoComplianceEngine : IAtoComplianceEngine
             "Consider automating recurring compliance checks"
         };
     }
+
+    #region STIG Validation Methods
+
+    /// <summary>
+    /// Validates STIGs for a specific control family
+    /// </summary>
+    private async Task<List<AtoFinding>> ValidateFamilyStigsAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        string family,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        // Get all STIGs mapped to this control family
+        var allStigs = await _stigKnowledgeService.GetAllStigsAsync(cancellationToken);
+        var familyStigs = allStigs.Where(s => 
+            s.NistControls != null && 
+            s.NistControls.Any(nc => nc.StartsWith(family, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
+
+        _logger.LogDebug("Found {Count} STIGs for control family {Family}", familyStigs.Count, family);
+
+        // Validate each STIG
+        foreach (var stig in familyStigs)
+        {
+            var stigFindings = await ValidateStigComplianceAsync(
+                subscriptionId,
+                resourceGroupName,
+                stig,
+                cancellationToken);
+            findings.AddRange(stigFindings);
+        }
+
+        return findings;
+    }
+
+    /// <summary>
+    /// Validates a specific STIG and returns findings
+    /// </summary>
+    private async Task<List<AtoFinding>> ValidateStigComplianceAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // Dispatch to specific validation method based on STIG service type
+        return stig.ServiceType switch
+        {
+            StigServiceType.Network => await ValidateNetworkStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            StigServiceType.Storage => await ValidateStorageStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            StigServiceType.Compute => await ValidateComputeStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            StigServiceType.Database => await ValidateDatabaseStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            StigServiceType.Identity => await ValidateIdentityStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            StigServiceType.Monitoring => await ValidateMonitoringStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            StigServiceType.Security => await ValidateSecurityStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            StigServiceType.Platform => await ValidatePlatformStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            StigServiceType.Integration => await ValidateIntegrationStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            StigServiceType.Containers => await ValidateContainerStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => new List<AtoFinding>()
+        };
+    }
+
+    private async Task<List<AtoFinding>> ValidateNetworkStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        return stig.StigId switch
+        {
+            "V-219187" => await ValidateNoPublicIpsStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219210" => await ValidateNsgDenyAllStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219235" => await ValidateAksPrivateClusterStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219240" => await ValidateAzureFirewallStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219245" => await ValidateStoragePrivateEndpointStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => findings
+        };
+    }
+
+    private async Task<List<AtoFinding>> ValidateStorageStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        return stig.StigId switch
+        {
+            "V-219165" => await ValidateStorageEncryptionStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219215" => await ValidateStoragePublicAccessStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219245" => await ValidateStoragePrivateEndpointStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => findings
+        };
+    }
+
+    private async Task<List<AtoFinding>> ValidateComputeStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        return stig.StigId switch
+        {
+            "V-219230" => await ValidateAksRbacStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219235" => await ValidateAksPrivateClusterStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219265" => await ValidateVmDiskEncryptionStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => findings
+        };
+    }
+
+    private async Task<List<AtoFinding>> ValidateDatabaseStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        return stig.StigId switch
+        {
+            "V-219201" => await ValidateSqlTlsStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219225" => await ValidateSqlTdeStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219255" => await ValidateSqlAtpStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219305" => await ValidateCosmosDbPrivateEndpointStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219310" => await ValidateCosmosDbCmkStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => findings
+        };
+    }
+
+    private async Task<List<AtoFinding>> ValidateIdentityStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        return stig.StigId switch
+        {
+            "V-219153" => await ValidateMfaStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219250" => await ValidateAzureAdPimStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219275" => await ValidateManagedIdentityStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => findings
+        };
+    }
+
+    private async Task<List<AtoFinding>> ValidateMonitoringStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        return stig.StigId switch
+        {
+            "V-219220" => await ValidateDiagnosticLogsStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219260" => await ValidateActivityLogRetentionStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => findings
+        };
+    }
+
+    private async Task<List<AtoFinding>> ValidateSecurityStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        return stig.StigId switch
+        {
+            "V-219178" => await ValidateKeyVaultStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219270" => await ValidateAzurePolicyStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219280" => await ValidateDefenderForCloudStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => findings
+        };
+    }
+
+    // Individual STIG validation implementations
+    private async Task<List<AtoFinding>> ValidateNoPublicIpsStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check for VMs with public IPs
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateNsgDenyAllStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Validate NSGs have deny-all inbound rules at lowest priority
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateStorageEncryptionStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check storage accounts have encryption at rest
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateStoragePublicAccessStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check storage accounts have public blob access disabled
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateDiagnosticLogsStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Validate diagnostic logs enabled on critical resources
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateSqlTlsStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check SQL databases enforce TLS 1.2+
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateSqlTdeStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Validate SQL databases have TDE enabled
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateAksRbacStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check AKS clusters use Azure RBAC
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateAksPrivateClusterStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Validate AKS clusters are private
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateAzureFirewallStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Azure Firewall is deployed for egress filtering
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateStoragePrivateEndpointStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Validate storage accounts use private endpoints
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateMfaStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Azure AD MFA is enabled for all users
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateAzureAdPimStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Validate Azure AD PIM is configured for privileged roles
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateSqlAtpStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check SQL Advanced Threat Protection is enabled
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateActivityLogRetentionStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Validate Activity Log retention is 365+ days
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateVmDiskEncryptionStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check VMs have disk encryption enabled
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateAzurePolicyStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Validate Azure Policy assignments are enforced
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateManagedIdentityStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check App Services use managed identities
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateDefenderForCloudStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Validate Defender for Cloud Standard tier is enabled
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateKeyVaultStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Key Vaults have required security settings
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidatePlatformStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        return stig.StigId switch
+        {
+            "V-219275" => await ValidateManagedIdentityStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219285" => await ValidateAppServiceHttpsStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219290" => await ValidateAppServiceTlsStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219315" => await ValidateFunctionAppHttpsStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219320" => await ValidateFunctionAppManagedIdentityStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => findings
+        };
+    }
+
+    private async Task<List<AtoFinding>> ValidateIntegrationStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        return stig.StigId switch
+        {
+            "V-219325" => await ValidateApimSubscriptionKeysStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219330" => await ValidateApimVnetStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219335" => await ValidateServiceBusPrivateEndpointStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219340" => await ValidateServiceBusCmkStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => findings
+        };
+    }
+
+    private async Task<List<AtoFinding>> ValidateContainerStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        var findings = new List<AtoFinding>();
+
+        return stig.StigId switch
+        {
+            "V-219230" => await ValidateAksRbacStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219235" => await ValidateAksPrivateClusterStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219295" => await ValidateAcrPrivateAccessStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            "V-219300" => await ValidateAcrVulnerabilityScanStigAsync(subscriptionId, resourceGroupName, stig, cancellationToken),
+            _ => findings
+        };
+    }
+
+    // New STIG validation methods for Platform services
+    private async Task<List<AtoFinding>> ValidateAppServiceHttpsStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check App Services have HTTPS only enabled
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateAppServiceTlsStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check App Services enforce TLS 1.2+
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateFunctionAppHttpsStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Function Apps have HTTPS only enabled
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateFunctionAppManagedIdentityStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Function Apps use managed identities
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    // New STIG validation methods for Integration services
+    private async Task<List<AtoFinding>> ValidateApimSubscriptionKeysStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check API Management requires subscription keys
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateApimVnetStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check API Management uses VNet integration
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateServiceBusPrivateEndpointStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Service Bus uses private endpoints
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateServiceBusCmkStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Service Bus uses customer-managed keys
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    // New STIG validation methods for Container services
+    private async Task<List<AtoFinding>> ValidateAcrPrivateAccessStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Container Registry disables public access
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateAcrVulnerabilityScanStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Container Registry has vulnerability scanning enabled
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    // Database STIG validation methods
+    private async Task<List<AtoFinding>> ValidateCosmosDbPrivateEndpointStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Cosmos DB uses private endpoints
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    private async Task<List<AtoFinding>> ValidateCosmosDbCmkStigAsync(
+        string subscriptionId,
+        string? resourceGroupName,
+        StigControl stig,
+        CancellationToken cancellationToken)
+    {
+        // TODO: Implement - Check Cosmos DB uses customer-managed keys
+        await Task.CompletedTask;
+        return new List<AtoFinding>();
+    }
+
+    #endregion
 
 
     #endregion

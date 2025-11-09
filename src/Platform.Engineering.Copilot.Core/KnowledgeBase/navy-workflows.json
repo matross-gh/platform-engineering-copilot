@@ -1,0 +1,452 @@
+{
+  "workflows": [
+    {
+      "workflowId": "WF-NAV-ATO-001",
+      "name": "Navy RMF ATO Process",
+      "description": "Standard Navy process for obtaining Authority to Operate (ATO) for information systems",
+      "organization": "Navy",
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": "Initiate RMF Process",
+          "description": "System owner initiates RMF process and assigns key personnel",
+          "responsibilities": [
+            "Identify system owner",
+            "Assign ISSO/ISSM",
+            "Identify Authorizing Official (AO)",
+            "Establish security team"
+          ],
+          "deliverables": [
+            "RMF kickoff meeting minutes",
+            "Team roster with roles",
+            "Initial schedule"
+          ],
+          "estimatedDuration": "1-2 weeks",
+          "prerequisites": []
+        },
+        {
+          "stepNumber": 2,
+          "title": "System Categorization (RMF Step 1)",
+          "description": "Conduct FIPS 199 analysis and determine system impact level",
+          "responsibilities": [
+            "Conduct impact analysis (CIA triad)",
+            "Determine FIPS 199 categorization",
+            "Define authorization boundary",
+            "Document categorization decision"
+          ],
+          "deliverables": [
+            "FIPS 199 categorization document",
+            "System identification",
+            "Authorization boundary diagram"
+          ],
+          "estimatedDuration": "2-4 weeks",
+          "prerequisites": ["RMF process initiated"]
+        },
+        {
+          "stepNumber": 3,
+          "title": "Security Control Selection (RMF Step 2)",
+          "description": "Select and tailor security controls based on categorization",
+          "responsibilities": [
+            "Select NIST 800-53 baseline",
+            "Apply DoD overlays and tailoring",
+            "Document control selection",
+            "Get AO approval on control set"
+          ],
+          "deliverables": [
+            "Security control baseline",
+            "Tailoring decisions documented",
+            "Initial System Security Plan (SSP)"
+          ],
+          "estimatedDuration": "3-6 weeks",
+          "prerequisites": ["Categorization complete and approved"]
+        },
+        {
+          "stepNumber": 4,
+          "title": "Security Control Implementation (RMF Step 3)",
+          "description": "Implement selected security controls and document implementation",
+          "responsibilities": [
+            "Implement technical controls",
+            "Implement administrative controls",
+            "Apply STIGs and security baselines",
+            "Document control implementation in SSP"
+          ],
+          "deliverables": [
+            "Implemented security controls",
+            "Complete System Security Plan (SSP)",
+            "STIG compliance documentation",
+            "Configuration baselines"
+          ],
+          "estimatedDuration": "8-16 weeks",
+          "prerequisites": ["Control selection approved"]
+        },
+        {
+          "stepNumber": 5,
+          "title": "Security Assessment (RMF Step 4)",
+          "description": "Independent assessment of security control effectiveness",
+          "responsibilities": [
+            "Develop Security Assessment Plan (SAP)",
+            "Conduct security control testing",
+            "Perform vulnerability scanning",
+            "Conduct penetration testing (if required)",
+            "Document findings in SAR"
+          ],
+          "deliverables": [
+            "Security Assessment Plan (SAP)",
+            "Security Assessment Report (SAR)",
+            "Vulnerability scan results",
+            "Penetration test report (if applicable)",
+            "Plan of Action & Milestones (POA&M)"
+          ],
+          "estimatedDuration": "6-12 weeks",
+          "prerequisites": ["Controls implemented", "SSP complete"]
+        },
+        {
+          "stepNumber": 6,
+          "title": "Authorization Package Preparation",
+          "description": "Compile complete authorization package for AO review",
+          "responsibilities": [
+            "Finalize all RMF documentation",
+            "Prepare executive summary",
+            "Address all assessment findings",
+            "Submit package to AO"
+          ],
+          "deliverables": [
+            "Complete authorization package",
+            "Executive summary for AO",
+            "Risk executive summary",
+            "All supporting documentation"
+          ],
+          "estimatedDuration": "2-4 weeks",
+          "prerequisites": ["Assessment complete"]
+        },
+        {
+          "stepNumber": 7,
+          "title": "Authorization Decision (RMF Step 5)",
+          "description": "AO reviews package and makes authorization decision",
+          "responsibilities": [
+            "AO reviews authorization package",
+            "Risk acceptance decision",
+            "Issue authorization decision memo",
+            "Define terms and conditions"
+          ],
+          "deliverables": [
+            "Authority to Operate (ATO) or Interim ATO (IATO)",
+            "Authorization decision memo",
+            "Terms and conditions",
+            "Approved POA&M with milestones"
+          ],
+          "estimatedDuration": "2-6 weeks",
+          "prerequisites": ["Authorization package submitted"]
+        },
+        {
+          "stepNumber": 8,
+          "title": "Continuous Monitoring (RMF Step 6)",
+          "description": "Ongoing monitoring and annual assessment",
+          "responsibilities": [
+            "Implement continuous monitoring",
+            "Track POA&M progress",
+            "Conduct annual assessments",
+            "Report security posture to AO",
+            "Maintain security documentation"
+          ],
+          "deliverables": [
+            "Monthly continuous monitoring reports",
+            "Quarterly POA&M updates",
+            "Annual assessment reports",
+            "Change request documentation"
+          ],
+          "estimatedDuration": "Ongoing throughout ATO period",
+          "prerequisites": ["ATO granted"]
+        }
+      ],
+      "requiredDocuments": [
+        "System Security Plan (SSP)",
+        "Security Assessment Plan (SAP)",
+        "Security Assessment Report (SAR)",
+        "Plan of Action & Milestones (POA&M)",
+        "Authorization Decision Memo",
+        "Continuous Monitoring Plan"
+      ],
+      "approvalAuthorities": [
+        "Authorizing Official (AO)",
+        "Senior Information Security Officer (SISO)",
+        "Navy CISO (for high-impact systems)"
+      ],
+      "impactLevel": "All levels (IL2-IL6)"
+    },
+    {
+      "workflowId": "WF-PMW-CLOUD-001",
+      "name": "PMW Cloud System Deployment",
+      "description": "Program Manager Warfare Systems (PMW) process for deploying cloud-based systems",
+      "organization": "PMW",
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": "Mission Needs Statement",
+          "description": "Define mission requirements and cloud solution approach",
+          "responsibilities": [
+            "Document mission requirements",
+            "Identify cloud services needed",
+            "Determine impact level",
+            "Get PMW approval"
+          ],
+          "deliverables": [
+            "Mission needs statement",
+            "Cloud service selection justification",
+            "Impact level determination"
+          ],
+          "estimatedDuration": "2-4 weeks",
+          "prerequisites": []
+        },
+        {
+          "stepNumber": 2,
+          "title": "Cloud Environment Request",
+          "description": "Request cloud environment from Navy cloud broker",
+          "responsibilities": [
+            "Submit cloud service request",
+            "Specify IL level and data classification",
+            "Identify required services (compute, storage, networking)",
+            "Define resource requirements"
+          ],
+          "deliverables": [
+            "Cloud service request form",
+            "Resource sizing estimate",
+            "Cost estimate"
+          ],
+          "estimatedDuration": "1-2 weeks",
+          "prerequisites": ["Mission needs approved"]
+        },
+        {
+          "stepNumber": 3,
+          "title": "Security Architecture Review",
+          "description": "Navy cyber security review of proposed architecture",
+          "responsibilities": [
+            "Submit architecture diagrams",
+            "Complete security questionnaire",
+            "Present to security review board",
+            "Address security concerns"
+          ],
+          "deliverables": [
+            "Architecture diagrams (network, data flow)",
+            "Security architecture document",
+            "Security review board approval"
+          ],
+          "estimatedDuration": "3-6 weeks",
+          "prerequisites": ["Cloud environment provisioned"]
+        },
+        {
+          "stepNumber": 4,
+          "title": "Implement Security Controls",
+          "description": "Implement Navy-mandated security controls",
+          "responsibilities": [
+            "Apply DoD/Navy STIGs",
+            "Implement IL-specific controls",
+            "Configure logging and monitoring",
+            "Integrate with Navy SOC"
+          ],
+          "deliverables": [
+            "STIG compliance documentation",
+            "Security control implementation evidence",
+            "SOC integration confirmation"
+          ],
+          "estimatedDuration": "4-8 weeks",
+          "prerequisites": ["Security architecture approved"]
+        },
+        {
+          "stepNumber": 5,
+          "title": "Initiate RMF Process",
+          "description": "Begin formal RMF authorization process",
+          "responsibilities": [
+            "Follow Navy RMF workflow (WF-NAV-ATO-001)",
+            "Prepare authorization package",
+            "Coordinate with ISSO/ISSM",
+            "Engage assessors"
+          ],
+          "deliverables": [
+            "See WF-NAV-ATO-001 deliverables"
+          ],
+          "estimatedDuration": "20-40 weeks",
+          "prerequisites": ["Security controls implemented"]
+        },
+        {
+          "stepNumber": 6,
+          "title": "Deployment and Operations",
+          "description": "Deploy application and transition to operations",
+          "responsibilities": [
+            "Deploy application to cloud",
+            "Conduct operational testing",
+            "Train operators and administrators",
+            "Transition to sustainment"
+          ],
+          "deliverables": [
+            "Deployment runbook",
+            "Operations manual",
+            "Training completion certificates",
+            "Sustainment plan"
+          ],
+          "estimatedDuration": "4-8 weeks",
+          "prerequisites": ["ATO granted"]
+        }
+      ],
+      "requiredDocuments": [
+        "Mission Needs Statement",
+        "Cloud Service Request",
+        "Security Architecture Document",
+        "All RMF documents (SSP, SAP, SAR, POA&M)",
+        "Operations Manual",
+        "Sustainment Plan"
+      ],
+      "approvalAuthorities": [
+        "PMW Director",
+        "Navy CISO",
+        "Authorizing Official",
+        "Cloud Service Broker"
+      ],
+      "impactLevel": "Typically IL4-IL6"
+    },
+    {
+      "workflowId": "WF-NAV-EMASS-001",
+      "name": "eMASS System Registration",
+      "description": "Process for registering and maintaining systems in Enterprise Mission Assurance Support Service (eMASS)",
+      "organization": "Navy",
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": "System Identification",
+          "description": "Identify system for eMASS registration",
+          "responsibilities": [
+            "Determine if system requires registration",
+            "Gather system information",
+            "Identify system owner and ISSO"
+          ],
+          "deliverables": [
+            "System information worksheet"
+          ],
+          "estimatedDuration": "1 week",
+          "prerequisites": []
+        },
+        {
+          "stepNumber": 2,
+          "title": "eMASS Account Setup",
+          "description": "Request eMASS accounts for system personnel",
+          "responsibilities": [
+            "Submit account requests for system owner, ISSO, ISSM",
+            "Complete eMASS training",
+            "Obtain eMASS credentials"
+          ],
+          "deliverables": [
+            "eMASS account credentials",
+            "Training completion certificates"
+          ],
+          "estimatedDuration": "1-2 weeks",
+          "prerequisites": ["System identified"]
+        },
+        {
+          "stepNumber": 3,
+          "title": "System Registration in eMASS",
+          "description": "Create system record in eMASS",
+          "responsibilities": [
+            "Create system entry in eMASS",
+            "Enter system metadata (name, description, impact level)",
+            "Define authorization boundary",
+            "Associate with organizational hierarchy"
+          ],
+          "deliverables": [
+            "eMASS system registration number"
+          ],
+          "estimatedDuration": "1 week",
+          "prerequisites": ["eMASS accounts active"]
+        },
+        {
+          "stepNumber": 4,
+          "title": "Upload RMF Artifacts",
+          "description": "Upload all RMF documentation to eMASS",
+          "responsibilities": [
+            "Upload SSP, SAP, SAR, POA&M",
+            "Enter control implementation statements",
+            "Upload test evidence",
+            "Maintain document version control"
+          ],
+          "deliverables": [
+            "Complete eMASS artifact repository"
+          ],
+          "estimatedDuration": "2-4 weeks",
+          "prerequisites": ["System registered", "RMF documents available"]
+        },
+        {
+          "stepNumber": 5,
+          "title": "Continuous Monitoring Updates",
+          "description": "Maintain eMASS records throughout system lifecycle",
+          "responsibilities": [
+            "Update POA&M monthly",
+            "Upload scan results",
+            "Update control status",
+            "Report significant changes"
+          ],
+          "deliverables": [
+            "Monthly eMASS updates",
+            "Quarterly status reports"
+          ],
+          "estimatedDuration": "Ongoing",
+          "prerequisites": ["System authorized", "Artifacts uploaded"]
+        }
+      ],
+      "requiredDocuments": [
+        "System Security Plan (SSP)",
+        "Security Assessment Plan (SAP)",
+        "Security Assessment Report (SAR)",
+        "Plan of Action & Milestones (POA&M)",
+        "Vulnerability scan results",
+        "Test evidence artifacts"
+      ],
+      "approvalAuthorities": [
+        "ISSO",
+        "Authorizing Official"
+      ],
+      "impactLevel": "All levels requiring ATO"
+    }
+  ],
+  "organizations": {
+    "PMW": {
+      "fullName": "Program Manager Warfare Systems",
+      "description": "Naval Sea Systems Command program offices responsible for warfare systems",
+      "examples": ["PMW-120", "PMW-130", "PMW-150", "PMW-160"],
+      "contact": "Via NAVSEA chain of command",
+      "responsibilities": [
+        "Weapon system acquisition and development",
+        "System integration",
+        "Fleet support and sustainment"
+      ]
+    },
+    "SPAWAR": {
+      "fullName": "Space and Naval Warfare Systems Command (Legacy)",
+      "description": "Now reorganized into NAVWAR - Naval Information Warfare Systems Command",
+      "currentName": "NAVWAR",
+      "responsibilities": [
+        "C4ISR systems",
+        "Information warfare",
+        "Cybersecurity"
+      ]
+    },
+    "NAVWAR": {
+      "fullName": "Naval Information Warfare Systems Command",
+      "description": "Develops, delivers, and sustains information warfare capabilities",
+      "contact": "https://www.navwar.navy.mil/",
+      "responsibilities": [
+        "Information warfare systems",
+        "Cybersecurity capabilities",
+        "Command and control systems"
+      ]
+    },
+    "NIWC": {
+      "fullName": "Naval Information Warfare Center",
+      "description": "Navy's technical authority for C4ISR, information warfare, and business systems",
+      "locations": ["NIWC Atlantic (Charleston)", "NIWC Pacific (San Diego)"],
+      "responsibilities": [
+        "Research and development",
+        "Systems engineering",
+        "Technical support"
+      ]
+    }
+  }
+}

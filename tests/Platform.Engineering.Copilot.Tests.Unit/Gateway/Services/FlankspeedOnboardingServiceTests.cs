@@ -20,22 +20,22 @@ using Xunit;
 namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
 {
     /// <summary>
-    /// Unit tests for FlankspeedOnboardingService
+    /// Unit tests for FlankspeedServiceCreationService
     /// Tests 4-step provisioning workflow: request management, approval, template generation, deployment
     /// </summary>
-    public class FlankspeedOnboardingServiceTests : IDisposable
+    public class FlankspeedServiceCreationServiceTests : IDisposable
     {
         private readonly PlatformEngineeringCopilotContext _context;
-        private readonly Mock<ILogger<FlankspeedOnboardingService>> _mockLogger;
+        private readonly Mock<ILogger<FlankspeedServiceCreationService>> _mockLogger;
         private readonly Mock<IEnvironmentManagementEngine> _mockEnvironmentEngine;
         private readonly Mock<ITemplateStorageService> _mockTemplateStorage;
         private readonly Mock<IEmailService> _mockEmailService;
         private readonly Mock<ISlackService> _mockSlackService;
         private readonly Mock<IDynamicTemplateGenerator> _mockTemplateGenerator;
         private readonly Mock<ITeamsNotificationService> _mockTeamsNotification;
-        private readonly FlankspeedOnboardingService _service;
+        private readonly FlankspeedServiceCreationService _service;
 
-        public FlankspeedOnboardingServiceTests()
+        public FlankspeedServiceCreationServiceTests()
         {
             // Use in-memory database for testing
             var options = new DbContextOptionsBuilder<PlatformEngineeringCopilotContext>()
@@ -43,7 +43,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
                 .Options;
             _context = new PlatformEngineeringCopilotContext(options);
 
-            _mockLogger = new Mock<ILogger<FlankspeedOnboardingService>>();
+            _mockLogger = new Mock<ILogger<FlankspeedServiceCreationService>>();
             _mockEnvironmentEngine = new Mock<IEnvironmentManagementEngine>();
             _mockTemplateStorage = new Mock<ITemplateStorageService>();
             _mockEmailService = new Mock<IEmailService>();
@@ -51,7 +51,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             _mockTemplateGenerator = new Mock<IDynamicTemplateGenerator>();
             _mockTeamsNotification = new Mock<ITeamsNotificationService>();
 
-            _service = new FlankspeedOnboardingService(
+            _service = new FlankspeedServiceCreationService(
                 _context,
                 _mockLogger.Object,
                 _mockEnvironmentEngine.Object,
@@ -79,9 +79,9 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             // Assert
             requestId.Should().NotBeNullOrEmpty();
             
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
             request.Should().NotBeNull();
-            request!.Status.Should().Be(OnboardingStatus.Draft);
+            request!.Status.Should().Be(ServiceCreationStatus.Draft);
             request.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
             request.LastUpdatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
         }
@@ -104,7 +104,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             // Assert
             result.Should().BeTrue();
             
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
             request!.MissionName.Should().Be("Test Mission");
             request.MissionOwner.Should().Be("John Doe");
             request.Command.Should().Be("COMNAVAIRLANT");
@@ -115,8 +115,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
-            request!.Status = OnboardingStatus.PendingReview;
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
+            request!.Status = ServiceCreationStatus.PendingReview;
             await _context.SaveChangesAsync();
 
             var updates = new Dictionary<string, object>
@@ -157,7 +157,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
             
             // Set all required fields for validation
             request!.MissionName = "Test Mission";
@@ -175,8 +175,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             // Assert
             result.Should().BeTrue();
             
-            var updatedRequest = await _context.OnboardingRequests.FindAsync(requestId);
-            updatedRequest!.Status.Should().Be(OnboardingStatus.PendingReview);
+            var updatedRequest = await _context.ServiceCreationRequests.FindAsync(requestId);
+            updatedRequest!.Status.Should().Be(ServiceCreationStatus.PendingReview);
         }
 
         [Fact]
@@ -184,8 +184,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
-            request!.Status = OnboardingStatus.PendingReview;
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
+            request!.Status = ServiceCreationStatus.PendingReview;
             await _context.SaveChangesAsync();
 
             // Act
@@ -247,26 +247,26 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             var request1 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
-                Status = OnboardingStatus.PendingReview,
+                Status = ServiceCreationStatus.PendingReview,
                 Priority = 1,
                 CreatedAt = DateTime.UtcNow
             };
             var request2 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
-                Status = OnboardingStatus.UnderReview,
+                Status = ServiceCreationStatus.UnderReview,
                 Priority = 2,
                 CreatedAt = DateTime.UtcNow
             };
             var request3 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
-                Status = OnboardingStatus.Approved,
+                Status = ServiceCreationStatus.Approved,
                 Priority = 3,
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _context.OnboardingRequests.AddRangeAsync(request1, request2, request3);
+            await _context.ServiceCreationRequests.AddRangeAsync(request1, request2, request3);
             await _context.SaveChangesAsync();
 
             // Act
@@ -286,19 +286,19 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             var request1 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
-                Status = OnboardingStatus.PendingReview,
+                Status = ServiceCreationStatus.PendingReview,
                 Priority = 1,
                 CreatedAt = DateTime.UtcNow.AddDays(-1)
             };
             var request2 = new ServiceCreationRequest
             {
                 Id = Guid.NewGuid().ToString(),
-                Status = OnboardingStatus.PendingReview,
+                Status = ServiceCreationStatus.PendingReview,
                 Priority = 2,
                 CreatedAt = DateTime.UtcNow.AddDays(-2)
             };
 
-            await _context.OnboardingRequests.AddRangeAsync(request1, request2);
+            await _context.ServiceCreationRequests.AddRangeAsync(request1, request2);
             await _context.SaveChangesAsync();
 
             // Act
@@ -328,7 +328,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _context.OnboardingRequests.AddRangeAsync(request1, request2);
+            await _context.ServiceCreationRequests.AddRangeAsync(request1, request2);
             await _context.SaveChangesAsync();
 
             // Act
@@ -356,8 +356,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             // Assert
             result.Should().BeTrue();
             
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
-            request!.Status.Should().Be(OnboardingStatus.Cancelled);
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
+            request!.Status.Should().Be(ServiceCreationStatus.Cancelled);
             request.RejectionReason.Should().Be(reason);
         }
 
@@ -366,8 +366,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
-            request!.Status = OnboardingStatus.Completed;
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
+            request!.Status = ServiceCreationStatus.Completed;
             await _context.SaveChangesAsync();
 
             // Act
@@ -399,8 +399,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
-            request!.Status = OnboardingStatus.PendingReview;
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
+            request!.Status = ServiceCreationStatus.PendingReview;
             request.MissionName = "Test Mission";
             request.MissionOwner = "John Doe";
             await _context.SaveChangesAsync();
@@ -410,7 +410,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
 
             // Mock Teams notification
             _mockTeamsNotification
-                .Setup(t => t.SendOnboardingApprovedNotificationAsync(
+                .Setup(t => t.SendServiceCreationApprovedNotificationAsync(
                     It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
                     It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
@@ -423,8 +423,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             result.Success.Should().BeTrue();
             result.JobId.Should().NotBeNullOrEmpty();
             
-            var updatedRequest = await _context.OnboardingRequests.FindAsync(requestId);
-            updatedRequest!.Status.Should().Be(OnboardingStatus.Provisioning);
+            var updatedRequest = await _context.ServiceCreationRequests.FindAsync(requestId);
+            updatedRequest!.Status.Should().Be(ServiceCreationStatus.Provisioning);
             updatedRequest.ApprovedBy.Should().Be(approvedBy);
             updatedRequest.ApprovalComments.Should().Be(comments);
             updatedRequest.ProvisioningJobId.Should().NotBeNullOrEmpty();
@@ -450,8 +450,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
-            request!.Status = OnboardingStatus.Completed;
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
+            request!.Status = ServiceCreationStatus.Completed;
             await _context.SaveChangesAsync();
 
             // Act
@@ -468,8 +468,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
-            request!.Status = OnboardingStatus.PendingReview;
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
+            request!.Status = ServiceCreationStatus.PendingReview;
             await _context.SaveChangesAsync();
 
             var rejectedBy = "admin@navy.mil";
@@ -481,8 +481,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             // Assert
             result.Should().BeTrue();
             
-            var updatedRequest = await _context.OnboardingRequests.FindAsync(requestId);
-            updatedRequest!.Status.Should().Be(OnboardingStatus.Rejected);
+            var updatedRequest = await _context.ServiceCreationRequests.FindAsync(requestId);
+            updatedRequest!.Status.Should().Be(ServiceCreationStatus.Rejected);
             updatedRequest.RejectedBy.Should().Be(rejectedBy);
             updatedRequest.RejectionReason.Should().Be(reason);
         }
@@ -496,14 +496,14 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
-            request!.Status = OnboardingStatus.PendingReview;
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
+            request!.Status = ServiceCreationStatus.PendingReview;
             request.MissionName = "Test Mission";
             request.MissionOwner = "John Doe";
             await _context.SaveChangesAsync();
 
             _mockTeamsNotification
-                .Setup(t => t.SendOnboardingApprovedNotificationAsync(
+                .Setup(t => t.SendServiceCreationApprovedNotificationAsync(
                     It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
                     It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
@@ -514,9 +514,9 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             // Assert
             result.JobId.Should().NotBeNullOrEmpty();
             
-            var updatedRequest = await _context.OnboardingRequests.FindAsync(requestId);
+            var updatedRequest = await _context.ServiceCreationRequests.FindAsync(requestId);
             updatedRequest!.ProvisioningJobId.Should().Be(result.JobId);
-            updatedRequest.Status.Should().Be(OnboardingStatus.Provisioning);
+            updatedRequest.Status.Should().Be(ServiceCreationStatus.Provisioning);
         }
 
         #endregion
@@ -528,7 +528,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
             // Set most fields but leave MissionName empty
             request!.MissionOwner = "John Doe";
             request.MissionOwnerEmail = "john.doe@navy.mil";
@@ -546,7 +546,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
             request!.MissionName = "Test Mission";
             request.MissionOwner = "John Doe";
             // Leave MissionOwnerEmail empty
@@ -568,7 +568,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var initialRequest = await _context.OnboardingRequests.FindAsync(requestId);
+            var initialRequest = await _context.ServiceCreationRequests.FindAsync(requestId);
             var initialTimestamp = initialRequest!.LastUpdatedAt;
 
             await Task.Delay(100); // Ensure timestamp difference
@@ -582,7 +582,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             await _service.UpdateDraftAsync(requestId, updates);
 
             // Assert
-            var updatedRequest = await _context.OnboardingRequests.FindAsync(requestId);
+            var updatedRequest = await _context.ServiceCreationRequests.FindAsync(requestId);
             updatedRequest!.LastUpdatedAt.Should().BeAfter(initialTimestamp);
         }
 
@@ -601,7 +601,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
 
             // Assert
             result.Should().BeTrue();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
             request!.MissionName.Should().Be("Test Mission");
         }
 
@@ -614,8 +614,8 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
         {
             // Arrange
             var requestId = await _service.CreateDraftRequestAsync();
-            var request = await _context.OnboardingRequests.FindAsync(requestId);
-            request!.Status = OnboardingStatus.PendingReview;
+            var request = await _context.ServiceCreationRequests.FindAsync(requestId);
+            request!.Status = ServiceCreationStatus.PendingReview;
             request.MissionName = "Test Mission";
             request.MissionOwner = "John Doe";
             request.Command = "COMNAVAIRLANT";
@@ -628,7 +628,7 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services
             await Task.Delay(100);
             
             _mockTeamsNotification.Verify(
-                t => t.SendOnboardingApprovedNotificationAsync(
+                t => t.SendServiceCreationApprovedNotificationAsync(
                     "Test Mission",
                     "John Doe",
                     "COMNAVAIRLANT",

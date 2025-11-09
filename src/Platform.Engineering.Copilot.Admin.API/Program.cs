@@ -6,19 +6,26 @@ using Platform.Engineering.Copilot.Core.Services.Azure.Cost;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Services.Validation.Validators;
 using Platform.Engineering.Copilot.Core.Services.Validation;
+using Platform.Engineering.Copilot.Core.Interfaces.Azure;
+using Platform.Engineering.Copilot.Core.Interfaces.Cost;
+using Platform.Engineering.Copilot.Core.Interfaces.Deployment;
+using Platform.Engineering.Copilot.Core.Interfaces.GitHub;
+using Platform.Engineering.Copilot.Core.Interfaces.ServiceCreation;
+using Platform.Engineering.Copilot.Core.Interfaces.Notifications;
+using Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
+using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
+using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
+using Platform.Engineering.Copilot.Compliance.Agent.Services.Governance;
+using Platform.Engineering.Copilot.Security.Agent.Extensions;
+using Platform.Engineering.Copilot.Environment.Agent.Services.Deployment;
+using Platform.Engineering.Copilot.Infrastructure.Core.Services;
 using Platform.Engineering.Copilot.Compliance.Core.Extensions;
-using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
 using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
 using Platform.Engineering.Copilot.Environment.Core.Extensions;
 using Platform.Engineering.Copilot.Discovery.Core.Extensions;
+using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
 using Platform.Engineering.Copilot.ServiceCreation.Core.Extensions;
-using Platform.Engineering.Copilot.Security.Core.Extensions;
 using Platform.Engineering.Copilot.Document.Core.Extensions;
-using Platform.Engineering.Copilot.Infrastructure.Core.Services;
-using Platform.Engineering.Copilot.Compliance.Core.Services.Compliance;
-using Platform.Engineering.Copilot.Compliance.Core.Interfaces;
-using Platform.Engineering.Copilot.Compliance.Core.Services.Governance;
-using Platform.Engineering.Copilot.Compliance.Core.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -111,13 +118,13 @@ builder.Services.AddScoped<IPredictiveScalingEngine, PredictiveScalingEngine>();
 builder.Services.AddScoped<EnvironmentStorageService>();
 
 // Deployment Orchestration Service
-builder.Services.AddScoped<IDeploymentOrchestrationService, Platform.Engineering.Copilot.Core.Services.Deployment.DeploymentOrchestrationService>();
+builder.Services.AddScoped<IDeploymentOrchestrationService, DeploymentOrchestrationService>();
 
 // Add services needed by EnvironmentManagementEngine
 builder.Services.AddScoped<IGitHubServices, Platform.Engineering.Copilot.Core.Services.GitHubGatewayService>();
 
 // Navy Flankspeed ServiceCreation Service
-builder.Services.AddScoped<IOnboardingService, Platform.Engineering.Copilot.Core.Services.ServiceCreation.FlankspeedOnboardingService>();
+builder.Services.AddScoped<IServiceCreationService, Platform.Engineering.Copilot.Core.Services.ServiceCreation.FlankspeedServiceCreationService>();
 
 // Notification Services (Phase 5)
 builder.Services.Configure<Platform.Engineering.Copilot.Core.Configuration.EmailConfiguration>(
@@ -125,9 +132,9 @@ builder.Services.Configure<Platform.Engineering.Copilot.Core.Configuration.Email
 builder.Services.Configure<Platform.Engineering.Copilot.Core.Configuration.SlackConfiguration>(
     builder.Configuration.GetSection("SlackNotifications"));
 builder.Services.AddHttpClient("SlackWebhook");
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.Notifications.IEmailService, 
+builder.Services.AddScoped<IEmailService, 
     Platform.Engineering.Copilot.Core.Services.Notifications.EmailService>();
-builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.Notifications.ISlackService, 
+builder.Services.AddScoped<ISlackService, 
     Platform.Engineering.Copilot.Core.Services.Notifications.SlackService>();
 
 // Teams Notification Service (Phase 4)
@@ -186,14 +193,14 @@ builder.Services.AddScoped<ITemplateAdminService, TemplateAdminService>();
 builder.Services.AddScoped<IAzurePricingService, AzurePricingService>();
 
 // Add domain-specific agents and plugins
-builder.Services.AddComplianceCore();
-builder.Services.AddInfrastructureCore();
-builder.Services.AddCostManagementCore();
-builder.Services.AddEnvironmentCore();
-builder.Services.AddDiscoveryCore();
-builder.Services.AddServiceCreationCore();
-builder.Services.AddSecurityCore();
-builder.Services.AddDocumentCore();
+builder.Services.AddComplianceAgent();
+builder.Services.AddInfrastructureAgent();
+builder.Services.AddCostManagementAgent();
+builder.Services.AddEnvironmentAgent();
+builder.Services.AddDiscoveryAgent();
+builder.Services.AddServiceCreationAgent();
+builder.Services.AddSecurityAgent();
+builder.Services.AddDocumentAgent();
 
 // NOTE: DeploymentPollingService removed - legacy service from Extensions project
 

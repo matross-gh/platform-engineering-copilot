@@ -22,21 +22,21 @@ appsettings.json              Program.cs                    OrchestratorAgent
 ===============              ==========                    =================
 {                            
   "EnabledAgents": {         if (IsEnabled("Infrastructure"))
-    "Infrastructure": true     ├─> AddInfrastructureCore()  
+    "Infrastructure": true     ├─> AddInfrastructureAgent()  
     "CostManagement": true     │   ├─> Register InfrastructureAgent
     "Environment": false   ────┼───│   └─> as ISpecializedAgent    ──┐
     "Discovery": true          │   │                                 │
   }                            │   └─> Register services             │
 }                              │                                     │
                                if (IsEnabled("CostManagement"))     │
-                                 ├─> AddCostManagementCore()        │
+                                 ├─> AddCostManagementAgent()        │
                                  │   └─> Register CostManagementAgent  ──> IEnumerable<ISpecializedAgent>
                                  │       as ISpecializedAgent        │    (Auto-injected into constructor)
                                if (IsEnabled("Environment"))        │    
                                  └─> [SKIPPED - disabled]           │    Only contains:
                                                                      │    • InfrastructureAgent
                                if (IsEnabled("Discovery"))          │    • CostManagementAgent  
-                                 └─> AddDiscoveryCore()             │    • DiscoveryAgent
+                                 └─> AddDiscoveryAgent()             │    • DiscoveryAgent
                                      └─> Register DiscoveryAgent ───┘
                                          as ISpecializedAgent
 ```

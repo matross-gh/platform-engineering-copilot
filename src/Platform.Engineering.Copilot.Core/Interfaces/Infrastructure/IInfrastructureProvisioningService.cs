@@ -38,12 +38,6 @@ public interface IInfrastructureProvisioningService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// List all resource groups in the subscription
-    /// </summary>
-    Task<List<string>> ListResourceGroupsAsync(
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Delete a resource group and all its resources
     /// </summary>
     Task<bool> DeleteResourceGroupAsync(

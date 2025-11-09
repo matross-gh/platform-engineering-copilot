@@ -1,0 +1,1162 @@
+{
+  "metadata": {
+    "version": "3.0",
+    "lastUpdated": "2025-11-09",
+    "totalStigs": 32,
+    "categories": [
+      "Identity",
+      "Network",
+      "Compute",
+      "Storage",
+      "Database",
+      "Monitoring",
+      "Security",
+      "Platform",
+      "Integration",
+      "Containers"
+    ],
+    "description": "Comprehensive Azure STIG knowledge base covering compute, network, storage, database, identity, monitoring, platform services, integration, and container services"
+  },
+  "stigControls": [
+    {
+      "stigId": "V-219153",
+      "vulnId": "SV-219153r879530_rule",
+      "ruleId": "SV-219153r879530_rule",
+      "title": "Azure AD authentication must use multi-factor authentication",
+      "description": "Multi-factor authentication (MFA) is required for all Azure AD privileged accounts to prevent unauthorized access. Without MFA, accounts are vulnerable to credential theft and brute force attacks.",
+      "severity": "High",
+      "checkText": "Verify that MFA is enabled for all privileged Azure AD accounts. Check Azure AD Security > Multi-Factor Authentication settings. If MFA is not enforced for privileged accounts, this is a finding.",
+      "fixText": "Enable MFA for all privileged Azure AD accounts: 1. Navigate to Azure AD > Security > Multi-Factor Authentication. 2. Select users with privileged roles. 3. Enable MFA and configure trusted devices. 4. Test MFA functionality.",
+      "nistControls": [
+        "IA-2(1)",
+        "IA-2(2)",
+        "IA-2(8)",
+        "AC-2"
+      ],
+      "cciRefs": [
+        "CCI-000765",
+        "CCI-001948",
+        "CCI-001953",
+        "CCI-001954"
+      ],
+      "category": "Identity and Access Management",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Identity",
+      "azureImplementation": {
+        "service": "Azure AD",
+        "configuration": "Conditional Access Policies, MFA Settings",
+        "azurePolicy": "Enable MFA for privileged accounts",
+        "automation": "az ad user update --id <user> --force-change-password-next-login true && Enable-AzureADMFA"
+      }
+    },
+    {
+      "stigId": "V-219187",
+      "vulnId": "SV-219187r879631_rule",
+      "ruleId": "SV-219187r879631_rule",
+      "title": "Azure VMs must not have public IP addresses assigned",
+      "description": "Virtual machines should not be directly accessible from the internet. Public IPs increase attack surface and violate boundary protection requirements for IL5/IL6 systems.",
+      "severity": "High",
+      "checkText": "Check all VMs for public IP assignments. Use Azure Policy or Azure Security Center to identify VMs with public IPs. If any production VMs have public IPs, this is a finding.",
+      "fixText": "Remove public IP addresses from VMs: 1. Use Azure Bastion or VPN for remote access. 2. Remove public IP association from VM network interface. 3. Configure NSG rules to deny inbound internet traffic. 4. Use Azure Firewall or Application Gateway for ingress.",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SC-7(3)",
+        "SC-7(5)"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314"
+      ],
+      "category": "Network Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Compute",
+      "azureImplementation": {
+        "service": "Azure Virtual Machines",
+        "configuration": "Network Interface, NSG, Azure Bastion",
+        "azurePolicy": "Deny public IP on VMs",
+        "automation": "az vm nic remove-public-ip --resource-group <rg> --vm-name <vm>"
+      }
+    },
+    {
+      "stigId": "V-219165",
+      "vulnId": "SV-219165r879587_rule",
+      "ruleId": "SV-219165r879587_rule",
+      "title": "Azure Storage accounts must use encryption at rest",
+      "description": "All Azure Storage accounts must use encryption at rest (SSE) with customer-managed keys or platform-managed keys. Data at rest must be encrypted to prevent unauthorized disclosure.",
+      "severity": "High",
+      "checkText": "Verify that all storage accounts have encryption enabled. Check Storage Account > Encryption settings. If encryption is not enabled or uses weak algorithms, this is a finding.",
+      "fixText": "Enable encryption at rest: 1. Navigate to Storage Account > Encryption. 2. Enable encryption with Microsoft-managed keys or customer-managed keys (CMK). 3. For IL5/IL6, use customer-managed keys in Azure Key Vault. 4. Rotate keys per DoD policy.",
+      "nistControls": [
+        "SC-28",
+        "SC-28(1)",
+        "SC-13"
+      ],
+      "cciRefs": [
+        "CCI-001350",
+        "CCI-002475"
+      ],
+      "category": "Data Protection",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Storage",
+      "azureImplementation": {
+        "service": "Azure Storage",
+        "configuration": "Storage Account Encryption, Key Vault",
+        "azurePolicy": "Require encryption at rest",
+        "automation": "az storage account update --name <account> --encryption-services blob file --encryption-key-source Microsoft.Keyvault"
+      }
+    },
+    {
+      "stigId": "V-219201",
+      "vulnId": "SV-219201r879733_rule",
+      "ruleId": "SV-219201r879733_rule",
+      "title": "Azure SQL Database must enforce TLS 1.2 or higher",
+      "description": "Azure SQL Database connections must use TLS 1.2 or higher to protect data in transit. Weak TLS versions (1.0, 1.1) are vulnerable to attacks.",
+      "severity": "Medium",
+      "checkText": "Check SQL Database connection security settings. Verify minimum TLS version is set to 1.2. If TLS 1.0 or 1.1 is allowed, this is a finding.",
+      "fixText": "Set minimum TLS version to 1.2: 1. Navigate to SQL Database > Connection strings. 2. Set Minimum TLS Version to 1.2. 3. Update connection strings in applications. 4. Test connectivity.",
+      "nistControls": [
+        "SC-8",
+        "SC-8(1)",
+        "SC-13"
+      ],
+      "cciRefs": [
+        "CCI-002418",
+        "CCI-002420",
+        "CCI-002421",
+        "CCI-002422"
+      ],
+      "category": "Transmission Security",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure SQL Database",
+        "configuration": "Connection Security, TLS Settings",
+        "azurePolicy": "Enforce TLS 1.2 minimum",
+        "automation": "az sql server update --resource-group <rg> --name <server> --minimal-tls-version 1.2"
+      },
+      "serviceType": "Database"
+    },
+    {
+      "stigId": "V-219178",
+      "vulnId": "SV-219178r879609_rule",
+      "ruleId": "SV-219178r879609_rule",
+      "title": "Azure Key Vault must have soft delete and purge protection enabled",
+      "description": "Azure Key Vault must have soft delete and purge protection to prevent accidental or malicious deletion of secrets, keys, and certificates.",
+      "severity": "Medium",
+      "checkText": "Check Key Vault properties for soft delete and purge protection. If either is disabled, this is a finding.",
+      "fixText": "Enable soft delete and purge protection: 1. Soft delete is enabled by default on new vaults. 2. Enable purge protection: az keyvault update --name <vault> --enable-purge-protection true. 3. Set retention period to 90 days minimum.",
+      "nistControls": [
+        "CP-9",
+        "CP-9(1)",
+        "AU-9"
+      ],
+      "cciRefs": [
+        "CCI-000537",
+        "CCI-001744"
+      ],
+      "category": "Security",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure Key Vault",
+        "configuration": "Soft Delete, Purge Protection",
+        "azurePolicy": "Require purge protection",
+        "automation": "az keyvault update --name <vault> --enable-soft-delete true --enable-purge-protection true"
+      },
+      "serviceType": "Security"
+    },
+    {
+      "stigId": "V-219210",
+      "vulnId": "SV-219210r879800_rule",
+      "ruleId": "SV-219210r879800_rule",
+      "title": "Network Security Groups must deny all inbound traffic by default",
+      "description": "NSGs must implement default-deny for all inbound traffic with explicit allow rules only for required services. This prevents unauthorized access and lateral movement.",
+      "severity": "High",
+      "checkText": "Review all NSG rules. Verify default deny-all inbound rule exists with lowest priority (highest number). If any NSG allows inbound 'Any' source to 'Any' destination, this is a finding.",
+      "fixText": "Configure NSG deny-all inbound: 1. Create rule 'DenyAllInbound' with priority 4096. 2. Set Source: Any, Destination: Any, Action: Deny. 3. Add explicit allow rules above it for required services. 4. Review and remove overly permissive rules.",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SC-7(5)",
+        "CM-7"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314"
+      ],
+      "category": "Network",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Network Security Group",
+        "configuration": "Inbound Security Rules",
+        "azurePolicy": "Deny all inbound by default",
+        "automation": "az network nsg rule create --nsg-name <nsg> --resource-group <rg> --name DenyAllInbound --priority 4096 --source-address-prefixes '*' --destination-address-prefixes '*' --access Deny --direction Inbound"
+      },
+      "serviceType": "Network"
+    },
+    {
+      "stigId": "V-219215",
+      "vulnId": "SV-219215r879850_rule",
+      "ruleId": "SV-219215r879850_rule",
+      "title": "Storage accounts must disable public blob access",
+      "description": "Azure Storage accounts must have public blob access disabled to prevent unauthorized data disclosure. Anonymous access violates DoD security policies.",
+      "severity": "High",
+      "checkText": "Check Storage Account > Configuration > Allow Blob public access. If enabled, this is a finding. Use Azure Policy to enforce at scale.",
+      "fixText": "Disable public blob access: 1. Navigate to Storage Account > Configuration. 2. Set 'Allow Blob public access' to Disabled. 3. Review existing containers for public access. 4. Use Azure Private Link for internal access.",
+      "nistControls": [
+        "AC-3",
+        "AC-6",
+        "SC-7"
+      ],
+      "cciRefs": [
+        "CCI-000213",
+        "CCI-002314"
+      ],
+      "category": "Storage",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure Storage",
+        "configuration": "Public Access Settings",
+        "azurePolicy": "Deny public blob access",
+        "automation": "az storage account update --name <account> --resource-group <rg> --allow-blob-public-access false"
+      },
+      "serviceType": "Storage"
+    },
+    {
+      "stigId": "V-219220",
+      "vulnId": "SV-219220r879900_rule",
+      "ruleId": "SV-219220r879900_rule",
+      "title": "Azure Monitor diagnostic logs must be enabled for all resources",
+      "description": "Diagnostic logging must be enabled for all Azure resources to support audit requirements and incident response. Logs must be sent to Log Analytics or Storage.",
+      "severity": "Medium",
+      "checkText": "Verify diagnostic settings are configured for all resources. Check Azure Monitor > Diagnostic Settings. If any resource lacks diagnostic logging, this is a finding.",
+      "fixText": "Enable diagnostic logs: 1. For each resource, navigate to Diagnostic Settings. 2. Create diagnostic setting. 3. Send to Log Analytics workspace. 4. Enable all log categories. 5. Set retention to 365 days minimum.",
+      "nistControls": [
+        "AU-2",
+        "AU-3",
+        "AU-6",
+        "AU-12"
+      ],
+      "cciRefs": [
+        "CCI-000130",
+        "CCI-000131",
+        "CCI-000132",
+        "CCI-000133"
+      ],
+      "category": "Monitoring",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure Monitor",
+        "configuration": "Diagnostic Settings",
+        "azurePolicy": "Require diagnostic logs",
+        "automation": "az monitor diagnostic-settings create --resource <resource-id> --workspace <workspace-id> --logs '[{\"category\":\"allLogs\",\"enabled\":true}]'"
+      },
+      "serviceType": "Monitoring"
+    },
+    {
+      "stigId": "V-219225",
+      "vulnId": "SV-219225r879950_rule",
+      "ruleId": "SV-219225r879950_rule",
+      "title": "Azure SQL Database must have Transparent Data Encryption enabled",
+      "description": "TDE must be enabled on all Azure SQL databases to encrypt data at rest. This protects against unauthorized access to database files and backups.",
+      "severity": "High",
+      "checkText": "Check each SQL database for TDE status. Navigate to SQL Database > Transparent data encryption. If TDE is not enabled, this is a finding.",
+      "fixText": "Enable TDE: 1. Navigate to SQL Database > Transparent data encryption. 2. Set Data encryption to ON. 3. For IL5/IL6, use customer-managed keys. 4. Verify backup encryption is enabled.",
+      "nistControls": [
+        "SC-28",
+        "SC-28(1)",
+        "SC-13"
+      ],
+      "cciRefs": [
+        "CCI-001350",
+        "CCI-002475"
+      ],
+      "category": "Database",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure SQL Database",
+        "configuration": "Transparent Data Encryption",
+        "azurePolicy": "Require TDE on SQL databases",
+        "automation": "az sql db tde set --resource-group <rg> --server <server> --database <db> --status Enabled"
+      },
+      "serviceType": "Database"
+    },
+    {
+      "stigId": "V-219230",
+      "vulnId": "SV-219230r880000_rule",
+      "ruleId": "SV-219230r880000_rule",
+      "title": "Azure Kubernetes Service must use Azure RBAC for authorization",
+      "description": "AKS clusters must use Azure RBAC integration for authorization. This provides centralized access control and audit logging for Kubernetes resources.",
+      "severity": "High",
+      "checkText": "Check AKS cluster configuration for Azure RBAC. Use 'az aks show' and verify enableAzureRBAC is true. If disabled, this is a finding.",
+      "fixText": "Enable Azure RBAC: 1. This must be set during cluster creation. 2. For existing clusters, recreate with --enable-azure-rbac flag. 3. Migrate RBAC policies. 4. Test access before production deployment.",
+      "nistControls": [
+        "AC-2",
+        "AC-3",
+        "AC-6",
+        "AU-2"
+      ],
+      "cciRefs": [
+        "CCI-000015",
+        "CCI-000213"
+      ],
+      "category": "Compute",
+      "stigFamily": "AKS STIG",
+      "azureImplementation": {
+        "service": "Azure Kubernetes Service",
+        "configuration": "Azure RBAC, AAD Integration",
+        "azurePolicy": "Require Azure RBAC on AKS",
+        "automation": "az aks create --enable-azure-rbac --enable-aad --aad-admin-group-object-ids <group-id>"
+      },
+      "serviceType": "Containers"
+    },
+    {
+      "stigId": "V-219235",
+      "vulnId": "SV-219235r880050_rule",
+      "ruleId": "SV-219235r880050_rule",
+      "title": "AKS clusters must use private clusters configuration",
+      "description": "AKS API server must not be publicly accessible. Private clusters keep the API server endpoint within the virtual network, preventing internet exposure.",
+      "severity": "Critical",
+      "checkText": "Verify AKS cluster is private. Check API server endpoint - should be private IP. If public IP is assigned, this is a finding.",
+      "fixText": "Create private AKS cluster: 1. Use --enable-private-cluster during creation. 2. Configure private endpoint. 3. Use Azure Bastion or VPN for kubectl access. 4. Never expose API server to internet.",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SC-7(3)",
+        "SC-7(5)"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314"
+      ],
+      "category": "Compute",
+      "stigFamily": "AKS STIG",
+      "azureImplementation": {
+        "service": "Azure Kubernetes Service",
+        "configuration": "Private Cluster, Private Endpoint",
+        "azurePolicy": "Require private AKS clusters",
+        "automation": "az aks create --enable-private-cluster --private-dns-zone <zone-id>"
+      },
+      "serviceType": "Containers"
+    },
+    {
+      "stigId": "V-219240",
+      "vulnId": "SV-219240r880100_rule",
+      "ruleId": "SV-219240r880100_rule",
+      "title": "Azure Firewall must be used for egress traffic filtering",
+      "description": "All egress traffic must flow through Azure Firewall for inspection and filtering. Direct internet egress from subnets violates boundary protection requirements.",
+      "severity": "High",
+      "checkText": "Verify all subnets route to Azure Firewall. Check route tables for 0.0.0.0/0 next hop to firewall. If any subnet has direct internet route, this is a finding.",
+      "fixText": "Configure Azure Firewall: 1. Deploy Azure Firewall in hub VNet. 2. Create route table with 0.0.0.0/0 -> Firewall IP. 3. Associate route table with all subnets. 4. Configure firewall rules (deny-all default).",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SI-3",
+        "SI-4"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314"
+      ],
+      "category": "Network",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure Firewall",
+        "configuration": "Firewall Rules, Route Tables",
+        "azurePolicy": "Require Azure Firewall for egress",
+        "automation": "az network route-table route create --route-table-name <rt> --resource-group <rg> --name default-route --address-prefix 0.0.0.0/0 --next-hop-type VirtualAppliance --next-hop-ip-address <firewall-ip>"
+      },
+      "serviceType": "Network"
+    },
+    {
+      "stigId": "V-219245",
+      "vulnId": "SV-219245r880150_rule",
+      "ruleId": "SV-219245r880150_rule",
+      "title": "Storage accounts must use private endpoints",
+      "description": "Storage accounts must use private endpoints to eliminate public internet exposure. Public endpoints increase attack surface and violate IL5/IL6 requirements.",
+      "severity": "High",
+      "checkText": "Check storage account networking. Verify private endpoint exists and public access is disabled. If public network access is enabled, this is a finding.",
+      "fixText": "Configure private endpoint: 1. Create private endpoint in VNet. 2. Disable public network access. 3. Update DNS to resolve to private IP. 4. Test connectivity from VNet.",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SC-7(3)"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314"
+      ],
+      "category": "Storage",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure Storage",
+        "configuration": "Private Endpoint, Network Rules",
+        "azurePolicy": "Require private endpoints on storage",
+        "automation": "az storage account update --name <account> --resource-group <rg> --default-action Deny && az network private-endpoint create --name <pe> --resource-group <rg> --vnet-name <vnet> --subnet <subnet> --private-connection-resource-id <storage-id> --connection-name <connection>"
+      },
+      "serviceType": "Storage"
+    },
+    {
+      "stigId": "V-219250",
+      "vulnId": "SV-219250r880200_rule",
+      "ruleId": "SV-219250r880200_rule",
+      "title": "Azure AD Privileged Identity Management must be enabled",
+      "description": "PIM must be enabled for all privileged roles to provide just-in-time access, approval workflows, and access reviews. Permanent privileged access violates least privilege.",
+      "severity": "High",
+      "checkText": "Verify PIM is enabled and configured. Check Azure AD > Privileged Identity Management. If privileged roles have permanent assignments without PIM, this is a finding.",
+      "fixText": "Enable PIM: 1. Enable Azure AD PIM in tenant. 2. Migrate permanent assignments to eligible. 3. Configure approval workflows. 4. Set maximum duration (8 hours). 5. Enable MFA for activation.",
+      "nistControls": [
+        "AC-2",
+        "AC-6",
+        "AC-6(1)",
+        "AC-6(2)"
+      ],
+      "cciRefs": [
+        "CCI-000015",
+        "CCI-002220"
+      ],
+      "category": "Identity",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure AD Privileged Identity Management",
+        "configuration": "Role Settings, Approval Workflows",
+        "azurePolicy": "Require PIM for privileged roles",
+        "automation": "# PIM requires Azure AD Premium P2 - configure via portal"
+      },
+      "serviceType": "Identity"
+    },
+    {
+      "stigId": "V-219255",
+      "vulnId": "SV-219255r880250_rule",
+      "ruleId": "SV-219255r880250_rule",
+      "title": "SQL databases must have Advanced Threat Protection enabled",
+      "description": "Advanced Threat Protection must be enabled on all SQL databases to detect anomalous activities and potential threats. This provides real-time security alerts.",
+      "severity": "Medium",
+      "checkText": "Check SQL database security settings. Verify Advanced Threat Protection is enabled. If disabled, this is a finding.",
+      "fixText": "Enable ATP: 1. Navigate to SQL Database > Security > Microsoft Defender for SQL. 2. Enable Advanced Threat Protection. 3. Configure email notifications. 4. Review alerts in Security Center.",
+      "nistControls": [
+        "SI-4",
+        "SI-4(2)",
+        "SI-4(5)",
+        "AU-6"
+      ],
+      "cciRefs": [
+        "CCI-001263",
+        "CCI-001312"
+      ],
+      "category": "Database",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure SQL Database",
+        "configuration": "Microsoft Defender for SQL",
+        "azurePolicy": "Require ATP on SQL databases",
+        "automation": "az security atp storage update --resource-group <rg> --storage-account <account> --is-enabled true"
+      },
+      "serviceType": "Database"
+    },
+    {
+      "stigId": "V-219260",
+      "vulnId": "SV-219260r880300_rule",
+      "ruleId": "SV-219260r880300_rule",
+      "title": "Activity logs must be retained for minimum 365 days",
+      "description": "Azure Activity Log retention must be set to 365 days minimum to meet DoD audit retention requirements. Logs must be exported to Storage or Log Analytics.",
+      "severity": "Medium",
+      "checkText": "Verify Activity Log export to Storage or Log Analytics. Check retention settings - must be 365 days minimum. If retention is less, this is a finding.",
+      "fixText": "Configure Activity Log retention: 1. Create diagnostic setting for subscription. 2. Send to Log Analytics workspace. 3. Set workspace retention to 365 days. 4. Enable archive to storage for long-term retention.",
+      "nistControls": [
+        "AU-11",
+        "AU-4",
+        "AU-9",
+        "AU-9(2)"
+      ],
+      "cciRefs": [
+        "CCI-000366",
+        "CCI-001849"
+      ],
+      "category": "Monitoring",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure Monitor",
+        "configuration": "Activity Log, Diagnostic Settings",
+        "azurePolicy": "Require 365-day log retention",
+        "automation": "az monitor diagnostic-settings subscription create --subscription <sub-id> --name <name> --workspace <workspace-id> --logs '[{\"category\":\"Administrative\",\"enabled\":true},{\"category\":\"Security\",\"enabled\":true}]'"
+      },
+      "serviceType": "Monitoring"
+    },
+    {
+      "stigId": "V-219265",
+      "vulnId": "SV-219265r880350_rule",
+      "ruleId": "SV-219265r880350_rule",
+      "title": "Virtual machines must use managed disks with encryption",
+      "description": "All VM disks must be managed disks with encryption at host or Azure Disk Encryption (ADE). Unencrypted disks violate data-at-rest encryption requirements.",
+      "severity": "High",
+      "checkText": "Check all VMs for disk encryption. Verify managed disks are encrypted (encryption at host or ADE). If any VM has unencrypted disks, this is a finding.",
+      "fixText": "Enable disk encryption: 1. For new VMs, use encryption at host. 2. For existing VMs, enable Azure Disk Encryption. 3. Store keys in Key Vault. 4. Enable key rotation policy.",
+      "nistControls": [
+        "SC-28",
+        "SC-28(1)",
+        "SC-13"
+      ],
+      "cciRefs": [
+        "CCI-001350",
+        "CCI-002475"
+      ],
+      "category": "Compute",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure Virtual Machines",
+        "configuration": "Managed Disks, Encryption at Host, ADE",
+        "azurePolicy": "Require disk encryption on VMs",
+        "automation": "az vm encryption enable --resource-group <rg> --name <vm> --disk-encryption-keyvault <vault>"
+      },
+      "serviceType": "Compute"
+    },
+    {
+      "stigId": "V-219270",
+      "vulnId": "SV-219270r880400_rule",
+      "ruleId": "SV-219270r880400_rule",
+      "title": "Azure Policy must be configured to enforce security baselines",
+      "description": "Azure Policy must be configured with security baselines (Azure Security Benchmark, DoD IL5 PAL) to automatically enforce compliance requirements.",
+      "severity": "Medium",
+      "checkText": "Check Azure Policy assignments. Verify security baseline initiatives are assigned at subscription or management group level. If no policy enforcement exists, this is a finding.",
+      "fixText": "Assign Azure Policy: 1. Navigate to Azure Policy. 2. Assign 'Azure Security Benchmark' initiative. 3. For IL5/IL6, assign DoD IL5 PAL. 4. Set enforcement mode to 'Default'. 5. Review non-compliant resources.",
+      "nistControls": [
+        "CM-6",
+        "CM-7",
+        "SI-2"
+      ],
+      "cciRefs": [
+        "CCI-000366",
+        "CCI-001812"
+      ],
+      "category": "Security",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure Policy",
+        "configuration": "Policy Assignments, Initiatives",
+        "azurePolicy": "Require policy enforcement",
+        "automation": "az policy assignment create --name <name> --scope /subscriptions/<sub-id> --policy-set-definition <initiative-id>"
+      },
+      "serviceType": "Other"
+    },
+    {
+      "stigId": "V-219275",
+      "vulnId": "SV-219275r880450_rule",
+      "ruleId": "SV-219275r880450_rule",
+      "title": "App Services must use managed identities for authentication",
+      "description": "App Services must use managed identities instead of connection strings or keys for authentication to Azure resources. This eliminates credential management risks.",
+      "severity": "Medium",
+      "checkText": "Check App Service identity settings. Verify managed identity is enabled. Review application code for hardcoded credentials. If credentials are used instead of managed identity, this is a finding.",
+      "fixText": "Enable managed identity: 1. Navigate to App Service > Identity. 2. Enable system-assigned identity. 3. Grant identity access to required resources. 4. Update application code to use DefaultAzureCredential. 5. Remove connection strings.",
+      "nistControls": [
+        "IA-5",
+        "IA-5(1)",
+        "SC-12",
+        "SC-13"
+      ],
+      "cciRefs": [
+        "CCI-000196",
+        "CCI-000197"
+      ],
+      "category": "Identity",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Azure App Service",
+        "configuration": "Managed Identity, RBAC",
+        "azurePolicy": "Require managed identity on App Services",
+        "automation": "az webapp identity assign --name <app> --resource-group <rg>"
+      },
+      "serviceType": "Platform"
+    },
+    {
+      "stigId": "V-219280",
+      "vulnId": "SV-219280r880500_rule",
+      "ruleId": "SV-219280r880500_rule",
+      "title": "Microsoft Defender for Cloud must be enabled with Standard tier",
+      "description": "Microsoft Defender for Cloud (formerly Security Center) must be enabled at Standard tier for all subscriptions to provide advanced threat detection and security recommendations.",
+      "severity": "Medium",
+      "checkText": "Check Defender for Cloud pricing tier. Verify Standard tier is enabled for all resource types. If Free tier is used, this is a finding.",
+      "fixText": "Enable Defender for Cloud Standard: 1. Navigate to Microsoft Defender for Cloud. 2. Go to Environment Settings. 3. Select subscription. 4. Enable Standard tier for all resource types. 5. Configure email notifications.",
+      "nistControls": [
+        "SI-4",
+        "SI-4(2)",
+        "RA-5",
+        "SI-3"
+      ],
+      "cciRefs": [
+        "CCI-001263",
+        "CCI-001312"
+      ],
+      "category": "Security",
+      "stigFamily": "Azure STIG",
+      "azureImplementation": {
+        "service": "Microsoft Defender for Cloud",
+        "configuration": "Pricing Tier, Resource Protection",
+        "azurePolicy": "Require Defender for Cloud Standard",
+        "automation": "az security pricing create --name VirtualMachines --tier Standard"
+      },
+      "serviceType": "Security"
+    },
+    {
+      "stigId": "V-219285",
+      "vulnId": "SV-219285r880550_rule",
+      "ruleId": "SV-219285r880550_rule",
+      "title": "App Service must use HTTPS only",
+      "description": "Azure App Service must be configured to use HTTPS only to ensure all communications are encrypted. HTTP traffic must be redirected to HTTPS.",
+      "severity": "High",
+      "checkText": "Check App Service configuration. Verify HTTPS Only is enabled. If HTTP traffic is allowed, this is a finding.",
+      "fixText": "Enable HTTPS Only: 1. Navigate to App Service > TLS/SSL settings. 2. Set HTTPS Only to On. 3. Configure custom domain with SSL certificate. 4. Test application access.",
+      "nistControls": [
+        "SC-8",
+        "SC-8(1)",
+        "SC-13"
+      ],
+      "cciRefs": [
+        "CCI-002418",
+        "CCI-002420",
+        "CCI-002421",
+        "CCI-002422"
+      ],
+      "category": "Transmission Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Platform",
+      "azureImplementation": {
+        "service": "Azure App Service",
+        "configuration": "TLS/SSL Settings",
+        "azurePolicy": "Require HTTPS on App Service",
+        "automation": "az webapp update --resource-group <rg> --name <app> --set httpsOnly=true"
+      }
+    },
+    {
+      "stigId": "V-219290",
+      "vulnId": "SV-219290r880600_rule",
+      "ruleId": "SV-219290r880600_rule",
+      "title": "App Service must use latest TLS version (1.2 or higher)",
+      "description": "App Service must enforce TLS 1.2 or higher for all connections. Older TLS versions (1.0, 1.1) have known vulnerabilities.",
+      "severity": "Medium",
+      "checkText": "Check App Service TLS version. Verify minimum TLS version is set to 1.2. If TLS 1.0 or 1.1 is allowed, this is a finding.",
+      "fixText": "Set minimum TLS version: 1. Navigate to App Service > TLS/SSL settings. 2. Set Minimum TLS Version to 1.2. 3. Update application to support TLS 1.2+. 4. Test connectivity.",
+      "nistControls": [
+        "SC-8",
+        "SC-8(1)",
+        "SC-13"
+      ],
+      "cciRefs": [
+        "CCI-002418",
+        "CCI-002420"
+      ],
+      "category": "Transmission Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Platform",
+      "azureImplementation": {
+        "service": "Azure App Service",
+        "configuration": "TLS/SSL Settings",
+        "azurePolicy": "Enforce TLS 1.2 minimum on App Service",
+        "automation": "az webapp config set --resource-group <rg> --name <app> --min-tls-version 1.2"
+      }
+    },
+    {
+      "stigId": "V-219295",
+      "vulnId": "SV-219295r880650_rule",
+      "ruleId": "SV-219295r880650_rule",
+      "title": "Container Registry must disable public network access",
+      "description": "Azure Container Registry must disable public network access and use private endpoints only. Public access increases attack surface for container images.",
+      "severity": "High",
+      "checkText": "Check Container Registry networking. Verify public network access is disabled and private endpoint exists. If public access is enabled, this is a finding.",
+      "fixText": "Disable public access: 1. Navigate to Container Registry > Networking. 2. Disable public network access. 3. Create private endpoint in VNet. 4. Update Docker/container configurations.",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SC-7(3)"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314"
+      ],
+      "category": "Network Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Containers",
+      "azureImplementation": {
+        "service": "Azure Container Registry",
+        "configuration": "Network Rules, Private Endpoint",
+        "azurePolicy": "Require private endpoint on ACR",
+        "automation": "az acr update --name <registry> --public-network-enabled false && az network private-endpoint create --name <pe> --resource-group <rg> --vnet-name <vnet> --subnet <subnet> --private-connection-resource-id <acr-id> --connection-name <connection>"
+      }
+    },
+    {
+      "stigId": "V-219300",
+      "vulnId": "SV-219300r880700_rule",
+      "ruleId": "SV-219300r880700_rule",
+      "title": "Container Registry must enable vulnerability scanning",
+      "description": "Azure Container Registry must have Microsoft Defender for Containers enabled to scan images for vulnerabilities before deployment.",
+      "severity": "Medium",
+      "checkText": "Verify Defender for Containers is enabled for the registry. Check for automated vulnerability scans. If scanning is disabled, this is a finding.",
+      "fixText": "Enable Defender for Containers: 1. Navigate to Microsoft Defender for Cloud. 2. Enable Defender for Containers. 3. Configure scan policies. 4. Review scan results.",
+      "nistControls": [
+        "SI-2",
+        "SI-3",
+        "RA-5"
+      ],
+      "cciRefs": [
+        "CCI-001233",
+        "CCI-001263"
+      ],
+      "category": "Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Containers",
+      "azureImplementation": {
+        "service": "Azure Container Registry",
+        "configuration": "Microsoft Defender for Containers",
+        "azurePolicy": "Require Defender for Containers",
+        "automation": "az security pricing create --name Containers --tier Standard"
+      }
+    },
+    {
+      "stigId": "V-219305",
+      "vulnId": "SV-219305r880750_rule",
+      "ruleId": "SV-219305r880750_rule",
+      "title": "Cosmos DB must use private endpoints",
+      "description": "Azure Cosmos DB accounts must use private endpoints to eliminate public internet exposure. Public endpoints violate boundary protection requirements.",
+      "severity": "High",
+      "checkText": "Check Cosmos DB networking. Verify private endpoint exists and public network access is disabled. If public access is enabled, this is a finding.",
+      "fixText": "Configure private endpoint: 1. Navigate to Cosmos DB > Networking. 2. Disable public network access. 3. Create private endpoint in VNet. 4. Update connection strings.",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SC-7(3)"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314"
+      ],
+      "category": "Network Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Database",
+      "azureImplementation": {
+        "service": "Azure Cosmos DB",
+        "configuration": "Private Endpoint, Firewall Rules",
+        "azurePolicy": "Require private endpoint on Cosmos DB",
+        "automation": "az cosmosdb update --name <account> --resource-group <rg> --enable-public-network false && az network private-endpoint create --name <pe> --resource-group <rg> --vnet-name <vnet> --subnet <subnet> --private-connection-resource-id <cosmos-id> --connection-name <connection> --group-ids Sql"
+      }
+    },
+    {
+      "stigId": "V-219310",
+      "vulnId": "SV-219310r880800_rule",
+      "ruleId": "SV-219310r880800_rule",
+      "title": "Cosmos DB must use customer-managed keys for encryption",
+      "description": "Cosmos DB must use customer-managed keys (CMK) in Azure Key Vault for data encryption. This provides additional control over encryption keys.",
+      "severity": "Medium",
+      "checkText": "Check Cosmos DB encryption settings. Verify customer-managed keys are configured. If platform-managed keys are used for IL5/IL6, this is a finding.",
+      "fixText": "Enable CMK encryption: 1. Create keys in Azure Key Vault. 2. Grant Cosmos DB access to Key Vault. 3. Configure Cosmos DB to use CMK. 4. Test data access.",
+      "nistControls": [
+        "SC-28",
+        "SC-28(1)",
+        "SC-12",
+        "SC-13"
+      ],
+      "cciRefs": [
+        "CCI-001350",
+        "CCI-002475"
+      ],
+      "category": "Data Protection",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Database",
+      "azureImplementation": {
+        "service": "Azure Cosmos DB",
+        "configuration": "Encryption, Key Vault",
+        "azurePolicy": "Require CMK on Cosmos DB",
+        "automation": "# Must be configured during account creation: az cosmosdb create --key-uri <key-vault-key-uri>"
+      }
+    },
+    {
+      "stigId": "V-219315",
+      "vulnId": "SV-219315r880850_rule",
+      "ruleId": "SV-219315r880850_rule",
+      "title": "Azure Functions must disable HTTP (use HTTPS only)",
+      "description": "Azure Functions must be configured for HTTPS only. All function HTTP triggers must enforce HTTPS to protect data in transit.",
+      "severity": "High",
+      "checkText": "Check Function App configuration. Verify HTTPS Only is enabled. If HTTP traffic is allowed, this is a finding.",
+      "fixText": "Enable HTTPS Only: 1. Navigate to Function App > TLS/SSL settings. 2. Set HTTPS Only to On. 3. Update function URLs to HTTPS. 4. Test function invocations.",
+      "nistControls": [
+        "SC-8",
+        "SC-8(1)",
+        "SC-13"
+      ],
+      "cciRefs": [
+        "CCI-002418",
+        "CCI-002420"
+      ],
+      "category": "Transmission Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Platform",
+      "azureImplementation": {
+        "service": "Azure Functions",
+        "configuration": "TLS/SSL Settings",
+        "azurePolicy": "Require HTTPS on Function Apps",
+        "automation": "az functionapp update --resource-group <rg> --name <func> --set httpsOnly=true"
+      }
+    },
+    {
+      "stigId": "V-219320",
+      "vulnId": "SV-219320r880900_rule",
+      "ruleId": "SV-219320r880900_rule",
+      "title": "Azure Functions must use managed identity for authentication",
+      "description": "Functions must use managed identities instead of connection strings or keys for authentication to Azure resources.",
+      "severity": "Medium",
+      "checkText": "Check Function App identity settings. Verify managed identity is enabled. Review function code for hardcoded credentials. If credentials are used, this is a finding.",
+      "fixText": "Enable managed identity: 1. Navigate to Function App > Identity. 2. Enable system-assigned identity. 3. Grant identity access to required resources. 4. Update function code to use managed identity.",
+      "nistControls": [
+        "IA-5",
+        "IA-5(1)",
+        "SC-12"
+      ],
+      "cciRefs": [
+        "CCI-000196",
+        "CCI-000197"
+      ],
+      "category": "Identity",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Platform",
+      "azureImplementation": {
+        "service": "Azure Functions",
+        "configuration": "Managed Identity, RBAC",
+        "azurePolicy": "Require managed identity on Functions",
+        "automation": "az functionapp identity assign --name <func> --resource-group <rg>"
+      }
+    },
+    {
+      "stigId": "V-219325",
+      "vulnId": "SV-219325r880950_rule",
+      "ruleId": "SV-219325r880950_rule",
+      "title": "API Management must use subscription keys for API access control",
+      "description": "API Management must require subscription keys for all API operations. Anonymous access must be disabled.",
+      "severity": "High",
+      "checkText": "Check API Management subscription settings. Verify subscription keys are required for all APIs. If anonymous access is allowed, this is a finding.",
+      "fixText": "Enforce subscription keys: 1. Navigate to API Management > Subscriptions. 2. Ensure all APIs require subscriptions. 3. Disable anonymous access. 4. Configure key rotation policies.",
+      "nistControls": [
+        "AC-3",
+        "AC-6",
+        "IA-5"
+      ],
+      "cciRefs": [
+        "CCI-000213",
+        "CCI-002220"
+      ],
+      "category": "Access Control",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Integration",
+      "azureImplementation": {
+        "service": "Azure API Management",
+        "configuration": "Subscription Settings, API Policies",
+        "azurePolicy": "Require subscription keys on APIM",
+        "automation": "# Configure via API policies: <validate-subscription-key />"
+      }
+    },
+    {
+      "stigId": "V-219330",
+      "vulnId": "SV-219330r881000_rule",
+      "ruleId": "SV-219330r881000_rule",
+      "title": "API Management must use virtual network integration",
+      "description": "API Management must be deployed in internal virtual network mode to prevent public internet exposure of backend APIs.",
+      "severity": "High",
+      "checkText": "Check API Management networking. Verify VNet integration is configured in internal mode. If external mode or no VNet integration, this is a finding.",
+      "fixText": "Configure VNet integration: 1. Create dedicated subnet for APIM. 2. Configure APIM for internal VNet mode. 3. Configure custom DNS. 4. Update network security groups.",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SC-7(3)"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314"
+      ],
+      "category": "Network Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Integration",
+      "azureImplementation": {
+        "service": "Azure API Management",
+        "configuration": "Virtual Network Integration",
+        "azurePolicy": "Require VNet integration on APIM",
+        "automation": "az apim update --name <apim> --resource-group <rg> --virtual-network Internal --virtual-network-configuration <vnet-config>"
+      }
+    },
+    {
+      "stigId": "V-219335",
+      "vulnId": "SV-219335r881050_rule",
+      "ruleId": "SV-219335r881050_rule",
+      "title": "Service Bus must disable public network access",
+      "description": "Azure Service Bus namespaces must disable public network access and use private endpoints only.",
+      "severity": "High",
+      "checkText": "Check Service Bus networking. Verify public network access is disabled and private endpoint exists. If public access is enabled, this is a finding.",
+      "fixText": "Disable public access: 1. Navigate to Service Bus > Networking. 2. Disable public network access. 3. Create private endpoint in VNet. 4. Update connection strings.",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SC-7(3)"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314"
+      ],
+      "category": "Network Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Integration",
+      "azureImplementation": {
+        "service": "Azure Service Bus",
+        "configuration": "Private Endpoint, Network Rules",
+        "azurePolicy": "Require private endpoint on Service Bus",
+        "automation": "az servicebus namespace update --name <namespace> --resource-group <rg> --public-network-access Disabled && az network private-endpoint create --name <pe> --resource-group <rg> --vnet-name <vnet> --subnet <subnet> --private-connection-resource-id <sb-id> --connection-name <connection> --group-ids namespace"
+      }
+    },
+    {
+      "stigId": "V-219340",
+      "vulnId": "SV-219340r881100_rule",
+      "ruleId": "SV-219340r881100_rule",
+      "title": "Service Bus must use customer-managed keys for encryption",
+      "description": "Service Bus must use customer-managed keys (CMK) in Azure Key Vault for encryption at rest. Premium tier is required for CMK support.",
+      "severity": "Medium",
+      "checkText": "Check Service Bus encryption settings. Verify customer-managed keys are configured. If platform-managed keys are used for IL5/IL6, this is a finding.",
+      "fixText": "Enable CMK encryption: 1. Upgrade to Premium tier if needed. 2. Create keys in Azure Key Vault. 3. Grant Service Bus access to Key Vault. 4. Configure CMK encryption.",
+      "nistControls": [
+        "SC-28",
+        "SC-28(1)",
+        "SC-12",
+        "SC-13"
+      ],
+      "cciRefs": [
+        "CCI-001350",
+        "CCI-002475"
+      ],
+      "category": "Data Protection",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Integration",
+      "azureImplementation": {
+        "service": "Azure Service Bus",
+        "configuration": "Encryption, Key Vault",
+        "azurePolicy": "Require CMK on Service Bus",
+        "automation": "az servicebus namespace encryption create --namespace-name <namespace> --resource-group <rg> --encryption-config key-name=<key> key-vault-uri=<uri>"
+      }
+    }
+  ],
+  "stigFamilies": [
+    {
+      "family": "Azure STIG",
+      "version": "V1R1",
+      "releaseDate": "2024-01-26",
+      "description": "Security Technical Implementation Guide for Microsoft Azure Cloud Services",
+      "scope": "Applies to all Azure services used in DoD environments",
+      "url": "https://public.cyber.mil/stigs/downloads/"
+    },
+    {
+      "family": "Azure Kubernetes Service (AKS) STIG",
+      "version": "V1R1",
+      "releaseDate": "2023-09-27",
+      "description": "STIG for Azure Kubernetes Service container orchestration",
+      "scope": "AKS clusters in DoD environments",
+      "url": "https://public.cyber.mil/stigs/downloads/"
+    }
+  ],
+  "controlMappings": [
+    {
+      "nistControlId": "IA-2(1)",
+      "stigIds": [
+        "V-219153"
+      ],
+      "cciIds": [
+        "CCI-000765"
+      ],
+      "dodInstructions": [
+        "DoD 8500.01",
+        "DoDI 8520.02"
+      ],
+      "description": "Multi-factor authentication for network access to privileged accounts",
+      "implementationGuidance": {
+        "azure": "Use Azure AD Conditional Access to enforce MFA for privileged roles",
+        "il5": "Require hardware tokens or CAC/PIV for IL5 environments",
+        "il6": "Mandatory CAC/PIV authentication for all IL6 privileged access"
+      }
+    },
+    {
+      "nistControlId": "SC-28(1)",
+      "stigIds": [
+        "V-219165",
+        "V-219225",
+        "V-219265"
+      ],
+      "cciIds": [
+        "CCI-001350"
+      ],
+      "dodInstructions": [
+        "DoD 8500.01"
+      ],
+      "description": "Cryptographic protection for information at rest",
+      "implementationGuidance": {
+        "azure": "Enable SSE with customer-managed keys in Key Vault, TDE on SQL, disk encryption on VMs",
+        "il5": "Use FIPS 140-2 validated encryption modules",
+        "il6": "Require NSA-approved cryptography (Suite B)"
+      }
+    },
+    {
+      "nistControlId": "AC-4",
+      "stigIds": [
+        "V-219187",
+        "V-219210",
+        "V-219235",
+        "V-219240",
+        "V-219245"
+      ],
+      "cciIds": [
+        "CCI-001414"
+      ],
+      "dodInstructions": [
+        "DoD 8500.01",
+        "CNSSI 1253"
+      ],
+      "description": "Information flow enforcement",
+      "implementationGuidance": {
+        "azure": "Use NSGs, Azure Firewall, private endpoints, and private clusters",
+        "il5": "Deny all inbound internet traffic, whitelist-based egress",
+        "il6": "Complete network isolation, dedicated circuits only"
+      }
+    },
+    {
+      "nistControlId": "SC-7",
+      "stigIds": [
+        "V-219187",
+        "V-219210",
+        "V-219215",
+        "V-219235",
+        "V-219240",
+        "V-219245"
+      ],
+      "cciIds": [
+        "CCI-002314"
+      ],
+      "dodInstructions": [
+        "DoD 8500.01"
+      ],
+      "description": "Boundary protection",
+      "implementationGuidance": {
+        "azure": "Implement defense-in-depth with NSGs, Azure Firewall, private endpoints, no public IPs",
+        "il5": "Mandatory private endpoints for all PaaS services",
+        "il6": "Complete isolation from public internet"
+      }
+    },
+    {
+      "nistControlId": "AU-2",
+      "stigIds": [
+        "V-219220",
+        "V-219260"
+      ],
+      "cciIds": [
+        "CCI-000130",
+        "CCI-000131"
+      ],
+      "dodInstructions": [
+        "DoD 8500.01"
+      ],
+      "description": "Audit events",
+      "implementationGuidance": {
+        "azure": "Enable diagnostic logs on all resources, Activity Log export to Log Analytics",
+        "il5": "365-day retention minimum, real-time SIEM integration",
+        "il6": "Immutable logs, 730-day retention"
+      }
+    },
+    {
+      "nistControlId": "SI-4",
+      "stigIds": [
+        "V-219255",
+        "V-219280"
+      ],
+      "cciIds": [
+        "CCI-001263",
+        "CCI-001312"
+      ],
+      "dodInstructions": [
+        "DoD 8500.01"
+      ],
+      "description": "Information system monitoring",
+      "implementationGuidance": {
+        "azure": "Enable Advanced Threat Protection, Microsoft Defender for Cloud Standard tier",
+        "il5": "Real-time threat detection, automated response",
+        "il6": "Continuous monitoring, 24/7 SOC integration"
+      }
+    },
+    {
+      "nistControlId": "AC-2",
+      "stigIds": [
+        "V-219153",
+        "V-219230",
+        "V-219250"
+      ],
+      "cciIds": [
+        "CCI-000015"
+      ],
+      "dodInstructions": [
+        "DoD 8500.01"
+      ],
+      "description": "Account management",
+      "implementationGuidance": {
+        "azure": "Use Azure AD with MFA, PIM for privileged access, Azure RBAC on AKS",
+        "il5": "Just-in-time access, approval workflows",
+        "il6": "CAC/PIV mandatory, continuous access evaluation"
+      }
+    },
+    {
+      "nistControlId": "AC-6",
+      "stigIds": [
+        "V-219215",
+        "V-219250"
+      ],
+      "cciIds": [
+        "CCI-002220"
+      ],
+      "dodInstructions": [
+        "DoD 8500.01"
+      ],
+      "description": "Least privilege",
+      "implementationGuidance": {
+        "azure": "Use PIM for privileged access, deny public access by default",
+        "il5": "Role-based access control, zero standing privileges",
+        "il6": "Privileged access workstations (PAWs) required"
+      }
+    },
+    {
+      "nistControlId": "CM-6",
+      "stigIds": [
+        "V-219270"
+      ],
+      "cciIds": [
+        "CCI-000366"
+      ],
+      "dodInstructions": [
+        "DoD 8500.01"
+      ],
+      "description": "Configuration settings",
+      "implementationGuidance": {
+        "azure": "Use Azure Policy to enforce security baselines (ASB, DoD IL5 PAL)",
+        "il5": "Automated compliance enforcement via Azure Policy",
+        "il6": "Continuous compliance monitoring, drift detection"
+      }
+    },
+    {
+      "nistControlId": "IA-5",
+      "stigIds": [
+        "V-219275"
+      ],
+      "cciIds": [
+        "CCI-000196",
+        "CCI-000197"
+      ],
+      "dodInstructions": [
+        "DoD 8500.01",
+        "DoDI 8520.02"
+      ],
+      "description": "Authenticator management",
+      "implementationGuidance": {
+        "azure": "Use managed identities, eliminate connection strings and keys",
+        "il5": "Centralized identity management, automated credential rotation",
+        "il6": "Hardware security modules (HSM) for key management"
+      }
+    }
+  ]
+}

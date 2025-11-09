@@ -10,7 +10,7 @@ namespace Platform.Engineering.Copilot.CostManagement.Core.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddCostManagementCore(this IServiceCollection services)
+    public static IServiceCollection AddCostManagementAgent(this IServiceCollection services)
     {
         // Register Cost Management Agent and Plugin
         services.AddScoped<CostManagementAgent>();

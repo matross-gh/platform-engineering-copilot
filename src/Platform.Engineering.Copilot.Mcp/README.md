@@ -147,7 +147,7 @@ The orchestrator includes several optimizations for efficiency (40-60% LLM reduc
 3. **CostManagementAgent**: Analyze and estimate costs
 4. **DiscoveryAgent**: Inventory resources, monitor health
 5. **EnvironmentAgent**: Manage environment lifecycle, cloning
-6. **OnboardingAgent**: Onboard missions and teams
+6. **ServiceCreationAgent**: Onboard missions and teams
 
 ## Configuration
 

@@ -6,7 +6,14 @@ WORKDIR /src
 COPY Platform.Engineering.Copilot.sln ./
 COPY src/Platform.Engineering.Copilot.Admin.API/*.csproj ./src/Platform.Engineering.Copilot.Admin.API/
 COPY src/Platform.Engineering.Copilot.Core/*.csproj ./src/Platform.Engineering.Copilot.Core/
-COPY src/Platform.Engineering.Copilot.Data/*.csproj ./src/Platform.Engineering.Copilot.Data/
+COPY src/Platform.Engineering.Copilot.Compliance.Agent/*.csproj ./src/Platform.Engineering.Copilot.Compliance.Agent/
+COPY src/Platform.Engineering.Copilot.Infrastructure.Agent/*.csproj ./src/Platform.Engineering.Copilot.Infrastructure.Agent/
+COPY src/Platform.Engineering.Copilot.CostManagement.Agent/*.csproj ./src/Platform.Engineering.Copilot.CostManagement.Agent/
+COPY src/Platform.Engineering.Copilot.Environment.Agent/*.csproj ./src/Platform.Engineering.Copilot.Environment.Agent/
+COPY src/Platform.Engineering.Copilot.Discovery.Agent/*.csproj ./src/Platform.Engineering.Copilot.Discovery.Agent/
+COPY src/Platform.Engineering.Copilot.ServiceCreation.Agent/*.csproj ./src/Platform.Engineering.Copilot.ServiceCreation.Agent/
+COPY src/Platform.Engineering.Copilot.Security.Agent/*.csproj ./src/Platform.Engineering.Copilot.Security.Agent/
+COPY src/Platform.Engineering.Copilot.Document.Agent/*.csproj ./src/Platform.Engineering.Copilot.Document.Agent/
 
 # Restore dependencies
 RUN dotnet restore ./src/Platform.Engineering.Copilot.Admin.API/Platform.Engineering.Copilot.Admin.API.csproj
@@ -14,7 +21,14 @@ RUN dotnet restore ./src/Platform.Engineering.Copilot.Admin.API/Platform.Enginee
 # Copy all source code
 COPY src/Platform.Engineering.Copilot.Admin.API/. ./src/Platform.Engineering.Copilot.Admin.API/
 COPY src/Platform.Engineering.Copilot.Core/. ./src/Platform.Engineering.Copilot.Core/
-COPY src/Platform.Engineering.Copilot.Data/. ./src/Platform.Engineering.Copilot.Data/
+COPY src/Platform.Engineering.Copilot.Compliance.Agent/. ./src/Platform.Engineering.Copilot.Compliance.Agent/
+COPY src/Platform.Engineering.Copilot.Infrastructure.Agent/. ./src/Platform.Engineering.Copilot.Infrastructure.Agent/
+COPY src/Platform.Engineering.Copilot.CostManagement.Agent/. ./src/Platform.Engineering.Copilot.CostManagement.Agent/
+COPY src/Platform.Engineering.Copilot.Environment.Agent/. ./src/Platform.Engineering.Copilot.Environment.Agent/
+COPY src/Platform.Engineering.Copilot.Discovery.Agent/. ./src/Platform.Engineering.Copilot.Discovery.Agent/
+COPY src/Platform.Engineering.Copilot.ServiceCreation.Agent/. ./src/Platform.Engineering.Copilot.ServiceCreation.Agent/
+COPY src/Platform.Engineering.Copilot.Security.Agent/. ./src/Platform.Engineering.Copilot.Security.Agent/
+COPY src/Platform.Engineering.Copilot.Document.Agent/. ./src/Platform.Engineering.Copilot.Document.Agent/
 
 # Build and publish
 WORKDIR /src/src/Platform.Engineering.Copilot.Admin.API

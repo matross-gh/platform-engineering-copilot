@@ -6,13 +6,13 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Platform.Engineering.Copilot.Core.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AddFlankspeedOnboardingSupport : Migration
+    public partial class AddFlankspeedServiceCreationSupport : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "OnboardingRequests",
+                name: "ServiceCreationRequests",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
@@ -63,37 +63,37 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_OnboardingRequests", x => x.Id);
+                    table.PrimaryKey("PK_ServiceCreationRequests", x => x.Id);
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_OnboardingRequests_ClassificationLevel",
-                table: "OnboardingRequests",
+                name: "IX_ServiceCreationRequests_ClassificationLevel",
+                table: "ServiceCreationRequests",
                 column: "ClassificationLevel");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OnboardingRequests_Command",
-                table: "OnboardingRequests",
+                name: "IX_ServiceCreationRequests_Command",
+                table: "ServiceCreationRequests",
                 column: "Command");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OnboardingRequests_CreatedAt",
-                table: "OnboardingRequests",
+                name: "IX_ServiceCreationRequests_CreatedAt",
+                table: "ServiceCreationRequests",
                 column: "CreatedAt");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OnboardingRequests_MissionOwnerEmail",
-                table: "OnboardingRequests",
+                name: "IX_ServiceCreationRequests_MissionOwnerEmail",
+                table: "ServiceCreationRequests",
                 column: "MissionOwnerEmail");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OnboardingRequests_Status",
-                table: "OnboardingRequests",
+                name: "IX_ServiceCreationRequests_Status",
+                table: "ServiceCreationRequests",
                 column: "Status");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OnboardingRequests_Status_Priority_CreatedAt",
-                table: "OnboardingRequests",
+                name: "IX_ServiceCreationRequests_Status_Priority_CreatedAt",
+                table: "ServiceCreationRequests",
                 columns: new[] { "Status", "Priority", "CreatedAt" });
         }
 
@@ -101,7 +101,7 @@ namespace Platform.Engineering.Copilot.Core.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "OnboardingRequests");
+                name: "ServiceCreationRequests");
         }
     }
 }

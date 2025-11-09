@@ -18,14 +18,14 @@ using Xunit;
 namespace Platform.Engineering.Copilot.Tests.Unit.Core.Services.ServiceCreation;
 
 /// <summary>
-/// Unit tests for FlankspeedOnboardingService helper methods
+/// Unit tests for FlankspeedServiceCreationService helper methods
 /// Tests the 13 data-driven infrastructure generation methods
 /// </summary>
-public class FlankspeedOnboardingServiceHelperMethodsTests : IDisposable
+public class FlankspeedServiceCreationServiceHelperMethodsTests : IDisposable
 {
     private readonly PlatformEngineeringCopilotContext _context;
-    private readonly FlankspeedOnboardingService _service;
-    private readonly Mock<ILogger<FlankspeedOnboardingService>> _mockLogger;
+    private readonly FlankspeedServiceCreationService _service;
+    private readonly Mock<ILogger<FlankspeedServiceCreationService>> _mockLogger;
     private readonly Mock<IEnvironmentManagementEngine> _mockEnvironmentEngine;
     private readonly Mock<ITemplateStorageService> _mockTemplateStorage;
     private readonly Mock<IEmailService> _mockEmailService;
@@ -33,14 +33,14 @@ public class FlankspeedOnboardingServiceHelperMethodsTests : IDisposable
     private readonly Mock<IDynamicTemplateGenerator> _mockTemplateGenerator;
     private readonly Mock<ITeamsNotificationService> _mockTeamsNotificationService;
 
-    public FlankspeedOnboardingServiceHelperMethodsTests()
+    public FlankspeedServiceCreationServiceHelperMethodsTests()
     {
         var options = new DbContextOptionsBuilder<PlatformEngineeringCopilotContext>()
             .UseInMemoryDatabase($"FlankspeedHelperTests-{Guid.NewGuid()}")
             .Options;
 
         _context = new PlatformEngineeringCopilotContext(options);
-        _mockLogger = new Mock<ILogger<FlankspeedOnboardingService>>();
+        _mockLogger = new Mock<ILogger<FlankspeedServiceCreationService>>();
         _mockEnvironmentEngine = new Mock<IEnvironmentManagementEngine>();
         _mockTemplateStorage = new Mock<ITemplateStorageService>();
         _mockEmailService = new Mock<IEmailService>();
@@ -48,7 +48,7 @@ public class FlankspeedOnboardingServiceHelperMethodsTests : IDisposable
         _mockTemplateGenerator = new Mock<IDynamicTemplateGenerator>();
         _mockTeamsNotificationService = new Mock<ITeamsNotificationService>();
 
-        _service = new FlankspeedOnboardingService(
+        _service = new FlankspeedServiceCreationService(
             _context,
             _mockLogger.Object,
             _mockEnvironmentEngine.Object,
@@ -66,10 +66,10 @@ public class FlankspeedOnboardingServiceHelperMethodsTests : IDisposable
 
     private T InvokePrivate<T>(string methodName, params object?[] parameters)
     {
-        var method = typeof(FlankspeedOnboardingService)
+        var method = typeof(FlankspeedServiceCreationService)
             .GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
 
-        method.Should().NotBeNull($"Expected private helper {methodName} to exist on FlankspeedOnboardingService");
+        method.Should().NotBeNull($"Expected private helper {methodName} to exist on FlankspeedServiceCreationService");
 
         var result = method!.Invoke(_service, parameters);
         return result is null ? default! : (T)result;
@@ -357,15 +357,15 @@ public class FlankspeedOnboardingServiceHelperMethodsTests : IDisposable
 
     #endregion
 
-    #region Full Integration - BuildTemplateRequestFromOnboarding Tests
+    #region Full Integration - BuildTemplateRequestFromServiceCreation Tests
 
     [Fact]
-    public void BuildTemplateRequestFromOnboarding_WithSecretAksPostgreSQL_CreatesCompleteRequest()
+    public void BuildTemplateRequestFromServiceCreation_WithSecretAksPostgreSQL_CreatesCompleteRequest()
     {
         var request = CreateRequest("SECRET", "AKS and Kubernetes with PostgreSQL", 1000, "10.150.0.0/16");
         request.MissionName = "mission-zero";
 
-        var template = InvokePrivate<TemplateGenerationRequest>("BuildTemplateRequestFromOnboarding", request);
+        var template = InvokePrivate<TemplateGenerationRequest>("BuildTemplateRequestFromServiceCreation", request);
 
     template.Infrastructure.ComputePlatform.Should().Be(ComputePlatform.AKS);
     template.Deployment.Replicas.Should().Be(3);
@@ -376,12 +376,12 @@ public class FlankspeedOnboardingServiceHelperMethodsTests : IDisposable
     }
 
     [Fact]
-    public void BuildTemplateRequestFromOnboarding_WithUnclassAppService_CreatesBasicRequest()
+    public void BuildTemplateRequestFromServiceCreation_WithUnclassAppService_CreatesBasicRequest()
     {
         var request = CreateRequest("UNCLASS", "Azure App Service with SQL Server", 200, "10.20.0.0/16");
         request.MissionName = "mission-bravo";
 
-        var template = InvokePrivate<TemplateGenerationRequest>("BuildTemplateRequestFromOnboarding", request);
+        var template = InvokePrivate<TemplateGenerationRequest>("BuildTemplateRequestFromServiceCreation", request);
 
     template.Infrastructure.ComputePlatform.Should().Be(ComputePlatform.AppService);
     template.Databases.Should().ContainSingle(db => db.Type == DatabaseType.AzureSQL);

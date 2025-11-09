@@ -645,6 +645,129 @@ HTTP Client (Axios)
         └──────────────────────────────┘
 ```
 
+---
+
+## 💾 Workspace Creation - Save Templates Directly
+
+**New Feature:** Automatically save infrastructure templates to your VS Code workspace with one click!
+
+When you generate infrastructure templates (Bicep, Terraform, Kubernetes), the extension detects them and offers buttons to save them directly to your workspace with proper folder structure.
+
+### Supported Template Types
+
+| Template Type | Auto-Organization | Generated Files |
+|--------------|-------------------|----------------|
+| **Bicep** | ✅ Modules in `modules/` subfolder | `main.bicep`, `main.parameters.json`, `modules/`, `README.md` |
+| **Terraform** | ✅ Modules in `modules/` subfolder | `main.tf`, `variables.tf`, `outputs.tf`, `providers.tf`, `.gitignore`, `README.md` |
+| **Kubernetes** | ✅ Manifests in `manifests/` subfolder | `deployment.yaml`, `service.yaml`, etc. |
+| **ARM Templates** | ✅ Parameters separate | `azuredeploy.json`, `parameters.json`, `README.md` |
+
+### How It Works
+
+1. **Ask for a template:**
+   ```
+   @platform Create a Bicep template for an Azure Storage Account with private endpoint
+   ```
+
+2. **Template appears in chat response** with proper syntax highlighting
+
+3. **Click "📁 Create Project in Workspace"** button below the response
+   - Prompts for project name
+   - Automatically organizes files based on template type
+   - Creates README with deployment instructions
+   - Opens main template file in editor
+
+4. **Or click "💾 Save Single File"** to save individual files
+
+### Example Workflow: Bicep Project Creation
+
+**Chat Request:**
+```
+@platform Generate a Bicep template for an AKS cluster with Azure Monitor
+```
+
+**Response includes:**
+````bicep
+// main.bicep
+param location string = 'eastus'
+param clusterName string = 'aks-dev-001'
+...
+
+// modules/monitoring.bicep
+resource monitor 'Microsoft.Monitor/accounts@2023-04-03' = {
+  name: monitorName
+  ...
+}
+````
+
+**Click "Create Project in Workspace"** → Enter project name: `aks-infrastructure`
+
+**Created structure:**
+```
+aks-infrastructure/
+├── main.bicep
+├── main.parameters.json
+├── modules/
+│   └── monitoring.bicep
+└── README.md
+```
+
+**README.md includes:**
+- Deployment instructions with `az deployment` commands
+- Parameter descriptions
+- Prerequisites
+- Resource naming conventions
+
+### Example: Terraform Project Creation
+
+**Chat Request:**
+```
+@platform Create Terraform for VNet with 3 subnets and NSGs
+```
+
+**Created structure:**
+```
+vnet-infrastructure/
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── providers.tf
+├── .gitignore
+├── modules/
+│   └── network.tf
+└── README.md
+```
+
+**README.md includes:**
+- `terraform init`, `plan`, `apply` instructions
+- Variable descriptions
+- Output values
+- State management notes
+
+### Template Detection
+
+The extension automatically detects templates by analyzing code blocks:
+- **Bicep**: ` ```bicep `
+- **Terraform**: ` ```terraform ` or ` ```hcl `
+- **Kubernetes**: ` ```yaml ` with `apiVersion:` and `kind:`
+- **ARM**: ` ```json ` with `"type": "Microsoft.*"`
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `Platform Copilot: Create Workspace` | Create multi-file project from templates |
+| `Platform Copilot: Save Template` | Save single template file |
+
+### Button Actions
+
+| Button | Action |
+|--------|--------|
+| 📁 **Create Project in Workspace** | Creates complete project structure |
+| 💾 **Save Single File** | Saves individual template file |
+
+---
+
 ### Key Components
 
 **1. GitHub Copilot Chat Participant** (`chatParticipant.ts`)

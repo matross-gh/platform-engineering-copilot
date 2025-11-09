@@ -532,7 +532,7 @@ Use this to verify correct behavior:
 > - **CostManagementAgent**: Asks about analysis scope, breakdown preferences, optimization focus
 > - **DiscoveryAgent**: Asks about resource types, search criteria, output format
 > - **EnvironmentAgent**: Asks about environment type, location, configuration level
-> - **OnboardingAgent**: Progressive questioning through 4 phases (mission basics, technical, compliance, budget)
+> - **ServiceCreationAgent**: Progressive questioning through 4 phases (mission basics, technical, compliance, budget)
 >
 > **Expected Conversation Flow:**
 > 1. User makes initial request (may be vague or detailed)
@@ -545,7 +545,7 @@ Use this to verify correct behavior:
 > - Ask ONLY for missing critical information
 > - Use smart defaults for non-critical details
 > - Check SharedMemory for context from previous agents
-> - Progressive disclosure (OnboardingAgent asks 2-4 questions at a time across 4 phases)
+> - Progressive disclosure (ServiceCreationAgent asks 2-4 questions at a time across 4 phases)
 
 ---
 
@@ -1333,10 +1333,10 @@ Is my staging environment configured the same as production?
 
 ---
 
-### 🚀 OnboardingAgent (Mission/Team ServiceCreation)
+### 🚀 ServiceCreationAgent (Mission/Team ServiceCreation)
 
 > **🤖 Conversational Requirements Gathering**  
-> OnboardingAgent uses progressive questioning through 4 phases: mission basics → technical → compliance → budget.
+> ServiceCreationAgent uses progressive questioning through 4 phases: mission basics → technical → compliance → budget.
 
 **Test 6.1: New Mission ServiceCreation (Conversational - Multi-Turn)**
 ```
@@ -1353,7 +1353,7 @@ Turn 9: "$50k/month budget, must use usgovvirginia region"
 **Expected Behavior:**
 - Agent asks 2-4 questions per turn (not all at once)
 - Builds on previous answers to ask relevant follow-ups
-- After Phase 4 complete, **IMMEDIATELY calls create_onboarding_request**
+- After Phase 4 complete, **IMMEDIATELY calls create_ServiceCreation_request**
 - No confirmation needed - just creates ServiceCreation with all gathered requirements
 
 **Validation:**
@@ -1460,15 +1460,15 @@ Turn 3: User answers ALL agents: "subscription 453c..., summary, last month by s
 **Test 9.1: Complete Mission Deployment (Conversational - Multi-Turn)**
 ```
 Turn 1: "I'm starting a new mission called Secure Ops Platform for NSWC"
-Turn 2: (OnboardingAgent Phase 1: mission owner, classification, timeline)
+Turn 2: (ServiceCreationAgent Phase 1: mission owner, classification, timeline)
 Turn 3: "Owner: CDR Sarah Johnson, sarah@navy.mil. Classification: CUI. Timeline: 90 days"
-Turn 4: (OnboardingAgent Phase 2: workload, scale, compute, storage)
+Turn 4: (ServiceCreationAgent Phase 2: workload, scale, compute, storage)
 Turn 5: "Web app, 5000 users, AKS + SQL + Key Vault, usgovvirginia, subscription 453c..."
-Turn 6: (OnboardingAgent Phase 3: compliance, ATO, security)
+Turn 6: (ServiceCreationAgent Phase 3: compliance, ATO, security)
 Turn 7: "FedRAMP High, yes ATO in 90 days, Zero Trust required"
-Turn 8: (OnboardingAgent Phase 4: budget, constraints)
+Turn 8: (ServiceCreationAgent Phase 4: budget, constraints)
 Turn 9: "$50k/month budget"
-Turn 10: (OnboardingAgent creates request → InfrastructureAgent asks: "Confirm AKS configuration?")
+Turn 10: (ServiceCreationAgent creates request → InfrastructureAgent asks: "Confirm AKS configuration?")
 Turn 11: "yes, proceed with FedRAMP compliant template"
 Turn 12: (InfrastructureAgent generates → EnvironmentAgent asks: "Should I deploy?")
 Turn 13: "yes, deploy to usgovvirginia"
@@ -1478,7 +1478,7 @@ Turn 16: (ComplianceAgent scans → CostManagementAgent confirms: "Estimate cost
 Turn 17: "yes"
 ```
 **Expected:**
-- OnboardingAgent: Progressive 4-phase questioning → creates request
+- ServiceCreationAgent: Progressive 4-phase questioning → creates request
 - InfrastructureAgent: Uses ServiceCreation data, confirms only template type → generates
 - EnvironmentAgent: Uses template from SharedMemory, confirms deploy → deploys
 - ComplianceAgent: Uses resource group from SharedMemory, confirms scan → scans
@@ -1615,7 +1615,7 @@ I need to know what resources I have and how much they're costing me. Break down
 ```
 I'm starting a new mission called "Secure Operations Platform" for NSWC. We need a complete setup: onboard the mission, provision infrastructure (AKS, SQL, Key Vault) in USGov Virginia, configure it properly, check compliance, and set up cost tracking with a $50k/month budget.
 ```
-**Expected:** OnboardingAgent → InfrastructureAgent → EnvironmentAgent → ComplianceAgent → CostManagementAgent
+**Expected:** ServiceCreationAgent → InfrastructureAgent → EnvironmentAgent → ComplianceAgent → CostManagementAgent
 
 **Test 9.2: Environment Migration**
 ```
@@ -1751,13 +1751,13 @@ Deploy infrastructure.
 > **✨ NEW: Azure MCP Integration**  
 > The platform has been enhanced with 19 MCP-powered functions across 7 plugins that combine existing platform services with Azure MCP tools for comprehensive guidance. These functions provide best practices, schemas, compliance validation, security scanning, cost optimization, and environment governance.
 
-### � Resource Discovery with MCP (ResourceDiscoveryPlugin)
+### � Resource Discovery with MCP (AzureResourceDiscoveryPlugin)
 
 **Test MCP-1.1: Discover Resources with Schema Validation**
 ```
 Discover all Azure resources in subscription 453c2549-4cc5-464f-ba66-acad920823e8 and validate them against Bicep schemas
 ```
-**Expected:** ResourceDiscoveryPlugin uses MCP `bicepschema` tool to discover resources with schema validation
+**Expected:** AzureResourceDiscoveryPlugin uses MCP `bicepschema` tool to discover resources with schema validation
 **Validation:**
 - ✅ Lists resources with schema validation status
 - ✅ Shows Bicep resource type for each resource
@@ -1768,7 +1768,7 @@ Discover all Azure resources in subscription 453c2549-4cc5-464f-ba66-acad920823e
 ```
 Show me details for AKS cluster "aks-prod-eastus-001" and include Azure best practices recommendations
 ```
-**Expected:** ResourceDiscoveryPlugin combines resource details with MCP best practices guidance
+**Expected:** AzureResourceDiscoveryPlugin combines resource details with MCP best practices guidance
 **Validation:**
 - ✅ Shows resource configuration details
 - ✅ Includes Azure best practices for AKS
@@ -1779,7 +1779,7 @@ Show me details for AKS cluster "aks-prod-eastus-001" and include Azure best pra
 ```
 Search Azure documentation for AKS private cluster configuration and networking best practices
 ```
-**Expected:** ResourceDiscoveryPlugin uses MCP to search Azure docs
+**Expected:** AzureResourceDiscoveryPlugin uses MCP to search Azure docs
 **Validation:**
 - ✅ Returns relevant documentation content
 - ✅ Includes configuration examples
@@ -1790,7 +1790,7 @@ Search Azure documentation for AKS private cluster configuration and networking 
 ```
 What are the Azure best practices for deploying AKS clusters with high availability?
 ```
-**Expected:** ResourceDiscoveryPlugin provides comprehensive IaC best practices via MCP
+**Expected:** AzureResourceDiscoveryPlugin provides comprehensive IaC best practices via MCP
 **Validation:**
 - ✅ Covers Bicep/Terraform/ARM templates
 - ✅ Includes HA configuration patterns
@@ -1801,7 +1801,7 @@ What are the Azure best practices for deploying AKS clusters with high availabil
 ```
 Generate a Bicep template for an Azure Storage Account based on the official schema with all required properties
 ```
-**Expected:** ResourceDiscoveryPlugin uses MCP `bicepschema` to generate schema-compliant template
+**Expected:** AzureResourceDiscoveryPlugin uses MCP `bicepschema` to generate schema-compliant template
 **Validation:**
 - ✅ Template includes all required properties
 - ✅ Uses latest API version
@@ -2391,7 +2391,7 @@ Use this checklist to verify conversational requirements gathering is working co
 - [ ] Context is maintained throughout conversation
 - [ ] Each agent confirms intent but doesn't re-ask for data
 
-### OnboardingAgent Progressive Questioning
+### ServiceCreationAgent Progressive Questioning
 - [ ] Asks 2-4 questions per turn (not overwhelming)
 - [ ] Progresses through 4 phases: basics → technical → compliance → budget
 - [ ] Builds on previous answers for follow-up questions
@@ -2415,7 +2415,7 @@ Use this checklist to verify conversational requirements gathering is working co
 | Agent asks same question twice | Not checking conversation history | Agent must review previous messages before asking |
 | Agent asks for confirmation after user answers | Over-cautious prompting | After user provides answers, call function immediately |
 | Multi-agent workflow asks for subscription ID 3 times | Not checking SharedMemory | Each agent must check SharedMemory for context first |
-| OnboardingAgent overwhelms with 10+ questions at once | No progressive disclosure | Ask 2-4 questions per turn across 4 phases |
+| ServiceCreationAgent overwhelms with 10+ questions at once | No progressive disclosure | Ask 2-4 questions per turn across 4 phases |
 | Agent generates template without asking questions | Missing conversational trigger | Agent must ask questions BEFORE calling functions |
 | Agent provides guidance but doesn't call function | Response-only mode | Agent must CALL FUNCTIONS, not just explain what it would do |
 
@@ -2429,7 +2429,7 @@ Use this checklist to verify conversational requirements gathering is working co
 - **CostManagementAgent**: 2-4 questions (scope, time period, breakdown, optimization focus)
 - **DiscoveryAgent**: 2-3 questions (resource types, scope, output format)
 - **EnvironmentAgent**: 3-4 questions (environment type, location, configuration level)
-- **OnboardingAgent**: 8-12 questions across 4 phases (2-4 per phase)
+- **ServiceCreationAgent**: 8-12 questions across 4 phases (2-4 per phase)
 
 ### Conversational Flow Patterns
 

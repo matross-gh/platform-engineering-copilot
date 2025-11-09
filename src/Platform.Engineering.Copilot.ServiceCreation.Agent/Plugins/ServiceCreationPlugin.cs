@@ -9,7 +9,7 @@ namespace Platform.Engineering.Copilot.ServiceCreation.Core;
 
 /// <summary>
 /// Semantic Kernel plugin for service creation and mission service creation
-/// TODO: Re-enable full implementation when IOnboardingService is available
+/// TODO: Re-enable full implementation when IServiceCreationService is available
 /// </summary>
 public class ServiceCreationPlugin : BaseSupervisorPlugin
 {
@@ -27,8 +27,8 @@ public class ServiceCreationPlugin : BaseSupervisorPlugin
         [Description("Additional requirements")] string? additionalRequirements = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogWarning("ServiceCreationPlugin stub called - IOnboardingService implementation required");
-        return Task.FromResult($"TODO: IOnboardingService implementation required. Mission: {missionName}, Organization: {organization}");
+        _logger.LogWarning("ServiceCreationPlugin stub called - IServiceCreationService implementation required");
+        return Task.FromResult($"TODO: IServiceCreationService implementation required. Mission: {missionName}, Organization: {organization}");
     }
 
     [KernelFunction("submit_for_approval")]
@@ -38,8 +38,8 @@ public class ServiceCreationPlugin : BaseSupervisorPlugin
         [Description("Email of submitter")] string? submittedBy = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogWarning("ServiceCreationPlugin stub called - IOnboardingService implementation required");
-        return Task.FromResult($"TODO: IOnboardingService implementation required. Request ID: {requestId}");
+        _logger.LogWarning("ServiceCreationPlugin stub called - IServiceCreationService implementation required");
+        return Task.FromResult($"TODO: IServiceCreationService implementation required. Request ID: {requestId}");
     }
 
     [KernelFunction("get_service_creation_status")]
@@ -48,7 +48,7 @@ public class ServiceCreationPlugin : BaseSupervisorPlugin
         [Description("Request ID")] string requestId,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogWarning("ServiceCreationPlugin stub called - IOnboardingService implementation required");
-        return Task.FromResult($"TODO: IOnboardingService implementation required. Request ID: {requestId}");
+        _logger.LogWarning("ServiceCreationPlugin stub called - IServiceCreationService implementation required");
+        return Task.FromResult($"TODO: IServiceCreationService implementation required. Request ID: {requestId}");
     }
 }

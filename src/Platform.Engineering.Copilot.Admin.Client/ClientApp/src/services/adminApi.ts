@@ -885,7 +885,7 @@ class AdminApiService {
   /**
    * Get pending Navy Flankspeed ServiceCreation requests
    */
-  async getPendingOnboardingRequests(): Promise<ServiceCreationRequest[]> {
+  async getPendingServiceCreationRequests(): Promise<ServiceCreationRequest[]> {
     const response = await this.apiClient.get<ServiceCreationRequest[]>(
       '/ServiceCreation/pending'
     );
@@ -895,7 +895,7 @@ class AdminApiService {
   /**
    * Get specific ServiceCreation request by ID
    */
-  async getOnboardingRequest(requestId: string): Promise<ServiceCreationRequest> {
+  async getServiceCreationRequest(requestId: string): Promise<ServiceCreationRequest> {
     const response = await this.apiClient.get<ServiceCreationRequest>(
       `/ServiceCreation/${requestId}`
     );
@@ -905,12 +905,12 @@ class AdminApiService {
   /**
    * Approve a Navy Flankspeed ServiceCreation request
    */
-  async approveOnboardingRequest(
+  async approveServiceCreationRequest(
     requestId: string, 
     approvedBy: string, 
     comments?: string
-  ): Promise<OnboardingApprovalResponse> {
-    const response = await this.apiClient.post<OnboardingApprovalResponse>(
+  ): Promise<ServiceCreationApprovalResponse> {
+    const response = await this.apiClient.post<ServiceCreationApprovalResponse>(
       `/ServiceCreation/${requestId}/approve`,
       { approvedBy, comments }
     );
@@ -920,12 +920,12 @@ class AdminApiService {
   /**
    * Reject a Navy Flankspeed ServiceCreation request
    */
-  async rejectOnboardingRequest(
+  async rejectServiceCreationRequest(
     requestId: string, 
     rejectedBy: string, 
     reason: string
-  ): Promise<OnboardingApprovalResponse> {
-    const response = await this.apiClient.post<OnboardingApprovalResponse>(
+  ): Promise<ServiceCreationApprovalResponse> {
+    const response = await this.apiClient.post<ServiceCreationApprovalResponse>(
       `/ServiceCreation/${requestId}/reject`,
       { rejectedBy, reason }
     );
@@ -935,7 +935,7 @@ class AdminApiService {
   /**
    * Get ServiceCreation requests by mission owner email
    */
-  async getOnboardingRequestsByOwner(email: string): Promise<ServiceCreationRequest[]> {
+  async getServiceCreationRequestsByOwner(email: string): Promise<ServiceCreationRequest[]> {
     const response = await this.apiClient.get<ServiceCreationRequest[]>(
       `/ServiceCreation/owner/${email}`
     );
@@ -945,7 +945,7 @@ class AdminApiService {
   /**
    * Get ServiceCreation statistics
    */
-  async getOnboardingStats(): Promise<any> {
+  async getServiceCreationStats(): Promise<any> {
     const response = await this.apiClient.get<any>(
       '/ServiceCreation/stats'
     );
@@ -1269,7 +1269,7 @@ export interface ServiceCreationRequest {
   notificationHistory?: string[];
 }
 
-export interface OnboardingApprovalResponse {
+export interface ServiceCreationApprovalResponse {
   success: boolean;
   message: string;
   provisioningJobId?: string;

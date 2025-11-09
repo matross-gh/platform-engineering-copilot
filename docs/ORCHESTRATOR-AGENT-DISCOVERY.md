@@ -38,19 +38,19 @@ var agentConfig = builder.Configuration
 // Conditionally register ONLY enabled agents
 if (agentConfig.IsAgentEnabled("Infrastructure"))
 {
-    builder.Services.AddInfrastructureCore();  // ← Registers InfrastructureAgent as ISpecializedAgent
+    builder.Services.AddInfrastructureAgent();  // ← Registers InfrastructureAgent as ISpecializedAgent
     logger.LogInformation("✅ Infrastructure agent enabled");
 }
 
 if (agentConfig.IsAgentEnabled("Environment"))
 {
-    builder.Services.AddEnvironmentCore();  // ← NOT CALLED (disabled in config)
+    builder.Services.AddEnvironmentAgent();  // ← NOT CALLED (disabled in config)
     logger.LogInformation("✅ Environment agent enabled");
 }
 
 if (agentConfig.IsAgentEnabled("Discovery"))
 {
-    builder.Services.AddDiscoveryCore();  // ← Registers DiscoveryAgent as ISpecializedAgent
+    builder.Services.AddDiscoveryAgent();  // ← Registers DiscoveryAgent as ISpecializedAgent
     logger.LogInformation("✅ Discovery agent enabled");
 }
 ```
@@ -61,7 +61,7 @@ Each domain's `ServiceCollectionExtensions.cs` registers its agent as **both** t
 
 ```csharp
 // Platform.Engineering.Copilot.Infrastructure.Core/Extensions/ServiceCollectionExtensions.cs
-public static IServiceCollection AddInfrastructureCore(this IServiceCollection services)
+public static IServiceCollection AddInfrastructureAgent(this IServiceCollection services)
 {
     // Register concrete type (for direct injection if needed)
     services.AddScoped<InfrastructureAgent>();
@@ -167,7 +167,7 @@ The orchestrator will automatically discover it - **no changes needed to `Orches
 Configuration → Conditional Registration → DI Container → Orchestrator
 ============    =======================    ============    ============
 appsettings     if (enabled)               Collection of   IEnumerable<ISpecializedAgent>
-.json           AddInfrastructureCore()    ISpecializedAgent   ↓
+.json           AddInfrastructureAgent()    ISpecializedAgent   ↓
                                           instances       Build _agents dictionary
 ```
 

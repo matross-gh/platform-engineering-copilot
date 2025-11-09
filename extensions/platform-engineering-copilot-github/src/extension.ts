@@ -3,6 +3,7 @@ import { McpClient } from './services/mcpClient';
 import { PlatformChatParticipant } from './chatParticipant';
 import { config } from './config';
 import { showShareMenu, copyToClipboard, exportReportWithPrompt } from './services/exportService';
+import { WorkspaceService } from './services/workspaceService';
 
 let apiClient: McpClient;
 let chatParticipant: PlatformChatParticipant;
@@ -209,6 +210,112 @@ function registerCommands(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('platform-copilot.copyToClipboard', async (content: string) => {
             await copyToClipboard(content);
+        })
+    );
+
+    // Workspace creation commands for infrastructure templates
+    const workspaceService = new WorkspaceService();
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('platform-copilot.createWorkspace', async (templates: Map<string, string>, templateType: 'bicep' | 'terraform' | 'kubernetes' | 'arm' | null) => {
+            try {
+                if (!templates || templates.size === 0) {
+                    vscode.window.showWarningMessage('No templates to save');
+                    return;
+                }
+
+                // Prompt for project name
+                const projectName = await vscode.window.showInputBox({
+                    prompt: 'Enter project name',
+                    placeHolder: 'my-infrastructure-project',
+                    validateInput: (value) => {
+                        if (!value || value.trim().length === 0) {
+                            return 'Project name cannot be empty';
+                        }
+                        if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
+                            return 'Project name can only contain letters, numbers, hyphens, and underscores';
+                        }
+                        return null;
+                    }
+                });
+
+                if (!projectName) {
+                    return; // User cancelled
+                }
+
+                // Create workspace with detected template type
+                if (templateType && (templateType === 'bicep' || templateType === 'terraform' || templateType === 'kubernetes')) {
+                    await workspaceService.createInfrastructureTemplate(templateType, templates, projectName);
+                } else {
+                    // Convert Map to FileToCreate array for generic workspace creation
+                    const files = Array.from(templates.entries()).map(([fileName, content]) => ({
+                        relativePath: fileName,
+                        content: content,
+                        openAfterCreate: false
+                    }));
+
+                    await workspaceService.createWorkspace({
+                        projectName: projectName,
+                        files: files,
+                        createInNewFolder: true,
+                        folderName: projectName
+                    });
+                }
+
+                vscode.window.showInformationMessage(`✅ Created ${projectName} in workspace`);
+            } catch (error) {
+                vscode.window.showErrorMessage(
+                    `Failed to create workspace: ${error instanceof Error ? error.message : 'Unknown error'}`
+                );
+                config.error('Workspace creation failed:', error);
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('platform-copilot.saveTemplate', async (templates: Map<string, string>) => {
+            try {
+                if (!templates || templates.size === 0) {
+                    vscode.window.showWarningMessage('No templates to save');
+                    return;
+                }
+
+                // If multiple templates, let user choose which one to save
+                let fileName: string;
+                let content: string;
+
+                if (templates.size === 1) {
+                    const entry = Array.from(templates.entries())[0];
+                    if (!entry) {
+                        vscode.window.showWarningMessage('No template content found');
+                        return;
+                    }
+                    fileName = entry[0];
+                    content = entry[1];
+                } else {
+                    const selectedFile = await vscode.window.showQuickPick(
+                        Array.from(templates.keys()),
+                        {
+                            placeHolder: 'Select file to save'
+                        }
+                    );
+
+                    if (!selectedFile) {
+                        return; // User cancelled
+                    }
+
+                    fileName = selectedFile;
+                    content = templates.get(selectedFile) || '';
+                }
+
+                await workspaceService.createFile(fileName, content, true);
+                vscode.window.showInformationMessage(`✅ Saved ${fileName}`);
+            } catch (error) {
+                vscode.window.showErrorMessage(
+                    `Failed to save template: ${error instanceof Error ? error.message : 'Unknown error'}`
+                );
+                config.error('Template save failed:', error);
+            }
         })
     );
 

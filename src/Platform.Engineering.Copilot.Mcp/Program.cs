@@ -183,37 +183,37 @@ class Program
 
         if (agentConfig.IsAgentEnabled("Compliance"))
         {
-            builder.Services.AddComplianceCore();
+            builder.Services.AddComplianceAgent();
             logger.LogInformation("✅ Compliance agent enabled");
         }
 
         if (agentConfig.IsAgentEnabled("Infrastructure"))
         {
-            builder.Services.AddInfrastructureCore();
+            builder.Services.AddInfrastructureAgent();
             logger.LogInformation("✅ Infrastructure agent enabled");
         }
 
         if (agentConfig.IsAgentEnabled("CostManagement"))
         {
-            builder.Services.AddCostManagementCore();
+            builder.Services.AddCostManagementAgent();
             logger.LogInformation("✅ CostManagement agent enabled");
         }
 
         if (agentConfig.IsAgentEnabled("Environment"))
         {
-            builder.Services.AddEnvironmentCore();
+            builder.Services.AddEnvironmentAgent();
             logger.LogInformation("✅ Environment agent enabled");
         }
 
         if (agentConfig.IsAgentEnabled("Discovery"))
         {
-            builder.Services.AddDiscoveryCore();
+            builder.Services.AddDiscoveryAgent();
             logger.LogInformation("✅ Discovery agent enabled");
         }
 
         if (agentConfig.IsAgentEnabled("ServiceCreation"))
         {
-            builder.Services.AddServiceCreationCore();
+            builder.Services.AddServiceCreationAgent();
             logger.LogInformation("✅ ServiceCreation agent enabled");
         }
 
@@ -225,7 +225,7 @@ class Program
 
         if (agentConfig.IsAgentEnabled("Document"))
         {
-            builder.Services.AddDocumentCore();
+            builder.Services.AddDocumentAgent();
             logger.LogInformation("✅ Document agent enabled");
         }
 

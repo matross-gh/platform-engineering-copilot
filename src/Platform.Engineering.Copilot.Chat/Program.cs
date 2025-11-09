@@ -10,8 +10,8 @@ using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
 using Platform.Engineering.Copilot.Environment.Core.Extensions;
 using Platform.Engineering.Copilot.Discovery.Core.Extensions;
 using Platform.Engineering.Copilot.ServiceCreation.Core.Extensions;
-using Platform.Engineering.Copilot.Security.Core.Extensions;
 using Platform.Engineering.Copilot.Document.Core.Extensions;
+using Platform.Engineering.Copilot.Security.Agent.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,14 +59,14 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<IChatService, ChatService>();
 
 // Add domain-specific agents and plugins
-builder.Services.AddComplianceCore();
-builder.Services.AddInfrastructureCore();
-builder.Services.AddCostManagementCore();
-builder.Services.AddEnvironmentCore();
-builder.Services.AddDiscoveryCore();
-builder.Services.AddServiceCreationCore();
-builder.Services.AddSecurityCore();
-builder.Services.AddDocumentCore();
+builder.Services.AddComplianceAgent();
+builder.Services.AddInfrastructureAgent();
+builder.Services.AddCostManagementAgent();
+builder.Services.AddEnvironmentAgent();
+builder.Services.AddDiscoveryAgent();
+builder.Services.AddServiceCreationAgent();
+builder.Services.AddSecurityAgent();
+builder.Services.AddDocumentAgent();
 
 // Add SPA services
 builder.Services.AddSpaStaticFiles(configuration =>

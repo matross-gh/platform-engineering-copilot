@@ -135,15 +135,15 @@ public class MultiAgentServiceRegistrationTests
     }
 
     [Fact]
-    public void OnboardingAgent_ShouldBeResolvable()
+    public void ServiceCreationAgent_ShouldBeResolvable()
     {
         // Act
         var agents = _serviceProvider.GetServices<ISpecializedAgent>().ToList();
-        var onboardingAgent = agents.FirstOrDefault(a => a.AgentType == AgentType.ServiceCreation);
+        var ServiceCreationAgent = agents.FirstOrDefault(a => a.AgentType == AgentType.ServiceCreation);
 
         // Assert
-        Assert.NotNull(onboardingAgent);
-        Assert.IsType<OnboardingAgent>(onboardingAgent);
+        Assert.NotNull(ServiceCreationAgent);
+        Assert.IsType<ServiceCreationAgent>(ServiceCreationAgent);
     }
 
     [Fact]

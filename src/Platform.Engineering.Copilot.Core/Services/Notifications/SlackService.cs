@@ -77,7 +77,7 @@ public class SlackService : ISlackService
             }
         };
 
-        return await SendSlackMessageAsync(payload, "OnboardingApproved", cancellationToken);
+        return await SendSlackMessageAsync(payload, "ServiceCreationApproved", cancellationToken);
     }
 
     public async Task<SlackNotificationResult> SendServiceCreationRejectedAsync(
@@ -135,7 +135,7 @@ public class SlackService : ISlackService
             }
         };
 
-        return await SendSlackMessageAsync(payload, "OnboardingRejected", cancellationToken);
+        return await SendSlackMessageAsync(payload, "ServiceCreationRejected", cancellationToken);
     }
 
     public async Task<SlackNotificationResult> SendProvisioningCompleteAsync(

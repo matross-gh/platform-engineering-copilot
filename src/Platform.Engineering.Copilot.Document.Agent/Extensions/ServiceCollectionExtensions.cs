@@ -9,7 +9,7 @@ namespace Platform.Engineering.Copilot.Document.Core.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddDocumentCore(this IServiceCollection services)
+    public static IServiceCollection AddDocumentAgent(this IServiceCollection services)
     {
         // Register Architecture Diagram Analyzer
         services.AddScoped<IArchitectureDiagramAnalyzer, ArchitectureDiagramAnalyzer>();

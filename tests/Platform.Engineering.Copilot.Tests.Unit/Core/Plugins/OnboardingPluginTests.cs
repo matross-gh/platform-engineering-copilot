@@ -11,23 +11,23 @@ using Xunit;
 
 namespace Platform.Engineering.Copilot.Tests.Unit.Core.Plugins
 {
-    public class OnboardingPluginTests
+    public class ServiceCreationPluginTests
     {
-        private static OnboardingPlugin CreatePlugin(Mock<IOnboardingService> onboardingServiceMock)
+        private static ServiceCreationPlugin CreatePlugin(Mock<IServiceCreationService> ServiceCreationServiceMock)
         {
             var kernel = Kernel.CreateBuilder().Build();
-            var logger = Mock.Of<ILogger<OnboardingPlugin>>();
-            return new OnboardingPlugin(logger, kernel, onboardingServiceMock.Object);
+            var logger = Mock.Of<ILogger<ServiceCreationPlugin>>();
+            return new ServiceCreationPlugin(logger, kernel, ServiceCreationServiceMock.Object);
         }
 
         [Fact]
-        public async Task CaptureOnboardingRequirementsAsync_CreatesDraft()
+        public async Task CaptureServiceCreationRequirementsAsync_CreatesDraft()
         {
-            var onboardingServiceMock = new Mock<IOnboardingService>();
-            onboardingServiceMock.Setup(s => s.CreateDraftRequestAsync(It.IsAny<CancellationToken>())).ReturnsAsync("req-123");
-            var plugin = CreatePlugin(onboardingServiceMock);
+            var ServiceCreationServiceMock = new Mock<IServiceCreationService>();
+            ServiceCreationServiceMock.Setup(s => s.CreateDraftRequestAsync(It.IsAny<CancellationToken>())).ReturnsAsync("req-123");
+            var plugin = CreatePlugin(ServiceCreationServiceMock);
 
-            var response = await plugin.CaptureOnboardingRequirementsAsync("Seawolf", "COMNAVWAR", null);
+            var response = await plugin.CaptureServiceCreationRequirementsAsync("Seawolf", "COMNAVWAR", null);
 
             response.Should().Contain("req-123");
         }
@@ -36,13 +36,13 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Plugins
         public async Task SubmitForApprovalAsync_ValidRequest_Succeeds()
         {
             var requestId = "11111111-1111-1111-1111-111111111111";
-            var onboardingServiceMock = new Mock<IOnboardingService>();
-            onboardingServiceMock.Setup(s => s.GetRequestAsync(requestId, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new ServiceCreationRequest { Id = requestId, Status = OnboardingStatus.Draft, MissionName = "Test" });
-            onboardingServiceMock.Setup(s => s.ValidateForSubmissionAsync(requestId, It.IsAny<CancellationToken>()))
+            var ServiceCreationServiceMock = new Mock<IServiceCreationService>();
+            ServiceCreationServiceMock.Setup(s => s.GetRequestAsync(requestId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ServiceCreationRequest { Id = requestId, Status = ServiceCreationStatus.Draft, MissionName = "Test" });
+            ServiceCreationServiceMock.Setup(s => s.ValidateForSubmissionAsync(requestId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new System.Collections.Generic.List<string>());
-            onboardingServiceMock.Setup(s => s.SubmitRequestAsync(requestId, null, It.IsAny<CancellationToken>())).ReturnsAsync(true);
-            var plugin = CreatePlugin(onboardingServiceMock);
+            ServiceCreationServiceMock.Setup(s => s.SubmitRequestAsync(requestId, null, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            var plugin = CreatePlugin(ServiceCreationServiceMock);
 
             var response = await plugin.SubmitForApprovalAsync(requestId);
 
@@ -52,9 +52,9 @@ namespace Platform.Engineering.Copilot.Tests.Unit.Core.Plugins
         [Fact]
         public async Task SubmitForApprovalAsync_InvalidRequest_ReturnsError()
         {
-            var onboardingServiceMock = new Mock<IOnboardingService>();
-            onboardingServiceMock.Setup(s => s.GetRequestAsync("bad-id", It.IsAny<CancellationToken>())).ReturnsAsync((ServiceCreationRequest?)null);
-            var plugin = CreatePlugin(onboardingServiceMock);
+            var ServiceCreationServiceMock = new Mock<IServiceCreationService>();
+            ServiceCreationServiceMock.Setup(s => s.GetRequestAsync("bad-id", It.IsAny<CancellationToken>())).ReturnsAsync((ServiceCreationRequest?)null);
+            var plugin = CreatePlugin(ServiceCreationServiceMock);
 
             var response = await plugin.SubmitForApprovalAsync("bad-id");
 

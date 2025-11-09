@@ -305,8 +305,32 @@ public class CostManagementPlugin : BaseSupervisorPlugin
 
     private async Task<string> HandleOptimizationAsync(string subscriptionId, CancellationToken cancellationToken)
     {
-    var analysis = await _costOptimizationEngine.AnalyzeSubscriptionAsync(subscriptionId);
-    var recommendations = analysis.Recommendations ?? new List<DetailedCostOptimizationRecommendation>();
+        var analysis = await _costOptimizationEngine.AnalyzeSubscriptionAsync(subscriptionId);
+        var recommendations = analysis.Recommendations ?? new List<DetailedCostOptimizationRecommendation>();
+
+        // Get Azure best practices for cost optimization via MCP
+        object? mcpBestPractices = null;
+        try
+        {
+            await _azureMcpClient.InitializeAsync(cancellationToken);
+            
+            _logger.LogInformation("Fetching cost optimization best practices via Azure MCP");
+            
+            var bestPractices = await _azureMcpClient.CallToolAsync("get_bestpractices", 
+                new Dictionary<string, object?>
+                {
+                    ["resourceType"] = "cost-optimization"
+                }, cancellationToken);
+
+            if (bestPractices.Success)
+            {
+                mcpBestPractices = bestPractices.Result;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not retrieve cost optimization best practices from Azure MCP");
+        }
 
         var sb = new StringBuilder();
         sb.AppendLine("# 🎯 Cost Optimization Analysis");
@@ -397,6 +421,20 @@ public class CostManagementPlugin : BaseSupervisorPlugin
         else
         {
             sb.AppendLine("_No recommendations available. Your resources are already well-optimized! 🎉_");
+        }
+
+        // Add Azure MCP best practices if available
+        if (mcpBestPractices != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## 📚 Azure Cost Optimization Best Practices");
+            sb.AppendLine();
+            sb.AppendLine("_Guidance from Microsoft Azure Best Practices:_");
+            sb.AppendLine();
+            sb.AppendLine($"```");
+            sb.AppendLine(mcpBestPractices.ToString());
+            sb.AppendLine($"```");
+            sb.AppendLine();
         }
 
         return sb.ToString();
@@ -923,6 +961,58 @@ public class CostManagementPlugin : BaseSupervisorPlugin
                 success = false,
                 error = $"Failed to get budget recommendations: {ex.Message}"
             }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    // ========== AZURE MCP ENHANCED FUNCTIONS ==========
+
+    [KernelFunction("search_cost_docs")]
+    [Description("Search official Microsoft Azure cost management documentation for guidance. " +
+                 "Use when you need official docs on pricing, cost optimization, budgets, or FinOps best practices. " +
+                 "Examples: 'How to optimize storage costs', 'Reserved instance pricing', 'Cost allocation tags'")]
+    public async Task<string> SearchCostOptimizationDocsAsync(
+        [Description("Search query (e.g., 'reserved instances pricing', 'cost optimization strategies', 'budget alerts')")] string query,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Searching Azure cost documentation for: {Query}", query);
+
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = "Search query is required"
+                }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            }
+
+            await _azureMcpClient.InitializeAsync(cancellationToken);
+
+            var docs = await _azureMcpClient.CallToolAsync("documentation", 
+                new Dictionary<string, object?>
+                {
+                    ["query"] = $"Azure cost management {query}"
+                }, cancellationToken);
+
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = docs.Success,
+                query = query,
+                results = docs.Success ? docs.Result : "Documentation search unavailable",
+                nextSteps = new[]
+                {
+                    "Review the documentation results above for official Microsoft guidance.",
+                    "Say 'get cost optimization recommendations for subscription <id>' for actionable recommendations.",
+                    "Say 'analyze costs for subscription <id>' for detailed cost analysis.",
+                    "Visit https://learn.microsoft.com/azure/cost-management-billing for comprehensive guides."
+                }
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching cost documentation for query: {Query}", query);
+            return CreateErrorResponse("search cost documentation", ex);
         }
     }
 
