@@ -31,6 +31,22 @@ public class GitHubActionsWorkflowGenerator
         files[".github/workflows/cd-staging.yml"] = GenerateEnvironmentWorkflow(request, "staging");
         files[".github/workflows/cd-prod.yml"] = GenerateEnvironmentWorkflow(request, "prod");
         
+        // Generate DoD IL compliance workflows if applicable
+        if (request.DoDCompliance != null)
+        {
+            // IL4+: Add STIG security scanning workflow
+            if (request.DoDCompliance.ImpactLevel >= Core.Models.Compliance.ImpactLevel.IL4)
+            {
+                files[".github/workflows/security-scan.yml"] = GenerateSTIGSecurityScanWorkflow(request);
+            }
+            
+            // IL5+: Add compliance validation workflow
+            if (request.DoDCompliance.ImpactLevel >= Core.Models.Compliance.ImpactLevel.IL5)
+            {
+                files[".github/workflows/compliance-check.yml"] = GenerateComplianceCheckWorkflow(request);
+            }
+        }
+        
         return files;
     }
     
@@ -883,6 +899,322 @@ jobs:
         sb.AppendLine();
         sb.AppendLine($"    - name: Deploy to {platformName}");
         sb.AppendLine($"      run: echo \"Deploy to {environment} environment on {platformName}\"");
+        
+        return sb.ToString();
+    }
+    
+    /// <summary>
+    /// Generate STIG security scanning workflow for IL4+ environments
+    /// Includes: Trivy (container/IaC), Checkov (IaC), tfsec (Terraform), TruffleHog (secrets)
+    /// </summary>
+    private string GenerateSTIGSecurityScanWorkflow(TemplateGenerationRequest request)
+    {
+        var sb = new StringBuilder();
+        var dodSpec = request.DoDCompliance!;
+        var infrastructure = request.Infrastructure ?? new InfrastructureSpec();
+        var hasInfraCode = infrastructure.Format != InfrastructureFormat.Kubernetes;
+        // Check if Docker is likely present (containers, App Service, or Container Apps)
+        var hasDocker = infrastructure.ComputePlatform == ComputePlatform.ContainerApps ||
+                       infrastructure.ComputePlatform == ComputePlatform.AppService ||
+                       infrastructure.ComputePlatform == ComputePlatform.ECS ||
+                       infrastructure.ComputePlatform == ComputePlatform.AKS;
+        
+        sb.AppendLine("name: STIG Security Scan");
+        sb.AppendLine();
+        sb.AppendLine("# DoD STIG compliance scanning for IL4+ environments");
+        sb.AppendLine($"# Impact Level: {dodSpec.ImpactLevel}");
+        sb.AppendLine($"# Mission Sponsor: {dodSpec.MissionSponsor ?? "Not Specified"}");
+        sb.AppendLine($"# Data Classification: {dodSpec.DataClassification ?? "Not Specified"}");
+        sb.AppendLine();
+        sb.AppendLine("on:");
+        sb.AppendLine("  push:");
+        sb.AppendLine("    branches: [ main, develop ]");
+        sb.AppendLine("  pull_request:");
+        sb.AppendLine("    branches: [ main ]");
+        sb.AppendLine("  schedule:");
+        sb.AppendLine("    # Daily scan at 2 AM UTC");
+        sb.AppendLine("    - cron: '0 2 * * *'");
+        sb.AppendLine();
+        sb.AppendLine("permissions:");
+        sb.AppendLine("  contents: read");
+        sb.AppendLine("  security-events: write");
+        sb.AppendLine("  actions: read");
+        sb.AppendLine();
+        sb.AppendLine("jobs:");
+        
+        // Job 1: Secret scanning with TruffleHog
+        sb.AppendLine("  secret-scan:");
+        sb.AppendLine("    name: Secret Detection (TruffleHog)");
+        sb.AppendLine("    runs-on: ubuntu-latest");
+        sb.AppendLine();
+        sb.AppendLine("    steps:");
+        sb.AppendLine("    - name: Checkout code");
+        sb.AppendLine("      uses: actions/checkout@v4");
+        sb.AppendLine("      with:");
+        sb.AppendLine("        fetch-depth: 0  # Full history for secret detection");
+        sb.AppendLine();
+        sb.AppendLine("    - name: TruffleHog Secret Scan");
+        sb.AppendLine("      uses: trufflesecurity/trufflehog@main");
+        sb.AppendLine("      with:");
+        sb.AppendLine("        path: ./");
+        sb.AppendLine("        base: ${{ github.event.repository.default_branch }}");
+        sb.AppendLine("        head: HEAD");
+        sb.AppendLine("        extra_args: --only-verified");
+        sb.AppendLine();
+        
+        // Job 2: IaC scanning (if infrastructure code present)
+        if (hasInfraCode)
+        {
+            sb.AppendLine("  iac-scan:");
+            sb.AppendLine("    name: Infrastructure Security Scan");
+            sb.AppendLine("    runs-on: ubuntu-latest");
+            sb.AppendLine();
+            sb.AppendLine("    steps:");
+            sb.AppendLine("    - name: Checkout code");
+            sb.AppendLine("      uses: actions/checkout@v4");
+            sb.AppendLine();
+            
+            // Terraform-specific scanning
+            if (infrastructure.Format == InfrastructureFormat.Terraform)
+            {
+                sb.AppendLine("    - name: tfsec Terraform Security Scan");
+                sb.AppendLine("      uses: aquasecurity/tfsec-action@v1.0.0");
+                sb.AppendLine("      with:");
+                sb.AppendLine("        soft_fail: false");
+                sb.AppendLine("        format: sarif");
+                sb.AppendLine("        output: tfsec-results.sarif");
+                sb.AppendLine();
+                sb.AppendLine("    - name: Upload tfsec SARIF");
+                sb.AppendLine("      uses: github/codeql-action/upload-sarif@v3");
+                sb.AppendLine("      with:");
+                sb.AppendLine("        sarif_file: tfsec-results.sarif");
+                sb.AppendLine();
+            }
+            
+            // Checkov for multi-IaC support
+            sb.AppendLine("    - name: Checkov IaC Security Scan");
+            sb.AppendLine("      uses: bridgecrewio/checkov-action@v12");
+            sb.AppendLine("      with:");
+            sb.AppendLine("        directory: ./");
+            sb.AppendLine("        framework: all");
+            sb.AppendLine("        output_format: sarif");
+            sb.AppendLine("        output_file_path: checkov-results.sarif");
+            sb.AppendLine("        soft_fail: false");
+            sb.AppendLine();
+            sb.AppendLine("    - name: Upload Checkov SARIF");
+            sb.AppendLine("      uses: github/codeql-action/upload-sarif@v3");
+            sb.AppendLine("      with:");
+            sb.AppendLine("        sarif_file: checkov-results.sarif");
+            sb.AppendLine();
+        }
+        
+        // Job 3: Container scanning (if Docker present)
+        if (hasDocker)
+        {
+            sb.AppendLine("  container-scan:");
+            sb.AppendLine("    name: Container Security Scan (Trivy)");
+            sb.AppendLine("    runs-on: ubuntu-latest");
+            sb.AppendLine();
+            sb.AppendLine("    steps:");
+            sb.AppendLine("    - name: Checkout code");
+            sb.AppendLine("      uses: actions/checkout@v4");
+            sb.AppendLine();
+            sb.AppendLine("    - name: Build Docker image");
+            sb.AppendLine("      run: docker build -t ${{ github.repository }}:${{ github.sha }} .");
+            sb.AppendLine();
+            sb.AppendLine("    - name: Trivy Container Scan");
+            sb.AppendLine("      uses: aquasecurity/trivy-action@master");
+            sb.AppendLine("      with:");
+            sb.AppendLine("        image-ref: ${{ github.repository }}:${{ github.sha }}");
+            sb.AppendLine("        format: 'sarif'");
+            sb.AppendLine("        output: 'trivy-results.sarif'");
+            sb.AppendLine("        severity: 'CRITICAL,HIGH,MEDIUM'");
+            sb.AppendLine();
+            sb.AppendLine("    - name: Upload Trivy SARIF");
+            sb.AppendLine("      uses: github/codeql-action/upload-sarif@v3");
+            sb.AppendLine("      with:");
+            sb.AppendLine("        sarif_file: trivy-results.sarif");
+            sb.AppendLine();
+        }
+        
+        // Job 4: Dependency scanning
+        sb.AppendLine("  dependency-scan:");
+        sb.AppendLine("    name: Dependency Security Scan");
+        sb.AppendLine("    runs-on: ubuntu-latest");
+        sb.AppendLine();
+        sb.AppendLine("    steps:");
+        sb.AppendLine("    - name: Checkout code");
+        sb.AppendLine("      uses: actions/checkout@v4");
+        sb.AppendLine();
+        sb.AppendLine("    - name: Trivy Filesystem Scan");
+        sb.AppendLine("      uses: aquasecurity/trivy-action@master");
+        sb.AppendLine("      with:");
+        sb.AppendLine("        scan-type: 'fs'");
+        sb.AppendLine("        scan-ref: '.'");
+        sb.AppendLine("        format: 'sarif'");
+        sb.AppendLine("        output: 'trivy-fs-results.sarif'");
+        sb.AppendLine("        severity: 'CRITICAL,HIGH,MEDIUM'");
+        sb.AppendLine();
+        sb.AppendLine("    - name: Upload Trivy FS SARIF");
+        sb.AppendLine("      uses: github/codeql-action/upload-sarif@v3");
+        sb.AppendLine("      with:");
+        sb.AppendLine("        sarif_file: trivy-fs-results.sarif");
+        
+        return sb.ToString();
+    }
+    
+    /// <summary>
+    /// Generate compliance validation workflow for IL5+ environments
+    /// Integrates with PolicyEnforcementService for IL policy validation
+    /// </summary>
+    private string GenerateComplianceCheckWorkflow(TemplateGenerationRequest request)
+    {
+        var sb = new StringBuilder();
+        var dodSpec = request.DoDCompliance!;
+        var infrastructure = request.Infrastructure ?? new InfrastructureSpec();
+        
+        sb.AppendLine("name: DoD Compliance Check");
+        sb.AppendLine();
+        sb.AppendLine($"# DoD IL{(int)dodSpec.ImpactLevel} Compliance Validation");
+        sb.AppendLine($"# Mission Sponsor: {dodSpec.MissionSponsor ?? "Not Specified"}");
+        sb.AppendLine($"# DoDAAC: {dodSpec.DoDAAC ?? "Not Specified"}");
+        sb.AppendLine($"# Classification: {dodSpec.DataClassification ?? "Not Specified"}");
+        sb.AppendLine($"# Compliance Frameworks: {string.Join(", ", dodSpec.ComplianceFrameworks)}");
+        sb.AppendLine();
+        sb.AppendLine("on:");
+        sb.AppendLine("  pull_request:");
+        sb.AppendLine("    branches: [ main ]");
+        sb.AppendLine("  workflow_dispatch:");
+        sb.AppendLine();
+        sb.AppendLine("permissions:");
+        sb.AppendLine("  contents: read");
+        sb.AppendLine("  pull-requests: write");
+        sb.AppendLine();
+        sb.AppendLine("jobs:");
+        sb.AppendLine("  compliance-validation:");
+        sb.AppendLine($"    name: IL{(int)dodSpec.ImpactLevel} Compliance Validation");
+        sb.AppendLine("    runs-on: ubuntu-latest");
+        sb.AppendLine();
+        sb.AppendLine("    steps:");
+        sb.AppendLine("    - name: Checkout code");
+        sb.AppendLine("      uses: actions/checkout@v4");
+        sb.AppendLine();
+        
+        // FIPS 140-2 check for IL5+
+        if (dodSpec.RequiresFIPS140_2)
+        {
+            sb.AppendLine("    - name: FIPS 140-2 Compliance Check");
+            sb.AppendLine("      run: |");
+            sb.AppendLine("        echo \"Checking FIPS 140-2 compliance for IL5+ environment...\"");
+            
+            if (infrastructure.Format == InfrastructureFormat.Terraform)
+            {
+                sb.AppendLine("        # Verify encryption at rest with CMK");
+                sb.AppendLine("        grep -r 'encryption_enabled.*=.*true' . || (echo 'ERROR: Encryption at rest not enabled' && exit 1)");
+                sb.AppendLine("        # Verify TLS 1.3 minimum");
+                sb.AppendLine("        grep -r 'minimum_tls_version.*=.*\"1.3\"' . || echo 'WARNING: TLS 1.3 not enforced'");
+            }
+            else if (infrastructure.Format == InfrastructureFormat.Bicep)
+            {
+                sb.AppendLine("        # Verify encryption at rest with CMK");
+                sb.AppendLine("        grep -r \"encryption: 'CustomerManaged'\" . || (echo 'ERROR: Customer-managed encryption not configured' && exit 1)");
+                sb.AppendLine("        # Verify TLS 1.3 minimum");
+                sb.AppendLine("        grep -r \"minimalTlsVersion: '1.3'\" . || echo 'WARNING: TLS 1.3 not enforced'");
+            }
+            
+            sb.AppendLine();
+        }
+        
+        // Region validation
+        var allowedRegions = dodSpec.GetAllowedRegions();
+        sb.AppendLine("    - name: Azure Region Validation");
+        sb.AppendLine("      run: |");
+        sb.AppendLine($"        echo \"Validating deployment region for {dodSpec.ImpactLevel}...\"");
+        sb.AppendLine($"        # Allowed regions: {string.Join(", ", allowedRegions)}");
+        
+        if (infrastructure.Format == InfrastructureFormat.Terraform)
+        {
+            sb.AppendLine("        REGION=$(grep -oP 'location\\s*=\\s*\"\\K[^\"]+' . | head -1)");
+        }
+        else if (infrastructure.Format == InfrastructureFormat.Bicep)
+        {
+            sb.AppendLine("        REGION=$(grep -oP \"location: '\\K[^']+\" . | head -1)");
+        }
+        
+        sb.AppendLine("        echo \"Detected region: $REGION\"");
+        sb.AppendLine($"        ALLOWED_REGIONS=({string.Join(" ", allowedRegions.Select(r => $"\"{r}\""))})");
+        sb.AppendLine("        if [[ ! \" ${ALLOWED_REGIONS[@]} \" =~ \" ${REGION} \" ]]; then");
+        sb.AppendLine($"          echo \"ERROR: Region $REGION not allowed for {dodSpec.ImpactLevel}\"");
+        sb.AppendLine("          exit 1");
+        sb.AppendLine("        fi");
+        sb.AppendLine();
+        
+        // Tagging validation
+        sb.AppendLine("    - name: DoD Mandatory Tagging Validation");
+        sb.AppendLine("      run: |");
+        sb.AppendLine("        echo \"Verifying mandatory DoD resource tags...\"");
+        var mandatoryTags = dodSpec.GenerateMandatoryTags("production");
+        foreach (var tag in mandatoryTags.Take(5))
+        {
+            sb.AppendLine($"        grep -r '{tag.Key}' . || echo 'WARNING: Missing tag {tag.Key}'");
+        }
+        sb.AppendLine();
+        
+        // Private endpoints for IL4+
+        if (dodSpec.RequiresPrivateEndpoints)
+        {
+            sb.AppendLine("    - name: Private Endpoint Validation (IL4+ Requirement)");
+            sb.AppendLine("      run: |");
+            sb.AppendLine("        echo \"Checking private endpoint configuration for IL4+ compliance...\"");
+            
+            if (infrastructure.Format == InfrastructureFormat.Terraform)
+            {
+                sb.AppendLine("        grep -r 'private_endpoint' . || (echo 'ERROR: Private endpoints not configured for IL4+' && exit 1)");
+            }
+            else if (infrastructure.Format == InfrastructureFormat.Bicep)
+            {
+                sb.AppendLine("        grep -r 'privateEndpoints' . || (echo 'ERROR: Private endpoints not configured for IL4+' && exit 1)");
+            }
+            
+            sb.AppendLine();
+        }
+        
+        // ATO reminder for IL5+
+        if (dodSpec.RequiresATO)
+        {
+            sb.AppendLine("    - name: ATO Package Reminder");
+            sb.AppendLine("      run: |");
+            sb.AppendLine($"        echo \"⚠️  {dodSpec.ImpactLevel} REQUIRES Authority to Operate (ATO)\"");
+            sb.AppendLine("        echo \"Ensure ATO package is prepared before production deployment:\"");
+            sb.AppendLine("        echo \"  - System Security Plan (SSP)\"");
+            sb.AppendLine("        echo \"  - Risk Assessment\"");
+            sb.AppendLine("        echo \"  - Security Assessment Report (SAR)\"");
+            sb.AppendLine("        echo \"  - Plan of Action & Milestones (POA&M)\"");
+            sb.AppendLine("        echo \"  - Continuous Monitoring Strategy\"");
+            sb.AppendLine();
+        }
+        
+        // eMASS registration for IL5+
+        if (dodSpec.RequireseMASS)
+        {
+            sb.AppendLine("    - name: eMASS Registration Reminder");
+            sb.AppendLine("      run: |");
+            sb.AppendLine($"        echo \"⚠️  {dodSpec.ImpactLevel} REQUIRES eMASS System Registration\"");
+            sb.AppendLine("        echo \"Ensure system is registered in eMASS before deployment\"");
+            sb.AppendLine("        echo \"Contact your ISSO/ISSM for guidance\"");
+            sb.AppendLine();
+        }
+        
+        sb.AppendLine("    - name: Compliance Summary");
+        sb.AppendLine("      run: |");
+        sb.AppendLine("        echo \"✅ DoD Compliance Checks Completed\"");
+        sb.AppendLine($"        echo \"Impact Level: {dodSpec.ImpactLevel}\"");
+        sb.AppendLine($"        echo \"Mission Sponsor: {dodSpec.MissionSponsor ?? "N/A"}\"");
+        sb.AppendLine($"        echo \"DoDAAC: {dodSpec.DoDAAC ?? "N/A"}\"");
+        sb.AppendLine($"        echo \"FIPS 140-2 Required: {dodSpec.RequiresFIPS140_2}\"");
+        sb.AppendLine($"        echo \"CAC Authentication Required: {dodSpec.RequiresCAC}\"");
+        sb.AppendLine($"        echo \"Private Endpoints Required: {dodSpec.RequiresPrivateEndpoints}\"");
+        sb.AppendLine($"        echo \"Customer-Managed Keys Required: {dodSpec.RequiresCustomerManagedKeys}\"");
         
         return sb.ToString();
     }

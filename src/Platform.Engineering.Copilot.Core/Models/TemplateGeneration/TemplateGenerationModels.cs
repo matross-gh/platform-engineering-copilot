@@ -29,6 +29,13 @@ namespace Platform.Engineering.Copilot.Core.Models
         
         // Observability
         public ObservabilitySpec Observability { get; set; } = new();
+        
+        // DoD-Specific Compliance (IL2/IL4/IL5/IL6)
+        /// <summary>
+        /// DoD-specific compliance metadata for Navy/DoD IL2-IL6 environments
+        /// Includes mission sponsor, DoDAAC, Impact Level, and derived security requirements
+        /// </summary>
+        public DoDComplianceSpec? DoDCompliance { get; set; }
     }
 
     /// <summary>

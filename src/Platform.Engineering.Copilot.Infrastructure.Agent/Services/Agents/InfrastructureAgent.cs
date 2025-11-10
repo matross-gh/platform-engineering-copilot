@@ -3,6 +3,7 @@ using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Platform.Engineering.Copilot.Core.Interfaces.Agents;
+using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 using Platform.Engineering.Copilot.Core.Models.Agents;
 using Platform.Engineering.Copilot.Core.Plugins;
 using Platform.Engineering.Copilot.Core.Services.Azure;
@@ -37,6 +38,7 @@ public class InfrastructureAgent : ISpecializedAgent
         INetworkTopologyDesignService networkDesignService,
         IPredictiveScalingEngine scalingEngine,
         IComplianceAwareTemplateEnhancer complianceEnhancer,
+        IPolicyEnforcementService policyEnforcementService,
         SharedMemory sharedMemory,
         AzureMcpClient azureMcpClient)
     {
@@ -54,6 +56,7 @@ public class InfrastructureAgent : ISpecializedAgent
             networkDesignService,
             scalingEngine,
             complianceEnhancer,
+            policyEnforcementService,
             sharedMemory,
             azureMcpClient);
 

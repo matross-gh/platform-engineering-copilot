@@ -5,9 +5,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Azure.Identity;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
+using Platform.Engineering.Copilot.Core.Interfaces.KnowledgeBase;
 using Platform.Engineering.Copilot.Core.Interfaces.Cache;
 using Platform.Engineering.Copilot.Core.Services.Cache;
 using Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
+using Platform.Engineering.Copilot.Compliance.Agent.Services.KnowledgeBase;
+using Platform.Engineering.Copilot.Core.Services.Compliance;
 using Platform.Engineering.Copilot.Core.Services.Jobs;
 using Platform.Engineering.Copilot.Compliance.Agent.Plugins;
 using Platform.Engineering.Copilot.Core.Services.Chat;
@@ -107,11 +110,21 @@ public static class ServiceCollectionExtensions
         // Register Azure Policy Service (required for compliance analysis)
         services.AddScoped<IAzurePolicyService, AzurePolicyEngine>();
         
+        // Register Policy Enforcement Service - Scoped (validates templates against IL2/IL4/IL5/IL6 policies)
+        services.AddScoped<IPolicyEnforcementService, PolicyEnforcementService>();
+        
         // Register GitHub Services - Singleton (no DbContext dependency)
         //services.AddSingleton<IGitHubServices, GitHubGatewayService>();
         
         // Register NIST Controls Service - Singleton (no DbContext dependency)
         services.AddSingleton<INistControlsService, NistControlsService>();
+        
+        // Register Knowledge Base Services - Singleton (no DbContext dependency)
+        services.AddSingleton<IStigKnowledgeService, StigKnowledgeService>();
+        services.AddSingleton<IDoDInstructionService, DoDInstructionService>();
+        services.AddSingleton<IRmfKnowledgeService, RmfKnowledgeService>();
+        services.AddSingleton<IDoDWorkflowService, DoDWorkflowService>();
+        // TODO: Add IImpactLevelService implementation
         
         // Register Compliance Metrics Service - Singleton (no DbContext dependency)
         services.AddSingleton<ComplianceMetricsService>();

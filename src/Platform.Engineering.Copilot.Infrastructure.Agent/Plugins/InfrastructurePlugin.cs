@@ -3,7 +3,9 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
+using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.Compliance;
 using Platform.Engineering.Copilot.Core.Plugins;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Services.Agents;
@@ -25,6 +27,7 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
     private readonly INetworkTopologyDesignService _networkDesignService;
     private readonly IPredictiveScalingEngine _scalingEngine;
     private readonly IComplianceAwareTemplateEnhancer _complianceEnhancer;
+    private readonly IPolicyEnforcementService _policyEnforcementService;
     private readonly SharedMemory _sharedMemory;
     private readonly AzureMcpClient _azureMcpClient;
     private string? _currentConversationId; // Set by agent before function calls
@@ -37,6 +40,7 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
         INetworkTopologyDesignService networkDesignService,
         IPredictiveScalingEngine scalingEngine,
         IComplianceAwareTemplateEnhancer complianceEnhancer,
+        IPolicyEnforcementService policyEnforcementService,
         SharedMemory sharedMemory,
         AzureMcpClient azureMcpClient)
         : base(logger, kernel)
@@ -46,6 +50,7 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
         _networkDesignService = networkDesignService;
         _scalingEngine = scalingEngine;
         _complianceEnhancer = complianceEnhancer;
+        _policyEnforcementService = policyEnforcementService ?? throw new ArgumentNullException(nameof(policyEnforcementService));
         _sharedMemory = sharedMemory;
         _azureMcpClient = azureMcpClient ?? throw new ArgumentNullException(nameof(azureMcpClient));
     }
@@ -1652,4 +1657,455 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
 
         return types.Any() ? types : new List<string> { "general" };
     }
+
+    #region DoD Impact Level Compliance Functions
+
+    [KernelFunction("validate_template_il_compliance")]
+    [Description("Validate a Bicep/Terraform/ARM template against DoD Impact Level compliance policies (IL2, IL4, IL5, IL6). Returns compliance violations and warnings. Use when user asks to 'validate template for IL5' or 'check compliance for Impact Level 6'.")]
+    public async Task<string> ValidateTemplateIlComplianceAsync(
+        [Description("The template content to validate (Bicep, Terraform, or ARM JSON)")]
+        string templateContent,
+        [Description("Template type: 'Bicep', 'Terraform', 'ARM', 'Kubernetes', or 'Helm'")]
+        string templateType,
+        [Description("Target DoD Impact Level: 'IL2', 'IL4', 'IL5', or 'IL6'")]
+        string impactLevel,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("🔍 Validating template for {ImpactLevel} compliance", impactLevel);
+
+            // Parse enum values
+            if (!Enum.TryParse<TemplateType>(templateType, ignoreCase: true, out var parsedTemplateType))
+            {
+                return $"❌ Invalid template type: {templateType}. Must be one of: Bicep, Terraform, ARM, Kubernetes, Helm";
+            }
+
+            if (!Enum.TryParse<ImpactLevel>(impactLevel, ignoreCase: true, out var parsedImpactLevel))
+            {
+                return $"❌ Invalid Impact Level: {impactLevel}. Must be one of: IL2, IL4, IL5, IL6";
+            }
+
+            var request = new TemplateValidationRequest
+            {
+                TemplateContent = templateContent,
+                Type = parsedTemplateType,
+                TargetImpactLevel = parsedImpactLevel,
+                RequiresApproval = parsedImpactLevel >= ImpactLevel.IL5
+            };
+
+            var result = await _policyEnforcementService.ValidateTemplateAsync(request, cancellationToken);
+
+            var response = new StringBuilder();
+            response.AppendLine($"## 🛡️ {parsedImpactLevel} Compliance Validation Results");
+            response.AppendLine();
+            response.AppendLine($"**Template Type:** {parsedTemplateType}");
+            response.AppendLine($"**Target Impact Level:** {parsedImpactLevel}");
+            response.AppendLine($"**Validated At:** {result.ValidatedAt:yyyy-MM-dd HH:mm:ss} UTC");
+            response.AppendLine();
+
+            if (result.IsCompliant)
+            {
+                response.AppendLine("✅ **Status:** COMPLIANT");
+                response.AppendLine();
+                response.AppendLine($"🎉 Template meets all {parsedImpactLevel} compliance requirements!");
+            }
+            else
+            {
+                response.AppendLine("❌ **Status:** NOT COMPLIANT");
+                response.AppendLine();
+                response.AppendLine($"**Total Violations:** {result.Violations.Count}");
+                response.AppendLine($"- 🔴 Critical: {result.CriticalViolations}");
+                response.AppendLine($"- 🟠 High: {result.HighViolations}");
+                response.AppendLine($"- 🟡 Medium: {result.MediumViolations}");
+                response.AppendLine($"- 🟢 Low: {result.LowViolations}");
+                response.AppendLine();
+
+                if (result.Violations.Any())
+                {
+                    response.AppendLine("### 📋 Policy Violations");
+                    response.AppendLine();
+
+                    foreach (var violation in result.Violations.OrderByDescending(v => v.Severity))
+                    {
+                        var severityEmoji = violation.Severity switch
+                        {
+                            PolicyViolationSeverity.Critical => "🔴",
+                            PolicyViolationSeverity.High => "🟠",
+                            PolicyViolationSeverity.Medium => "🟡",
+                            _ => "🟢"
+                        };
+
+                        response.AppendLine($"{severityEmoji} **{violation.PolicyName}** ({violation.PolicyId})");
+                        response.AppendLine($"   - **Description:** {violation.Description}");
+                        response.AppendLine($"   - **Recommended Action:** {violation.RecommendedAction}");
+                        response.AppendLine();
+                    }
+                }
+            }
+
+            if (result.Warnings?.Any() == true)
+            {
+                response.AppendLine("### ⚠️ Warnings");
+                response.AppendLine();
+                foreach (var warning in result.Warnings)
+                {
+                    response.AppendLine($"- {warning}");
+                }
+                response.AppendLine();
+            }
+
+            response.AppendLine("### 💡 Next Steps");
+            if (!result.IsCompliant)
+            {
+                response.AppendLine("1. Review the policy violations above");
+                response.AppendLine("2. Use 'get_remediation_guidance' for specific fix instructions");
+                response.AppendLine($"3. Apply fixes to the template and re-validate");
+                response.AppendLine($"4. For pre-hardened templates, use 'generate_il_compliant_template'");
+            }
+            else
+            {
+                response.AppendLine("1. Template is ready for deployment");
+                if (parsedImpactLevel >= ImpactLevel.IL5)
+                {
+                    response.AppendLine("2. Submit for approval workflow (required for IL5/IL6)");
+                }
+                response.AppendLine($"3. Deploy to allowed regions only");
+            }
+
+            return response.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error validating template IL compliance");
+            return $"❌ Error: {ex.Message}";
+        }
+    }
+
+    [KernelFunction("generate_il_compliant_template")]
+    [Description("Generate a pre-hardened Bicep/Terraform/ARM template with DoD Impact Level compliance controls baked in. Use when user asks 'generate an IL5 storage account' or 'create IL6-compliant AKS template'.")]
+    public async Task<string> GenerateIlCompliantTemplateAsync(
+        [Description("Azure resource type: 'StorageAccount', 'VirtualMachine', 'AksCluster', 'SqlDatabase', 'KeyVault', 'AppService', etc.")]
+        string resourceType,
+        [Description("Target DoD Impact Level: 'IL2', 'IL4', 'IL5', or 'IL6'")]
+        string impactLevel,
+        [Description("Template format: 'Bicep', 'Terraform', or 'ARM'")]
+        string templateType = "Bicep",
+        [Description("Resource name")]
+        string resourceName = "myresource",
+        [Description("Azure region (must be compliant with Impact Level restrictions)")]
+        string region = "usgovvirginia",
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("🏗️ Generating {ImpactLevel}-compliant {ResourceType} template", impactLevel, resourceType);
+
+            // Parse enum values
+            if (!Enum.TryParse<AzureResourceType>(resourceType, ignoreCase: true, out var parsedResourceType))
+            {
+                return $"❌ Invalid resource type: {resourceType}. Must be one of: StorageAccount, VirtualMachine, AksCluster, SqlDatabase, KeyVault, AppService, ContainerRegistry, CosmosDb, FunctionApp, ApiManagement, ServiceBus, VirtualNetwork, NetworkSecurityGroup";
+            }
+
+            if (!Enum.TryParse<ImpactLevel>(impactLevel, ignoreCase: true, out var parsedImpactLevel))
+            {
+                return $"❌ Invalid Impact Level: {impactLevel}. Must be one of: IL2, IL4, IL5, IL6";
+            }
+
+            if (!Enum.TryParse<TemplateType>(templateType, ignoreCase: true, out var parsedTemplateType))
+            {
+                return $"❌ Invalid template type: {templateType}. Must be one of: Bicep, Terraform, ARM";
+            }
+
+            var request = new IlTemplateRequest
+            {
+                ImpactLevel = parsedImpactLevel,
+                TemplateType = parsedTemplateType,
+                ResourceType = parsedResourceType,
+                ResourceName = resourceName,
+                Region = region
+            };
+
+            var template = await _policyEnforcementService.GenerateCompliantTemplateAsync(request, cancellationToken);
+
+            var response = new StringBuilder();
+            response.AppendLine($"## 🛡️ {parsedImpactLevel}-Compliant {parsedResourceType} Template");
+            response.AppendLine();
+            response.AppendLine($"**Template Format:** {template.TemplateType}");
+            response.AppendLine($"**Resource Type:** {template.ResourceType}");
+            response.AppendLine($"**Impact Level:** {template.ImpactLevel}");
+            response.AppendLine($"**Generated At:** {template.GeneratedAt:yyyy-MM-dd HH:mm:ss} UTC");
+            response.AppendLine($"**Applied Policies:** {template.AppliedPolicies.Count}");
+            response.AppendLine();
+
+            response.AppendLine("### 📜 Template Content");
+            response.AppendLine();
+            response.AppendLine("```" + template.TemplateType.ToString().ToLowerInvariant());
+            response.AppendLine(template.TemplateContent);
+            response.AppendLine("```");
+            response.AppendLine();
+
+            response.AppendLine("### 🔒 Applied Security Controls");
+            response.AppendLine();
+            foreach (var policyId in template.AppliedPolicies.Take(10))
+            {
+                response.AppendLine($"- {policyId}");
+            }
+            if (template.AppliedPolicies.Count > 10)
+            {
+                response.AppendLine($"- ... and {template.AppliedPolicies.Count - 10} more");
+            }
+            response.AppendLine();
+
+            response.AppendLine("### 💡 Next Steps");
+            response.AppendLine("1. Review the generated template above");
+            response.AppendLine("2. Customize resource-specific properties as needed");
+            response.AppendLine("3. Validate with 'validate_template_il_compliance' before deployment");
+            response.AppendLine($"4. Deploy to allowed regions: {region}");
+            if (parsedImpactLevel >= ImpactLevel.IL5)
+            {
+                response.AppendLine("5. Submit for approval workflow (required for IL5/IL6)");
+            }
+
+            return response.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating IL-compliant template");
+            return $"❌ Error: {ex.Message}";
+        }
+    }
+
+    [KernelFunction("get_il_policy_requirements")]
+    [Description("Get detailed DoD Impact Level policy requirements including encryption, networking, identity, allowed regions, and mandatory tags. Use when user asks 'what are IL5 requirements' or 'show me IL6 policy details'.")]
+    public async Task<string> GetIlPolicyRequirementsAsync(
+        [Description("DoD Impact Level: 'IL2', 'IL4', 'IL5', or 'IL6'")]
+        string impactLevel,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("📋 Retrieving {ImpactLevel} policy requirements", impactLevel);
+
+            if (!Enum.TryParse<ImpactLevel>(impactLevel, ignoreCase: true, out var parsedImpactLevel))
+            {
+                return $"❌ Invalid Impact Level: {impactLevel}. Must be one of: IL2, IL4, IL5, IL6";
+            }
+
+            var policy = await _policyEnforcementService.GetPolicyForImpactLevelAsync(parsedImpactLevel, cancellationToken);
+
+            var response = new StringBuilder();
+            response.AppendLine($"## 🛡️ {policy.Name}");
+            response.AppendLine();
+            response.AppendLine($"**Description:** {policy.Description}");
+            response.AppendLine();
+
+            response.AppendLine("### 🌍 Allowed Regions");
+            response.AppendLine();
+            foreach (var region in policy.AllowedRegions)
+            {
+                response.AppendLine($"- {region}");
+            }
+            response.AppendLine();
+
+            response.AppendLine("### 🔐 Encryption Requirements");
+            response.AppendLine();
+            response.AppendLine($"- **Encryption at Rest:** {(policy.EncryptionRequirements.RequiresEncryptionAtRest ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **Encryption in Transit:** {(policy.EncryptionRequirements.RequiresEncryptionInTransit ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **Customer-Managed Keys:** {(policy.EncryptionRequirements.RequiresCustomerManagedKeys ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **FIPS 140-2 Compliance:** {(policy.EncryptionRequirements.RequiresFipsCompliantEncryption ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **HSM-Backed Keys:** {(policy.EncryptionRequirements.RequiresHsmBackedKeys ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **Minimum TLS Version:** {policy.MinimumTlsVersion}");
+            response.AppendLine($"- **Key Vault SKU:** {policy.EncryptionRequirements.AllowedKeyVaultSku}");
+            response.AppendLine($"- **Minimum Key Size:** {policy.EncryptionRequirements.MinimumKeySize} bits");
+            response.AppendLine();
+
+            response.AppendLine("### 🌐 Network Requirements");
+            response.AppendLine();
+            response.AppendLine($"- **Private Endpoints:** {(policy.NetworkRequirements.RequiresPrivateEndpoints ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **Public Network Access:** {(policy.AllowPublicNetworkAccess ? "✅ Allowed" : "❌ Denied")}");
+            response.AppendLine($"- **Network Isolation:** {(policy.NetworkRequirements.RequiresNetworkIsolation ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **DDoS Protection:** {(policy.NetworkRequirements.RequiresDDoSProtection ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **Dedicated Subnet:** {(policy.NetworkRequirements.RequiresDedicatedSubnet ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **NSG Default Deny:** {(policy.NetworkRequirements.RequiresNsgRules ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **Internet Egress:** {(policy.NetworkRequirements.AllowInternetEgress ? "✅ Allowed" : "❌ Denied")}");
+            if (policy.NetworkRequirements.AllowedServiceEndpoints?.Any() == true)
+            {
+                response.AppendLine($"- **Allowed Service Endpoints:** {string.Join(", ", policy.NetworkRequirements.AllowedServiceEndpoints)}");
+            }
+            response.AppendLine();
+
+            response.AppendLine("### 👤 Identity Requirements");
+            response.AppendLine();
+            response.AppendLine($"- **Managed Identity:** {(policy.IdentityRequirements.RequiresManagedIdentity ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **Multi-Factor Auth:** {(policy.IdentityRequirements.RequiresMfa ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **Privileged Identity Management:** {(policy.IdentityRequirements.RequiresPim ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **CAC/PIV Authentication:** {(policy.IdentityRequirements.RequiresCac ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **Conditional Access:** {(policy.IdentityRequirements.RequiresConditionalAccess ? "✅ Required" : "⚪ Optional")}");
+            response.AppendLine($"- **Service Principals:** {(policy.IdentityRequirements.AllowsServicePrincipals ? "✅ Allowed" : "❌ Not Allowed")}");
+            response.AppendLine();
+
+            response.AppendLine("### 🏷️ Mandatory Tags");
+            response.AppendLine();
+            foreach (var tag in policy.MandatoryTags)
+            {
+                response.AppendLine($"- **{tag.Key}:** {tag.Value}");
+            }
+            response.AppendLine();
+
+            response.AppendLine("### 💡 Compliance Frameworks");
+            response.AppendLine();
+            var frameworks = parsedImpactLevel switch
+            {
+                ImpactLevel.IL2 => "FedRAMP Low, NIST 800-53 Low Baseline",
+                ImpactLevel.IL4 => "FedRAMP Moderate, NIST 800-53 Moderate Baseline",
+                ImpactLevel.IL5 => "FedRAMP High, NIST 800-53 High Baseline, STIG Compliance",
+                ImpactLevel.IL6 => "FedRAMP High+, NIST 800-53 High Baseline, STIG Compliance, TOP SECRET Controls",
+                _ => "Unknown"
+            };
+            response.AppendLine($"- {frameworks}");
+
+            return response.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving IL policy requirements");
+            return $"❌ Error: {ex.Message}";
+        }
+    }
+
+    [KernelFunction("apply_il_policies_to_template")]
+    [Description("Apply DoD Impact Level hardening policies to an existing template by adding advisory comments and recommendations. Use when user says 'harden this template for IL5' or 'add IL6 policies to my Bicep file'.")]
+    public async Task<string> ApplyIlPoliciesToTemplateAsync(
+        [Description("The existing template content to enhance")]
+        string templateContent,
+        [Description("Template type: 'Bicep', 'Terraform', or 'ARM'")]
+        string templateType,
+        [Description("Target DoD Impact Level: 'IL2', 'IL4', 'IL5', or 'IL6'")]
+        string impactLevel,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("🔧 Applying {ImpactLevel} policies to {TemplateType} template", impactLevel, templateType);
+
+            if (!Enum.TryParse<TemplateType>(templateType, ignoreCase: true, out var parsedTemplateType))
+            {
+                return $"❌ Invalid template type: {templateType}. Must be one of: Bicep, Terraform, ARM";
+            }
+
+            if (!Enum.TryParse<ImpactLevel>(impactLevel, ignoreCase: true, out var parsedImpactLevel))
+            {
+                return $"❌ Invalid Impact Level: {impactLevel}. Must be one of: IL2, IL4, IL5, IL6";
+            }
+
+            var hardenedTemplate = await _policyEnforcementService.ApplyPoliciesToTemplateAsync(
+                templateContent,
+                parsedTemplateType,
+                parsedImpactLevel,
+                cancellationToken);
+
+            var response = new StringBuilder();
+            response.AppendLine($"## 🔧 Template Enhanced with {parsedImpactLevel} Policies");
+            response.AppendLine();
+            response.AppendLine($"**Template Type:** {parsedTemplateType}");
+            response.AppendLine($"**Impact Level:** {parsedImpactLevel}");
+            response.AppendLine();
+
+            response.AppendLine("### 📜 Hardened Template");
+            response.AppendLine();
+            response.AppendLine("```" + parsedTemplateType.ToString().ToLowerInvariant());
+            response.AppendLine(hardenedTemplate);
+            response.AppendLine("```");
+            response.AppendLine();
+
+            response.AppendLine("### 💡 Next Steps");
+            response.AppendLine("1. Review the advisory comments added to the template");
+            response.AppendLine("2. Implement the recommended security controls");
+            response.AppendLine("3. Validate with 'validate_template_il_compliance'");
+            response.AppendLine("4. Deploy to approved regions only");
+
+            return response.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error applying IL policies to template");
+            return $"❌ Error: {ex.Message}";
+        }
+    }
+
+    [KernelFunction("get_remediation_guidance")]
+    [Description("Get IaC-specific remediation code snippets for fixing compliance violations. Returns Bicep/Terraform/ARM code to fix specific policy violations. Use when user asks 'how do I fix this violation' or 'show me the code to enable CMK'.")]
+    public async Task<string> GetRemediationGuidanceAsync(
+        [Description("Policy violation ID (e.g., 'ENC-001', 'NET-001')")]
+        string policyId,
+        [Description("Policy name or description")]
+        string policyName,
+        [Description("Template type for code examples: 'Bicep', 'Terraform', or 'ARM'")]
+        string templateType,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("🔧 Generating remediation guidance for {PolicyId} in {TemplateType}", policyId, templateType);
+
+            if (!Enum.TryParse<TemplateType>(templateType, ignoreCase: true, out var parsedTemplateType))
+            {
+                return $"❌ Invalid template type: {templateType}. Must be one of: Bicep, Terraform, ARM";
+            }
+
+            var violation = new PolicyViolation
+            {
+                PolicyId = policyId,
+                PolicyName = policyName,
+                Severity = PolicyViolationSeverity.High,
+                Description = $"Policy violation: {policyName}",
+                RecommendedAction = "Apply the remediation code below"
+            };
+
+            var guidance = await _policyEnforcementService.GetRemediationGuidanceAsync(violation, parsedTemplateType, cancellationToken);
+
+            var response = new StringBuilder();
+            response.AppendLine($"## 🔧 Remediation Guidance for {policyId}");
+            response.AppendLine();
+            response.AppendLine($"**Policy:** {policyName}");
+            response.AppendLine($"**Template Type:** {parsedTemplateType}");
+            response.AppendLine();
+
+            response.AppendLine("### 📝 Remediation Code");
+            response.AppendLine();
+            response.AppendLine("```" + parsedTemplateType.ToString().ToLowerInvariant());
+            response.AppendLine(guidance);
+            response.AppendLine("```");
+            response.AppendLine();
+
+            response.AppendLine("### 💡 Implementation Steps");
+            response.AppendLine("1. Copy the code snippet above");
+            response.AppendLine("2. Integrate it into your template at the appropriate location");
+            response.AppendLine("3. Update resource references and parameter names as needed");
+            response.AppendLine("4. Re-validate with 'validate_template_il_compliance'");
+
+            return response.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating remediation guidance");
+            return $"❌ Error: {ex.Message}";
+        }
+    }
+
+    private static string GetTemplateExtension(TemplateType templateType)
+    {
+        return templateType switch
+        {
+            TemplateType.Bicep => "bicep",
+            TemplateType.Terraform => "tf",
+            TemplateType.ARM => "json",
+            TemplateType.Kubernetes => "yaml",
+            TemplateType.Helm => "yaml",
+            _ => "txt"
+        };
+    }
+
+    #endregion
 }

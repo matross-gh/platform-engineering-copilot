@@ -1,5 +1,4 @@
 using Platform.Engineering.Copilot.Core.Models.Compliance;
-using Platform.Engineering.Copilot.Core.Models.Compliance;
 
 namespace Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 
