@@ -122,7 +122,7 @@ public class AzureMcpIntegrationTest
         await client.InitializeAsync();
 
         // Get subscription ID from Azure CLI
-        var subscriptionId = "453c2549-4cc5-464f-ba66-acad920823e8"; // From az account show
+        var subscriptionId = "00000000-0000-0000-0000-000000000000"; // From az account show
 
         // Act
         var result = await client.ListResourceGroupsAsync(subscriptionId);
@@ -152,7 +152,7 @@ public class AzureMcpIntegrationTest
         using var client = new AzureMcpClient(_logger, config);
         await client.InitializeAsync();
 
-        var subscriptionId = "453c2549-4cc5-464f-ba66-acad920823e8";
+        var subscriptionId = "00000000-0000-0000-0000-000000000000";
 
         // Act
         var result = await client.ListStorageAccountsAsync(subscriptionId);
@@ -202,13 +202,13 @@ public class AzureMcpIntegrationTest
 
         // 4. List resource groups
         _output.WriteLine("Step 4: Listing resource groups...");
-        var rgResult = await client.ListResourceGroupsAsync("453c2549-4cc5-464f-ba66-acad920823e8");
+        var rgResult = await client.ListResourceGroupsAsync("00000000-0000-0000-0000-000000000000");
         Assert.True(rgResult.Success);
         _output.WriteLine($"✅ Resource groups: {(rgResult.Result != null ? "Retrieved" : "None")}\n");
 
         // 5. List storage accounts
         _output.WriteLine("Step 5: Listing storage accounts...");
-        var storageResult = await client.ListStorageAccountsAsync("453c2549-4cc5-464f-ba66-acad920823e8");
+        var storageResult = await client.ListStorageAccountsAsync("00000000-0000-0000-0000-000000000000");
         Assert.True(storageResult.Success);
         _output.WriteLine($"✅ Storage accounts: {(storageResult.Result != null ? "Retrieved" : "None")}\n");
 
@@ -233,7 +233,7 @@ public class AzureMcpIntegrationTest
             "azure_resource_groups_list",
             new Dictionary<string, object?>
             {
-                ["subscriptionId"] = "453c2549-4cc5-464f-ba66-acad920823e8"
+                ["subscriptionId"] = "00000000-0000-0000-0000-000000000000"
             });
 
         // Assert

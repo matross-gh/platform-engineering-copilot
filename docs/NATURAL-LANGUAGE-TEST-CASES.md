@@ -1,5 +1,8 @@
 # Natural Language Test Cases for Multi-Agent System
 
+**Last Updated:** November 11, 2025  
+**Version:** 0.6.35
+
 Quick reference guide for testing the platform engineering copilot multi-agent system.
 
 ## 🎯 Quick Start
@@ -9,7 +12,31 @@ Quick reference guide for testing the platform engineering copilot multi-agent s
 curl -X POST http://localhost:5100/api/chat/intelligent-query \
   -H "Content-Type: application/json" \
   -d '{"message": "YOUR_QUERY", "conversationId": "test-1"}' | jq .
+
+# Test via MCP endpoint (new)
+curl -X POST http://localhost:5100/mcp/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "YOUR_QUERY"}' | jq .
 ```
+
+## ✨ What's New in v0.6.35
+
+### Azure MCP Best Practices Integration
+- Template generation now fetches real-time Azure best practices
+- Bicep templates include security hardening automatically
+- Terraform templates leverage Azure-specific guidance
+- Graceful fallback if MCP server unavailable
+
+### LLM Configuration & Optimization
+- Documented model requirements for all 7 agents
+- Token cost estimates for different operations
+- Temperature recommendations per agent (planned feature)
+- Troubleshooting guide for common LLM issues
+
+### Bug Fixes
+- Fixed dependency injection issues (ISemanticTextMemory, ICodeScanningEngine)
+- Service Creation Agent now works correctly
+- PR review integration functional
 
 ## 📖 Understanding Request Types
 
@@ -27,6 +54,57 @@ curl -X POST http://localhost:5100/api/chat/intelligent-query \
 ## 📋 Core Test Cases by Agent
 
 ### 🏗️ Infrastructure Agent
+
+#### Azure MCP Best Practices Tests (NEW in v0.6.35)
+
+**Test 1.31: Template with Best Practices Integration**
+```
+Generate a production AKS cluster with Azure best practices built in
+```
+**Expected Output:**
+- ✅ Bicep template with security hardening from Azure MCP
+- ✅ Best practices automatically incorporated (no manual specification)
+- ✅ Logs show: "📚 Fetching Azure best practices for aks via Azure MCP"
+- ✅ Logs show: "✅ Retrieved Azure best practices guidance (XXX chars)"
+- ✅ Template includes: TLS 1.2+, RBAC enabled, private cluster, managed identity
+- ⏱️ Time: 20-35 seconds (includes MCP call)
+
+**Validation:**
+- ✅ Check logs for MCP integration messages
+- ✅ Template has enhanced security configurations
+- ✅ Response mentions best practices source
+- ✅ Graceful handling if MCP server unavailable
+
+**Test 1.32: Terraform with Azure Best Practices**
+```
+Create Terraform for AKS with Azure best practices for usgovvirginia
+```
+**Expected Output:**
+- ✅ Terraform files (main.tf, variables.tf, outputs.tf)
+- ✅ Calls `azureterraformbestpractices` MCP tool
+- ✅ Includes Azure Gov specific configurations
+- ✅ Best practices in comments and README
+- ⏱️ Time: 20-35 seconds
+
+**Test 1.33: FedRAMP Template with MCP Enhancement**
+```
+Generate FedRAMP High compliant infrastructure with Azure best practices
+```
+**Expected Output:**
+- ✅ Template combines NIST controls + Azure MCP best practices
+- ✅ Logs show both compliance controls and MCP guidance
+- ✅ Enhanced security beyond basic FedRAMP requirements
+- ⏱️ Time: 25-40 seconds
+
+**Test 1.34: MCP Server Unavailable - Graceful Fallback**
+```
+Generate AKS template (with MCP server stopped)
+```
+**Expected Output:**
+- ✅ Template still generated successfully
+- ✅ Warning logged: "⚠️ Could not retrieve best practices from Azure MCP - continuing without them"
+- ✅ No errors, just missing enhanced guidance
+- ⏱️ Time: 15-25 seconds (faster without MCP call)
 
 #### Template Generation (Safe - No Resources Created)
 
@@ -64,7 +142,7 @@ Generate FedRAMP High compliant AKS template with all NIST controls
 
 **Test 4: Explicit Provisioning**
 ```
-Actually provision a production AKS cluster with 5 nodes in usgovvirginia. Make it live now in subscription 453c2549-4cc5-464f-ba66-acad920823e8
+Actually provision a production AKS cluster with 5 nodes in usgovvirginia. Make it live now in subscription 00000000-0000-0000-0000-000000000000
 ```
 **Expected Output:**
 - ✅ All 5 agents invoked (Infrastructure → Environment → Discovery → Compliance → Cost)
@@ -93,7 +171,7 @@ Design a 3-tier network with 10.0.0.0/16, include Bastion and Firewall
 
 **Test 6: Subscription Compliance Scan**
 ```
-Check NIST 800-53 compliance for subscription 453c2549-4cc5-464f-ba66-acad920823e8
+Check NIST 800-53 compliance for subscription 00000000-0000-0000-0000-000000000000
 ```
 **Expected Output:**
 - ✅ Compliance score (e.g., "78% compliant")
@@ -130,7 +208,7 @@ Show me Azure spending last month broken down by service
 
 **Test 9: Cost Optimization**
 ```
-Find cost savings opportunities in subscription 453c2549-4cc5-464f-ba66-acad920823e8
+Find cost savings opportunities in subscription 00000000-0000-0000-0000-000000000000
 ```
 **Expected Output:**
 - ✅ Top 10 recommendations with estimated savings
@@ -188,7 +266,7 @@ Show all environments - dev, test, prod configurations
 
 **Test M1: Schema-Validated Discovery**
 ```
-Discover resources in subscription 453c2549-4cc5-464f-ba66-acad920823e8 with Bicep schema validation
+Discover resources in subscription 00000000-0000-0000-0000-000000000000 with Bicep schema validation
 ```
 **Expected Output:**
 - ✅ Resource list with schema validation status
@@ -339,7 +417,7 @@ Security best practices for hardening my AKS cluster
 
 **Test M13: Cost Optimization with Advisor**
 ```
-Analyze subscription 453c2549-4cc5-464f-ba66-acad920823e8 for cost savings
+Analyze subscription 00000000-0000-0000-0000-000000000000 for cost savings
 ```
 **Expected Output:**
 - ✅ Top 10 opportunities ranked by savings
@@ -393,7 +471,7 @@ Validate environment "dev-aks-eastus" basic configuration
 
 **Test M17: Comprehensive Environment Validation**
 ```
-Run comprehensive validation of "prod-aks-eastus" in subscription 453c2549-4cc5-464f-ba66-acad920823e8
+Run comprehensive validation of "prod-aks-eastus" in subscription 00000000-0000-0000-0000-000000000000
 ```
 **Expected Output:**
 - ✅ 16 total checks (Basic + Standard + Comprehensive)
@@ -436,7 +514,7 @@ Turn 1: "Deploy production AKS for new mission"
 Turn 2-4: (AI asks questions, user answers)
 Turn 5: "yes proceed"
 Turn 6: (Template shown)
-Turn 7: "Actually provision this in subscription 453c2549-4cc5-464f-ba66-acad920823e8"
+Turn 7: "Actually provision this in subscription 00000000-0000-0000-0000-000000000000"
 ```
 **Expected Output:**
 - ✅ Turns 1-6: Infrastructure agent only (template generation)
@@ -455,9 +533,11 @@ Use this to verify correct behavior:
 ### Template Generation (Should NOT Create Resources)
 - [ ] Only InfrastructureAgent invoked
 - [ ] Response contains Bicep code or file paths
-- [ ] Time: 10-30 seconds
+- [ ] Time: 10-30 seconds (15-35 with MCP)
 - [ ] NO "resources created" message
 - [ ] NO real Azure resources exist after
+- [ ] **NEW:** Check logs for MCP best practices integration
+- [ ] **NEW:** Template includes security hardening from Azure MCP
 
 ### Actual Provisioning (Creates Real Resources ⚠️)
 - [ ] All 5 agents invoked in sequence
@@ -473,11 +553,21 @@ Use this to verify correct behavior:
 - [ ] NO template generated
 - [ ] NO resources created
 
-### MCP-Enhanced Functions
+### MCP-Enhanced Functions (NEW in v0.6.35)
 - [ ] Response mentions MCP tool used
 - [ ] Includes best practices or external guidance
 - [ ] Combines platform data + MCP insights
 - [ ] Provides actionable recommendations
+- [ ] **Infrastructure templates:** Logs show "📚 Fetching Azure best practices"
+- [ ] **Infrastructure templates:** Enhanced security configurations present
+- [ ] **Graceful degradation:** Works even if MCP server unavailable
+
+### LLM Configuration Validation (NEW in v0.6.35)
+- [ ] Server starts successfully with all agents
+- [ ] GPT-4o or GPT-4 Turbo configured
+- [ ] Context window: 32K-128K tokens depending on agent
+- [ ] Token usage logged for cost tracking
+- [ ] Function calling works correctly (99%+ accuracy with GPT-4o)
 
 ---
 
@@ -486,17 +576,35 @@ Use this to verify correct behavior:
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | Template generation invokes all 5 agents | Orchestrator misrouted | Check for "actually provision" keywords |
-| "Actually provision" only generates template | ExecutionPlanValidator bug | Verify fix applied (2025-10-22) |
+| "Actually provision" only generates template | ExecutionPlanValidator bug | ✅ **FIXED** in v0.6.35 |
 | Compliance scans entire subscription | Scope too broad | Specify resource group or resource ID |
-| MCP functions return generic responses | MCP server not connected | Check Azure MCP server status |
+| MCP functions return generic responses | MCP server not connected | Check Azure MCP server status at port 5100 |
 | Show me AKS module returns wrong code | Module filter bug | Use specific module name ("AKS cluster", "database", etc.) |
+| **Server won't start - DI errors** | **Missing service registration** | ✅ **FIXED** in v0.6.35 - ISemanticTextMemory registered |
+| **PR review not working** | **Concrete class injection** | ✅ **FIXED** in v0.6.35 - Uses ICodeScanningEngine interface |
+| **Azure best practices not included** | **MCP server not running** | Start MCP server or template will use defaults |
+| **High LLM costs** | **Wrong model/no caching** | Use GPT-4o, enable caching (see GETTING-STARTED.md) |
+| **Function calling failures** | **Using GPT-3.5 or older** | Upgrade to GPT-4o or GPT-4 Turbo |
+| **Slow responses** | **Using GPT-4 Turbo** | Switch to GPT-4o (2-3x faster) |
 
 ---
 
 ## � Quick Reference
 
 ### Test Subscription
-`453c2549-4cc5-464f-ba66-acad920823e8` (Use this in all tests)
+**⚠️ Use Your Own Subscription:** Replace with your Azure subscription ID in all tests.
+
+To set your subscription for testing:
+```bash
+# Azure CLI
+az account set --subscription "YOUR-SUBSCRIPTION-ID"
+
+# Or use in environment variables
+export AZURE_SUBSCRIPTION_ID="YOUR-SUBSCRIPTION-ID"
+
+# Or use the chat plugin function
+"Set my Azure subscription to YOUR-SUBSCRIPTION-ID"
+```
 
 ### Regions
 - `usgovvirginia` - US Gov Virginia
@@ -506,6 +614,42 @@ Use this to verify correct behavior:
 - AKS: `aks-{env}-{region}-{seq}`
 - RG: `rg-{app}-{env}-{region}`
 - Storage: `st{app}{env}{region}{seq}`
+
+### LLM Configuration (NEW in v0.6.35)
+
+**Recommended Models:**
+- **Production:** GPT-4o (best function calling, 2-3x faster)
+- **Fallback:** GPT-4 Turbo (slower but reliable)
+- **Not Recommended:** GPT-3.5, Ollama (limited function calling)
+
+**Model Requirements by Agent:**
+| Agent | Model | Context | Temp | Notes |
+|-------|-------|---------|------|-------|
+| Orchestrator | GPT-4o/GPT-4T | 128K | 0.0 | Deterministic routing |
+| Infrastructure | **GPT-4o** | 128K | 0.2 | Code gen + **Azure MCP** |
+| Compliance | GPT-4o/GPT-4T | 128K | 0.0 | Strict compliance |
+| Cost | GPT-4o/GPT-4T | 32K | 0.1 | Precise analysis |
+| Discovery | GPT-4o/GPT-4T | 32K | 0.0 | Accurate queries |
+| Security | **GPT-4o** | 64K | 0.0 | Threat detection |
+| Document | GPT-4o/GPT-4T | 128K | 0.3 | Creative writing |
+
+**Token Cost Estimates (GPT-4o):**
+- Simple query: ~$0.002 (100-500 input + 50-200 output)
+- Template generation: ~$0.04-$0.08 (2000-5000 input + 2000-6000 output)
+- Compliance scan: ~$0.05-$0.10 (3000-8000 input + 1000-4000 output)
+- Multi-agent workflow: ~$0.15-$0.30 (8000-20000 input + 5000-15000 output)
+
+**Environment Variables:**
+```bash
+# Required
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_OPENAI_API_KEY=your-api-key
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000
+AZURE_TENANT_ID=your-tenant-id
+```
+
+**📖 For detailed LLM configuration, see:** [GETTING-STARTED.md](./GETTING-STARTED.md#llm-configuration--model-requirements)
 
 ### MCP Tools Available
 - `bicepschema` - Schema validation
@@ -519,7 +663,8 @@ Use this to verify correct behavior:
 - `advisor` - Azure Advisor
 - `applens` - Application diagnostics
 - `activitylogs` - Activity logs
-- `get_bestpractices` - Best practices (most used)
+- `get_bestpractices` - **Azure best practices (most used, auto-integrated in templates)**
+- `azureterraformbestpractices` - **Terraform best practices (NEW in v0.6.35)**
 
 ---
 
@@ -604,7 +749,7 @@ Use this to verify correct behavior:
 
 **Test 1.1: AKS with Requirements Gathering (Template Generation)**
 ```
-I need to deploy a new Kubernetes cluster in Azure. Can you help me set up an AKS cluster in the US GOV Virginia region with 3 nodes in subscription 453c2549-4cc5-464f-ba66-acad920823e8?
+I need to deploy a new Kubernetes cluster in Azure. Can you help me set up an AKS cluster in the US GOV Virginia region with 3 nodes in subscription 00000000-0000-0000-0000-000000000000?
 ```
 **Expected Behavior:**
 1. AI acknowledges request enthusiastically
@@ -746,7 +891,7 @@ Turn 3: "dev environment, basic security is fine, 3 nodes, Standard_D2s_v3"
 Turn 4: (AI summarizes configuration)
 Turn 5: "yes proceed"
 Turn 6: (AI shows Bicep template)
-Turn 7: "Actually provision this template and create the resources now in subscription 453c2549-4cc5-464f-ba66-acad920823e8"
+Turn 7: "Actually provision this template and create the resources now in subscription 00000000-0000-0000-0000-000000000000"
 ```
 **Expected Behavior:**
 1. **Infrastructure Agent**: Generates Bicep template based on requirements
@@ -783,7 +928,7 @@ This workflow was previously **NOT WORKING** due to `ExecutionPlanValidator.IsTe
 
 **Test 1.7: Explicit Provisioning Request**
 ```
-Actually provision a production AKS cluster in usgovvirginia with 5 nodes in subscription 453c2549-4cc5-464f-ba66-acad920823e8. Make it live right now.
+Actually provision a production AKS cluster in usgovvirginia with 5 nodes in subscription 00000000-0000-0000-0000-000000000000. Make it live right now.
 ```
 **Expected Behavior:**
 - User explicitly requests provisioning with "actually provision" and "make it live"
@@ -801,7 +946,7 @@ Actually provision a production AKS cluster in usgovvirginia with 5 nodes in sub
 
 **Test 1.8: Simple AKS Deployment (Conversational Template Generation)**
 ```
-I need to deploy a new Kubernetes cluster in Azure. Can you help me set up an AKS cluster in the US GOV Virginia region with 3 nodes in subscription 453c2549-4cc5-464f-ba66-acad920823e8?
+I need to deploy a new Kubernetes cluster in Azure. Can you help me set up an AKS cluster in the US GOV Virginia region with 3 nodes in subscription 00000000-0000-0000-0000-000000000000?
 ```
 **Expected:** InfrastructureAgent asks questions, then generates Bicep template after gathering requirements (NO provisioning)
 
@@ -1011,13 +1156,13 @@ I need to forecast my VMSS scaling requirements for next week. What should I exp
 
 **Test 1.20: Optimize Auto-Scaling Configuration**
 ```
-My App Service Plan in subscription 453c2549-4cc5-464f-ba66-acad920823e8 keeps scaling up and down too frequently. Can you optimize the auto-scaling configuration?
+My App Service Plan in subscription 00000000-0000-0000-0000-000000000000 keeps scaling up and down too frequently. Can you optimize the auto-scaling configuration?
 ```
 **Expected:** InfrastructureAgent analyzes and provides optimized scaling configuration
 
 **⚠️ Note:** For actual optimization, you need to provide the full App Service Plan resource ID or name:
 ```
-My App Service Plan "prod-app-service-plan" in resource group "prod-rg" and subscription 453c2549-4cc5-464f-ba66-acad920823e8 keeps scaling up too frequently. Can you optimize it?
+My App Service Plan "prod-app-service-plan" in resource group "prod-rg" and subscription 00000000-0000-0000-0000-000000000000 keeps scaling up too frequently. Can you optimize it?
 ```
 If you don't provide specific resource details, the AI will provide **general scaling optimization guidance** rather than analyzing a specific resource.
 
@@ -1753,7 +1898,7 @@ Deploy infrastructure.
 
 **Test MCP-1.1: Discover Resources with Schema Validation**
 ```
-Discover all Azure resources in subscription 453c2549-4cc5-464f-ba66-acad920823e8 and validate them against Bicep schemas
+Discover all Azure resources in subscription 00000000-0000-0000-0000-000000000000 and validate them against Bicep schemas
 ```
 **Expected:** AzureResourceDiscoveryPlugin uses MCP `bicepschema` tool to discover resources with schema validation
 **Validation:**
@@ -1888,7 +2033,7 @@ My AKS deployment failed with error "QuotaExceeded". Can you help me troubleshoo
 
 **Test MCP-4.1: Validate Azure Policy Compliance**
 ```
-Check Azure Policy compliance for resource group "rg-prod-eastus" in subscription 453c2549-4cc5-464f-ba66-acad920823e8
+Check Azure Policy compliance for resource group "rg-prod-eastus" in subscription 00000000-0000-0000-0000-000000000000
 ```
 **Expected:** CompliancePlugin uses MCP `azurepolicy` tool for validation
 **Validation:**
@@ -1952,7 +2097,7 @@ What are the security best practices I should implement for my AKS cluster to ha
 
 **Test MCP-5.3: Security Scanning with Threat Intelligence**
 ```
-Run a comprehensive security scan including threat intelligence analysis for subscription 453c2549-4cc5-464f-ba66-acad920823e8
+Run a comprehensive security scan including threat intelligence analysis for subscription 00000000-0000-0000-0000-000000000000
 ```
 **Expected:** SecurityPlugin uses MCP `threatintelligence` and `defender` tools
 **Validation:**
@@ -1968,7 +2113,7 @@ Run a comprehensive security scan including threat intelligence analysis for sub
 
 **Test MCP-6.1: Get Cost Optimization Recommendations**
 ```
-Analyze my Azure subscription 453c2549-4cc5-464f-ba66-acad920823e8 and give me cost optimization recommendations with estimated savings
+Analyze my Azure subscription 00000000-0000-0000-0000-000000000000 and give me cost optimization recommendations with estimated savings
 ```
 **Expected:** CostManagementPlugin combines platform cost engine with Azure Advisor and FinOps best practices
 **Validation:**
@@ -2051,7 +2196,7 @@ Validate the configuration of environment "dev-aks-eastus" at a basic level
 
 **Test MCP-7.4: Validate Environment Configuration (Comprehensive)**
 ```
-Run a comprehensive validation of environment "prod-aks-eastus" in subscription 453c2549-4cc5-464f-ba66-acad920823e8 including security, compliance, cost, and DR checks
+Run a comprehensive validation of environment "prod-aks-eastus" in subscription 00000000-0000-0000-0000-000000000000 including security, compliance, cost, and DR checks
 ```
 **Expected:** EnvironmentManagementPlugin performs comprehensive validation
 **Validation:**
@@ -2109,7 +2254,7 @@ Use the Bicep schema tool to show me the latest API version for Microsoft.Storag
 
 **Test MCP-V3: Azure Advisor Tool**
 ```
-Get Azure Advisor recommendations for cost optimization in subscription 453c2549-4cc5-464f-ba66-acad920823e8
+Get Azure Advisor recommendations for cost optimization in subscription 00000000-0000-0000-0000-000000000000
 ```
 **Expected:** Uses MCP `advisor` tool
 **Validation:**

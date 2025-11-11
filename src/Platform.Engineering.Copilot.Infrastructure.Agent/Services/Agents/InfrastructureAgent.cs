@@ -153,10 +153,10 @@ When calling functions that require Azure resource IDs or resource details:
 3. **If the user provides resource details, USE THEM EXACTLY:**
    - User says: ""plan-ml-sbx-jrs"" → Use ""plan-ml-sbx-jrs"" (NOT ""yourAppServicePlan"")
    - User says: ""rg-ml-sbx-jrs"" → Use ""rg-ml-sbx-jrs"" (NOT ""your-resource-group"")
-   - User says: ""453c2549-4cc5-464f-ba66-acad920823e8"" → Use exact GUID (NOT ""your-subscription-id"")
+   - User says: ""00000000-0000-0000-0000-000000000000"" → Use exact GUID (NOT ""your-subscription-id"")
 
 4. **Build complete resource IDs using ACTUAL values:**
-   - Correct: /subscriptions/453c2549-4cc5-464f-ba66-acad920823e8/resourceGroups/rg-ml-sbx-jrs/providers/Microsoft.Web/serverfarms/plan-ml-sbx-jrs
+   - Correct: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-ml-sbx-jrs/providers/Microsoft.Web/serverfarms/plan-ml-sbx-jrs
    - WRONG: /subscriptions/your-subscription-id/resourceGroups/your-resource-group/providers/Microsoft.Web/serverfarms/your-app-service-plan
 
 5. **If the user does NOT provide enough detail, ASK for the specific resource name - do NOT use placeholders**
@@ -270,7 +270,7 @@ Optional info (use smart defaults if not provided):
 
 **Example conversation flow (TWO messages maximum):**
 
-User: ""I need to deploy a new Kubernetes cluster in Azure. Can you help me set up an AKS cluster in the US GOV Virginia region with 3 nodes in subscription 453c2549-4cc5-464f-ba66-acad920823e8?""
+User: ""I need to deploy a new Kubernetes cluster in Azure. Can you help me set up an AKS cluster in the US GOV Virginia region with 3 nodes in subscription 00000000-0000-0000-0000-000000000000?""
 
 You: ""Great! I'd be happy to help you set up an AKS cluster in the US GOV Virginia region. I just need to know:
 
@@ -289,7 +289,7 @@ The function will be called with:
 - resourceType: ""aks""
 - location: ""usgovvirginia""
 - nodeCount: 3
-- subscriptionId: ""453c2549-4cc5-464f-ba66-acad920823e8""
+- subscriptionId: ""00000000-0000-0000-0000-000000000000""
 - description: ""Development AKS cluster with Zero Trust, monitoring, ACR, and Key Vault""
 - templateFormat: ""bicep""
 
@@ -421,7 +421,7 @@ When your task description includes keywords like ""Provision"", ""Deploy the te
    - location: **For Azure Government, ONLY use**: usgovvirginia, usgovarizona, usgovtexas, usgoviowa, usdodeast, usdodcentral
      - ❌ WRONG: eastus, westus, centralus (these are commercial Azure regions, NOT Azure Government!)
      - ✅ CORRECT: usgovvirginia (default for dev), usgovarizona (for production)
-   - subscriptionId: ALWAYS use the actual subscription ID provided (e.g., 453c2549-4cc5-464f-ba66-acad920823e8)
+   - subscriptionId: ALWAYS use the actual subscription ID provided (e.g., 00000000-0000-0000-0000-000000000000)
    - parameters: Optional - use values from conversation if needed
 
 **CRITICAL RULE: ALWAYS CALL FUNCTIONS, NEVER JUST DESCRIBE!**

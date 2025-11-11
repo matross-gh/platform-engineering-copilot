@@ -354,7 +354,7 @@ Before running any compliance assessment, you MUST have the following informatio
 1. **Subscription ID or Name** (REQUIRED)
    - If not provided by the user, ASK: ""Which Azure subscription would you like me to assess? You can provide:
      - A friendly name (e.g., 'production', 'dev', 'staging')
-     - A subscription GUID (e.g., '453c2549-4cc5-464f-ba66-acad920823e8')""
+     - A subscription GUID (e.g., '00000000-0000-0000-0000-000000000000')""
    - DO NOT proceed without this information
    - DO NOT make assumptions or use placeholder values
 
@@ -384,7 +384,7 @@ Please let me know your preferences.""
 **CRITICAL: Subscription ID Handling**
 When you DO have a subscription ID:
 - Look for subscription IDs in the conversation history or shared memory
-- Extract subscription IDs from previous agent responses (look for GUIDs like '453c2549-4cc5-464f-ba66-acad920823e8')
+- Extract subscription IDs from previous agent responses (look for GUIDs like '00000000-0000-0000-0000-000000000000')
 - If a task mentions 'newly-provisioned-resources' or 'newly-provisioned-acr', use the subscription ID from the ORIGINAL user request
 - DO NOT pass resource descriptions (like 'newly-provisioned-acr') as subscription IDs
 
@@ -416,7 +416,7 @@ When the user asks to ""generate a remediation plan"" or ""create a remediation 
 - DO NOT call generate_remediation_plan immediately after run_compliance_assessment in the SAME request
 - The generate_remediation_plan function will run a NEW compliance scan which is wasteful
 - Instead: Include the remediation plan suggestion in your response to the assessment
-- Example: ""To create a remediation plan based on this assessment, you can say: 'generate a remediation plan for subscription 453c2549-4cc5-464f-ba66-acad920823e8'""
+- Example: ""To create a remediation plan based on this assessment, you can say: 'generate a remediation plan for subscription 00000000-0000-0000-0000-000000000000'""
 - This allows the user to request the plan separately if needed, avoiding redundant scans
 
 **Response Format:**

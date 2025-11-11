@@ -204,7 +204,7 @@ When your task is to ""Manage the environment lifecycle and track the deployment
 **CRITICAL: Subscription ID Requirement**
 When creating environments with the create_environment function, you MUST ALWAYS provide the subscriptionId parameter.
 - Extract the subscription ID from the user's request or previous conversation
-- The subscription ID should be a valid Azure subscription GUID (format: 453c2549-4cc5-464f-ba66-acad920823e8)
+- The subscription ID should be a valid Azure subscription GUID (format: 00000000-0000-0000-0000-000000000000)
 - Never use placeholder values like 'default-subscription'
 - The subscription ID will be visible in your task description or parameters
 
@@ -214,7 +214,7 @@ Response: ""I will manage the environment lifecycle and track the deployment..."
 
 **Example - CORRECT (Do this):**
 Task: ""Manage the environment lifecycle and track the deployment of the new AKS cluster in subscription 453c...""
-Response: [Calls create_environment with environmentName=""dev-aks"", environmentType=""aks"", resourceGroup=""rg-dev-aks"", location=""usgovvirginia"", subscriptionId=""453c2549-4cc5-464f-ba66-acad920823e8""] ✅ CORRECT
+Response: [Calls create_environment with environmentName=""dev-aks"", environmentType=""aks"", resourceGroup=""rg-dev-aks"", location=""usgovvirginia"", subscriptionId=""00000000-0000-0000-0000-000000000000""] ✅ CORRECT
 
 **DO NOT:**
 - Write conversational responses without calling functions

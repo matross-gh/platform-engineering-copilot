@@ -419,7 +419,7 @@ When users interact with the Platform Engineering Copilot via the chat interface
    - Azure CLI stores their credentials securely
 
 2. **User Sends Query**
-   - User: "Deploy an AKS cluster in subscription 453c2549-4cc5-464f-ba66-acad920823e8"
+   - User: "Deploy an AKS cluster in subscription 00000000-0000-0000-0000-000000000000"
    - Chat interface sends query to API
 
 3. **Multi-Agent System Processes Request**
@@ -472,7 +472,7 @@ The system uses a flexible approach to determine which Azure subscription to use
 
 1. **Explicit in Query** (Highest Priority)
    - User specifies subscription ID in their message
-   - Example: "in subscription 453c2549-4cc5-464f-ba66-acad920823e8"
+   - Example: "in subscription 00000000-0000-0000-0000-000000000000"
    - Agents extract and use this subscription ID
 
 2. **User's Default Subscription** (Fallback)
@@ -804,7 +804,7 @@ Use these natural language test cases:
 "What resources are deployed in my subscription?"
 
 # Test with specific subscription
-"List all AKS clusters in subscription 453c2549-4cc5-464f-ba66-acad920823e8"
+"List all AKS clusters in subscription 00000000-0000-0000-0000-000000000000"
 
 # Test multi-subscription query
 "Show me all my Azure subscriptions"

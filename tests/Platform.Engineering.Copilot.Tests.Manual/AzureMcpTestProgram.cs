@@ -82,7 +82,7 @@ class Program
             }
 
             // Test 4: List resource groups (using subscription from Azure CLI)
-            var subscriptionId = "453c2549-4cc5-464f-ba66-acad920823e8";
+            var subscriptionId = "00000000-0000-0000-0000-000000000000";
             Console.WriteLine($"\nTest 4: Listing resource groups in subscription {subscriptionId}...");
             var rgResult = await client.ListResourceGroupsAsync(subscriptionId);
             

@@ -19,13 +19,13 @@ public class SecurityPlugin : BaseSupervisorPlugin
     // Named subscriptions for easier testing and demos
     private static readonly Dictionary<string, string> _namedSubscriptions = new()
     {
-        { "production", "453c2549-4cc5-464f-ba66-acad920823e8" },
-        { "prod", "453c2549-4cc5-464f-ba66-acad920823e8" },
-        { "staging", "453c2549-4cc5-464f-ba66-acad920823e8" },
-        { "development", "453c2549-4cc5-464f-ba66-acad920823e8" },
-        { "dev", "453c2549-4cc5-464f-ba66-acad920823e8" },
-        { "secondary", "453c2549-4cc5-464f-ba66-acad920823e8" },
-        { "default", "453c2549-4cc5-464f-ba66-acad920823e8" },
+        { "production", "00000000-0000-0000-0000-000000000000" },
+        { "prod", "00000000-0000-0000-0000-000000000000" },
+        { "staging", "00000000-0000-0000-0000-000000000000" },
+        { "development", "00000000-0000-0000-0000-000000000000" },
+        { "dev", "00000000-0000-0000-0000-000000000000" },
+        { "secondary", "00000000-0000-0000-0000-000000000000" },
+        { "default", "00000000-0000-0000-0000-000000000000" },
     };
 
     public SecurityPlugin(

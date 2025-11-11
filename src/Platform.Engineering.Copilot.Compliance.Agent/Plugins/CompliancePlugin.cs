@@ -29,10 +29,10 @@ public class CompliancePlugin : BaseSupervisorPlugin
         // Format: { "friendly-name", "subscription-guid" }
         // Real Azure Government subscriptions
         { "primary", "0259b535-48b0-4b38-8a55-0e3dc4ea093f" },
-        { "production", "453c2549-4cc5-464f-ba66-acad920823e8" },
-        { "prod", "453c2549-4cc5-464f-ba66-acad920823e8" },
-        { "secondary", "453c2549-4cc5-464f-ba66-acad920823e8" },
-        { "default", "453c2549-4cc5-464f-ba66-acad920823e8" },
+        { "production", "00000000-0000-0000-0000-000000000000" },
+        { "prod", "00000000-0000-0000-0000-000000000000" },
+        { "secondary", "00000000-0000-0000-0000-000000000000" },
+        { "default", "00000000-0000-0000-0000-000000000000" },
         // Add more named subscriptions as needed
     };
 
