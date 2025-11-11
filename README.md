@@ -46,6 +46,35 @@ The platform is built on a **Model Context Protocol (MCP) Server** that orchestr
 - **Azure OpenAI** (gpt-4o deployment recommended)
 - **SQL Server** (or Docker container)
 
+### LLM Requirements
+
+The platform uses **Microsoft Semantic Kernel** with the following LLM requirements:
+
+| Component | Required Model | Context Window | Temperature | Notes |
+|-----------|---------------|----------------|-------------|-------|
+| **Orchestrator** | GPT-4o or GPT-4 Turbo | 128K | 0.0 | Routes requests to specialized agents |
+| **Infrastructure Agent** | GPT-4o (recommended) | 128K | 0.2 | Code generation, Azure MCP integration |
+| **Compliance Agent** | GPT-4o or GPT-4 Turbo | 128K | 0.0 | NIST 800-53 compliance assessment |
+| **Cost Management** | GPT-4o or GPT-4 Turbo | 32K | 0.1 | Cost analysis and forecasting |
+| **Discovery Agent** | GPT-4o or GPT-4 Turbo | 32K | 0.0 | Resource inventory and queries |
+| **Security Agent** | GPT-4o | 64K | 0.0 | Vulnerability scanning |
+| **Document Agent** | GPT-4o or GPT-4 Turbo | 128K | 0.3 | Technical documentation |
+
+**Recommended**: **Azure OpenAI GPT-4o** for best performance and function calling accuracy
+
+**Supported Providers**:
+- ✅ **Azure OpenAI** (recommended) - Azure Gov and Commercial
+- ⚠️ **OpenAI** - Commercial only, no FedRAMP compliance
+- ❌ **Ollama** - Local testing only, limited function calling
+
+**Token Usage**:
+- Simple queries: ~150-500 tokens (~$0.002)
+- Template generation: ~4000-8000 tokens (~$0.04-$0.08)
+- Compliance scans: ~5000-12000 tokens (~$0.06-$0.12)
+- Multi-agent workflows: ~10000-30000 tokens (~$0.12-$0.35)
+
+**📖 Complete LLM guide:** [GETTING-STARTED.md - LLM Configuration](./docs/GETTING-STARTED.md#-llm-configuration--model-requirements)
+
 ### 1. Clone and Build
 
 ```bash

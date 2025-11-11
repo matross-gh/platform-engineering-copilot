@@ -479,6 +479,300 @@ npm run build
 
 ---
 
+## 🧠 LLM Configuration & Model Requirements
+
+### Supported LLM Providers
+
+Platform Engineering Copilot uses **Microsoft Semantic Kernel** and supports multiple LLM providers:
+
+| Provider | Models | Recommended | Notes |
+|----------|--------|-------------|-------|
+| **Azure OpenAI** | GPT-4o, GPT-4 Turbo, GPT-4 | ✅ **GPT-4o** | Best performance, Azure Gov support |
+| **OpenAI** | GPT-4o, GPT-4 Turbo, GPT-4 | ⚠️ GPT-4o | No Azure Gov compliance |
+| **Ollama** | llama3.1, mistral, codellama | ❌ Not recommended | Local testing only, limited function calling |
+
+### Recommended Configuration
+
+**Production (Azure Government)**
+```json
+{
+  "Gateway": {
+    "AzureOpenAI": {
+      "Endpoint": "https://your-resource.openai.azure.us/",
+      "ApiKey": "your-api-key-or-use-managed-identity",
+      "DeploymentName": "gpt-4o",
+      "ChatDeploymentName": "gpt-4o",
+      "EmbeddingDeploymentName": "text-embedding-ada-002",
+      "UseManagedIdentity": false
+    },
+    "Azure": {
+      "CloudEnvironment": "AzureGovernment"
+    }
+  }
+}
+```
+
+**Development (Azure Commercial)**
+```json
+{
+  "Gateway": {
+    "AzureOpenAI": {
+      "Endpoint": "https://your-resource.openai.azure.com/",
+      "ApiKey": "your-api-key",
+      "DeploymentName": "gpt-4o",
+      "ChatDeploymentName": "gpt-4o",
+      "EmbeddingDeploymentName": "text-embedding-ada-002"
+    }
+  }
+}
+```
+
+### Model Requirements by Agent
+
+Each specialized agent has different LLM requirements:
+
+#### 1. **Orchestrator Agent** (Entry Point)
+- **Model**: GPT-4o or GPT-4 Turbo
+- **Context Window**: 128K tokens minimum
+- **Temperature**: 0.0 (deterministic routing)
+- **Why**: Routes requests to specialized agents, requires consistent decision-making
+- **Token Usage**: Low (50-200 tokens per request)
+
+#### 2. **Infrastructure Agent** 🏗️
+- **Model**: GPT-4o (required for code generation)
+- **Context Window**: 128K tokens (for large Bicep/Terraform templates)
+- **Temperature**: 0.2 (balance creativity and accuracy)
+- **Function Calling**: Required (15+ kernel functions)
+- **Why**: Generates production-ready IaC templates, requires deep Azure knowledge
+- **Token Usage**: High (2000-8000 tokens per template)
+- **Special**: Integrates with Azure MCP Server for best practices
+
+```bash
+# Infrastructure Agent Functions:
+- generate_infrastructure_template         # Bicep/Terraform generation
+- generate_compliant_infrastructure_template  # FedRAMP/NIST templates
+- generate_il_compliant_template           # DoD Impact Level templates
+- design_network_topology                  # Network architecture
+- set_azure_subscription                   # Context configuration
+- search_azure_documentation               # Live Azure docs
+```
+
+#### 3. **Compliance Agent** 🛡️
+- **Model**: GPT-4o or GPT-4 Turbo
+- **Context Window**: 128K tokens (for NIST 800-53 control mappings)
+- **Temperature**: 0.0 (strict compliance assessment)
+- **Function Calling**: Required (10+ kernel functions)
+- **Why**: Analyzes compliance gaps, maps NIST controls, validates configurations
+- **Token Usage**: Medium (1000-5000 tokens per scan)
+- **Knowledge Base**: 1000+ NIST controls, 500+ STIG rules
+
+```bash
+# Compliance Agent Functions:
+- assess_nist_compliance                   # NIST 800-53 gap analysis
+- scan_code_for_compliance                 # IaC compliance scanning
+- generate_ato_documentation               # ATO package generation
+- query_knowledge_base                     # DoD/Navy requirements
+- review_pull_request                      # PR compliance review
+```
+
+#### 4. **Cost Management Agent** 💰
+- **Model**: GPT-4o or GPT-4 Turbo
+- **Context Window**: 32K tokens minimum
+- **Temperature**: 0.1 (precise cost analysis)
+- **Function Calling**: Required (8+ kernel functions)
+- **Why**: Analyzes spending patterns, forecasts costs, recommends optimizations
+- **Token Usage**: Medium (500-3000 tokens per analysis)
+
+```bash
+# Cost Management Functions:
+- analyze_subscription_costs               # Cost breakdown
+- get_cost_recommendations                 # Savings opportunities
+- forecast_costs                           # Predictive analytics
+- create_budget                            # Budget management
+```
+
+#### 5. **Discovery Agent** 🔍
+- **Model**: GPT-4 Turbo or GPT-4o
+- **Context Window**: 32K tokens minimum
+- **Temperature**: 0.0 (accurate resource inventory)
+- **Function Calling**: Required (12+ kernel functions)
+- **Why**: Queries Azure resources, relationship mapping, dependency analysis
+- **Token Usage**: Low-Medium (200-2000 tokens per query)
+
+```bash
+# Discovery Agent Functions:
+- list_resources                           # Resource inventory
+- get_resource_dependencies                # Dependency graph
+- query_resource_graph                     # Azure Resource Graph queries
+- get_resource_health                      # Health status
+```
+
+#### 6. **Security Agent** 🔐
+- **Model**: GPT-4o (required for threat analysis)
+- **Context Window**: 64K tokens minimum
+- **Temperature**: 0.0 (precise security assessment)
+- **Function Calling**: Required (10+ kernel functions)
+- **Why**: Security scanning, vulnerability detection, threat modeling
+- **Token Usage**: Medium-High (1000-6000 tokens per scan)
+
+```bash
+# Security Agent Functions:
+- scan_security_vulnerabilities            # Vulnerability scanning
+- assess_security_posture                  # Security baseline
+- analyze_network_security                 # NSG analysis
+- check_encryption_status                  # Encryption validation
+```
+
+#### 7. **Document Agent** 📄
+- **Model**: GPT-4o or GPT-4 Turbo
+- **Context Window**: 128K tokens (for long documents)
+- **Temperature**: 0.3 (creative documentation)
+- **Function Calling**: Required (8+ kernel functions)
+- **Why**: Generates technical documentation, diagrams, runbooks
+- **Token Usage**: High (3000-10000 tokens per document)
+
+```bash
+# Document Agent Functions:
+- generate_architecture_diagram            # Mermaid diagrams
+- generate_ssp_document                    # System Security Plan
+- generate_runbook                         # Operations runbook
+- search_documentation                     # Doc search
+```
+
+### Token Budget Planning
+
+**Typical Request Costs:**
+
+| Operation | Tokens (Input) | Tokens (Output) | Total Cost @ GPT-4o |
+|-----------|----------------|-----------------|---------------------|
+| Simple query | 100-500 | 50-200 | ~$0.002 |
+| Template generation | 2000-5000 | 2000-6000 | ~$0.04-$0.08 |
+| Compliance scan | 3000-8000 | 1000-4000 | ~$0.05-$0.10 |
+| ATO documentation | 5000-15000 | 8000-20000 | ~$0.15-$0.30 |
+| Multi-agent workflow | 8000-20000 | 5000-15000 | ~$0.15-$0.30 |
+
+**Cost Optimization Tips:**
+- Use caching for repeated queries (built-in with `IntelligentChatCacheService`)
+- Enable agent selection to avoid unnecessary LLM calls
+- Use fast-path routing for simple commands
+- Set appropriate context window limits per agent
+
+### Temperature Settings by Task
+
+> **⚠️ Planned Feature**: Per-agent temperature configuration is not yet implemented. Currently, temperature is hardcoded in each agent (e.g., EnvironmentAgent uses 0.3). This feature is planned for a future release.
+
+**Recommended Temperature Values (for future implementation):**
+
+| Agent | Temperature | Reasoning |
+|-------|-------------|-----------|
+| Orchestrator | 0.0 | Deterministic routing decisions |
+| Infrastructure | 0.2 | Balance creativity and accuracy for code generation |
+| Compliance | 0.0 | Strict, deterministic compliance assessment |
+| Cost Management | 0.1 | Precise analysis with slight flexibility |
+| Discovery | 0.0 | Accurate resource queries and inventory |
+| Security | 0.0 | Precise security scanning and threat detection |
+| Document | 0.3 | Creative documentation and diagram generation |
+
+**Current Behavior:**
+- All agents currently use the same Azure OpenAI deployment
+- Temperature is set individually in each agent's code
+- No configuration-based override available yet
+
+### Model Limitations & Workarounds
+
+#### GPT-4 Turbo Limitations
+- **Function Calling**: Sometimes misses required parameters
+- **Workaround**: Use GPT-4o or add explicit parameter validation
+- **Code Generation**: May produce incomplete templates
+- **Workaround**: Use post-processing validation
+
+#### GPT-4o Strengths
+- ✅ **Best function calling accuracy** (99%+ on kernel function selection)
+- ✅ **Fastest response times** (2-3x faster than GPT-4 Turbo)
+- ✅ **Better code generation** for Bicep/Terraform
+- ✅ **128K context window** (handles large templates)
+- ✅ **Structured outputs** (better JSON formatting)
+
+#### Azure Government vs Commercial
+- **Azure Government**: GPT-4o, GPT-4 Turbo available in `usgovvirginia`, `usgovarizona`
+- **Endpoint**: Use `.azure.us` domain (e.g., `https://your-resource.openai.azure.us/`)
+- **Compliance**: FedRAMP High authorized, IL4/IL5 compatible
+- **Latency**: Slightly higher than commercial (50-100ms additional)
+
+### Environment Variables Reference
+
+```bash
+# Required for all agents
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_OPENAI_API_KEY=your-api-key
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=text-embedding-ada-002
+
+# Optional - Managed Identity (Production)
+AZURE_OPENAI_USE_MANAGED_IDENTITY=true
+
+# Optional - Model overrides per agent
+INFRASTRUCTURE_AGENT_MODEL=gpt-4o
+COMPLIANCE_AGENT_MODEL=gpt-4o
+COST_AGENT_MODEL=gpt-4-turbo
+```
+
+### Testing Different Models
+
+```bash
+# Test with GPT-4o (recommended)
+export AZURE_OPENAI_DEPLOYMENT=gpt-4o
+docker-compose up -d platform-mcp
+
+# Test with GPT-4 Turbo (fallback)
+export AZURE_OPENAI_DEPLOYMENT=gpt-4-turbo
+docker-compose up -d platform-mcp
+
+# Monitor token usage
+docker logs platform-mcp 2>&1 | grep "Token usage"
+```
+
+### Troubleshooting LLM Issues
+
+**Problem: "Model not found" error**
+```bash
+# Solution: Verify deployment name
+az cognitiveservices account deployment list \
+  --name your-openai-resource \
+  --resource-group your-rg
+```
+
+**Problem: High token costs**
+```bash
+# Solution: Enable caching and agent selection
+{
+  "AgentConfiguration": {
+    "EnableAgentSelection": true,
+    "CacheTTLMinutes": 30
+  }
+}
+```
+
+**Problem: Slow responses**
+```bash
+# Solution: Use GPT-4o instead of GPT-4 Turbo
+# GPT-4o is 2-3x faster for most operations
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+```
+
+**Problem: Function calling failures**
+```bash
+# Solution: Ensure using GPT-4o or GPT-4 Turbo
+# GPT-3.5 and older models don't support function calling
+```
+
+**📖 Learn more:**
+- [ARCHITECTURE.md](./ARCHITECTURE.md#llm-integration) - Detailed LLM architecture
+- [Azure OpenAI Documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/)
+
+---
+
 ## ✅ Verification & Testing
 
 ### Health Checks
