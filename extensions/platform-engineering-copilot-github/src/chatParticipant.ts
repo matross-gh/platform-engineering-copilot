@@ -145,8 +145,16 @@ export class PlatformChatParticipant implements vscode.Disposable {
         }
 
         // Add workspace creation button for infrastructure templates
-        if (response.intentType === 'infrastructure' || this.containsInfrastructureTemplates(response.response)) {
+        config.log(`Checking for infrastructure templates - intentType: ${response.intentType}`);
+        const hasTemplates = this.containsInfrastructureTemplates(response.response);
+        config.log(`Contains infrastructure templates: ${hasTemplates}`);
+        
+        if (response.intentType === 'infrastructure' || hasTemplates) {
             const templates = this.extractInfrastructureTemplates(response.response);
+            config.log(`Extracted ${templates.size} template(s):`);
+            for (const [filename, content] of templates.entries()) {
+                config.log(`  - ${filename} (${content.length} bytes)`);
+            }
             
             if (templates.size > 0) {
                 stream.markdown('\n---\n\n');
@@ -443,9 +451,32 @@ export class PlatformChatParticipant implements vscode.Disposable {
     private extractInfrastructureTemplates(response: string): Map<string, string> {
         const templates = new Map<string, string>();
         
-        // Regex to match code blocks with language identifier
+        // First try to extract from <details> sections with filenames
+        const detailsRegex = /<details>\s*<summary>📁\s*<strong>([^<]+)<\/strong>/g;
         const codeBlockRegex = /```(\w+)\n([\s\S]*?)```/g;
         
+        // Build map of positions to filenames from details/summary tags
+        const filenamePositions = new Map<number, string>();
+        let detailsMatch;
+        while ((detailsMatch = detailsRegex.exec(response)) !== null) {
+            const filename = detailsMatch[1].trim();
+            const position = detailsMatch.index;
+            filenamePositions.set(position, filename);
+        }
+        
+        // Also check for markdown headers (### filename.bicep or ### 📁 filename.bicep)
+        const headerRegex = /###\s*(?:📁\s*)?([^\n]+)/g;
+        let headerMatch;
+        while ((headerMatch = headerRegex.exec(response)) !== null) {
+            const filename = headerMatch[1].trim();
+            const position = headerMatch.index;
+            // Only add if it looks like a filename
+            if (filename.match(/\.(bicep|tf|yaml|yml|json)$/)) {
+                filenamePositions.set(position, filename);
+            }
+        }
+        
+        // Extract code blocks and match with nearest preceding filename
         let match;
         let bicepCount = 0;
         let terraformCount = 0;
@@ -455,43 +486,99 @@ export class PlatformChatParticipant implements vscode.Disposable {
         while ((match = codeBlockRegex.exec(response)) !== null) {
             const lang = match[1].toLowerCase();
             const content = match[2].trim();
+            const codeBlockPosition = match.index;
 
             if (!content) {
                 continue;
             }
 
+            // Find the nearest filename before this code block
+            let nearestFilename: string | undefined;
+            let nearestDistance = Infinity;
+            
+            for (const [pos, filename] of filenamePositions.entries()) {
+                if (pos < codeBlockPosition) {
+                    const distance = codeBlockPosition - pos;
+                    if (distance < nearestDistance) {
+                        nearestDistance = distance;
+                        nearestFilename = filename;
+                    }
+                }
+            }
+
             // Extract Bicep templates
             if (lang === 'bicep') {
-                const filename = bicepCount === 0 ? 'main.bicep' : `module${bicepCount}.bicep`;
+                const filename = nearestFilename || (bicepCount === 0 ? 'main.bicep' : `module${bicepCount}.bicep`);
                 templates.set(filename, content);
                 bicepCount++;
+                // Remove used filename so it's not reused
+                if (nearestFilename) {
+                    for (const [pos, fname] of filenamePositions.entries()) {
+                        if (fname === nearestFilename) {
+                            filenamePositions.delete(pos);
+                            break;
+                        }
+                    }
+                }
             }
             // Extract Terraform templates
             else if (lang === 'terraform' || lang === 'hcl') {
-                const filename = terraformCount === 0 ? 'main.tf' : `${this.inferTerraformFilename(content, terraformCount)}.tf`;
+                const filename = nearestFilename || (terraformCount === 0 ? 'main.tf' : `${this.inferTerraformFilename(content, terraformCount)}.tf`);
                 templates.set(filename, content);
                 terraformCount++;
+                if (nearestFilename) {
+                    for (const [pos, fname] of filenamePositions.entries()) {
+                        if (fname === nearestFilename) {
+                            filenamePositions.delete(pos);
+                            break;
+                        }
+                    }
+                }
             }
             // Extract Kubernetes manifests
             else if ((lang === 'yaml' || lang === 'yml') && content.includes('apiVersion:')) {
                 const resourceKind = this.extractK8sKind(content) || 'resource';
-                const filename = k8sCount === 0 
+                const filename = nearestFilename || (k8sCount === 0 
                     ? `${resourceKind.toLowerCase()}.yaml` 
-                    : `${resourceKind.toLowerCase()}-${k8sCount}.yaml`;
+                    : `${resourceKind.toLowerCase()}-${k8sCount}.yaml`);
                 templates.set(filename, content);
                 k8sCount++;
+                if (nearestFilename) {
+                    for (const [pos, fname] of filenamePositions.entries()) {
+                        if (fname === nearestFilename) {
+                            filenamePositions.delete(pos);
+                            break;
+                        }
+                    }
+                }
             }
             // Extract ARM templates (JSON)
             else if (lang === 'json' && content.includes('"type": "Microsoft.')) {
-                const filename = jsonCount === 0 ? 'azuredeploy.json' : `template${jsonCount}.json`;
+                const filename = nearestFilename || (jsonCount === 0 ? 'azuredeploy.json' : `template${jsonCount}.json`);
                 templates.set(filename, content);
                 jsonCount++;
+                if (nearestFilename) {
+                    for (const [pos, fname] of filenamePositions.entries()) {
+                        if (fname === nearestFilename) {
+                            filenamePositions.delete(pos);
+                            break;
+                        }
+                    }
+                }
             }
             // Extract parameter files
             else if (lang === 'json' && (content.includes('"parameters":') || content.includes('"$schema":') && content.includes('deploymentParameters'))) {
-                const filename = 'parameters.json';
+                const filename = nearestFilename || 'parameters.json';
                 templates.set(filename, content);
                 jsonCount++;
+                if (nearestFilename) {
+                    for (const [pos, fname] of filenamePositions.entries()) {
+                        if (fname === nearestFilename) {
+                            filenamePositions.delete(pos);
+                            break;
+                        }
+                    }
+                }
             }
         }
 

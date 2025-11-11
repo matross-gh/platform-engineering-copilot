@@ -276,6 +276,63 @@ Use 'explain_dod_instruction' for complete details.
         }
     }
 
+    [KernelFunction("get_control_with_dod_instructions")]
+    [Description("Get NIST 800-53 control details with related DoD instruction references. " +
+                 "Shows which DoD instructions mandate this control with specific sections and requirements. " +
+                 "Use when users ask 'What DoD instructions require AC-2?' or 'Show DoD guidance for SC-7'")]
+    public async Task<string> GetControlWithDoDInstructionsAsync(
+        [Description("NIST 800-53 control ID (e.g., 'AC-2', 'SC-7', 'IA-2(1)')")] string nistControlId,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Getting DoD instructions for NIST control {ControlId}", nistControlId);
+        
+        try
+        {
+            var dodInstructions = await _dodInstructionService.GetInstructionsByControlAsync(
+                nistControlId, 
+                cancellationToken);
+            
+            if (!dodInstructions.Any())
+                return $"No DoD instructions found for NIST control {nistControlId}.";
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"# DoD Instructions for NIST {nistControlId}");
+            sb.AppendLine();
+            sb.AppendLine($"Found {dodInstructions.Count} DoD instruction{(dodInstructions.Count > 1 ? "s" : "")} with requirements for this control:");
+            sb.AppendLine();
+            
+            foreach (var instruction in dodInstructions)
+            {
+                var mappings = instruction.ControlMappings
+                    .Where(m => m.NistControlId.Equals(nistControlId, StringComparison.OrdinalIgnoreCase));
+                
+                foreach (var mapping in mappings)
+                {
+                    sb.AppendLine($"## {instruction.InstructionId}: {instruction.Title}");
+                    sb.AppendLine();
+                    sb.AppendLine($"**Section:** {mapping.Section}");
+                    sb.AppendLine($"**Requirement:** {mapping.Requirement}");
+                    sb.AppendLine($"**Applicable Impact Levels:** {mapping.ImpactLevel}");
+                    sb.AppendLine();
+                    sb.AppendLine($"**Full Instruction:** {instruction.Url}");
+                    sb.AppendLine();
+                    sb.AppendLine("---");
+                    sb.AppendLine();
+                }
+            }
+            
+            sb.AppendLine("Use `explain_dod_instruction` for complete details on any instruction.");
+            sb.AppendLine("Use `explain_impact_level` to understand Impact Level requirements.");
+            
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting DoD instructions for control");
+            return "Error retrieving DoD instruction mappings. Please check logs for details.";
+        }
+    }
+
     #endregion
 
     #region Workflow Functions
@@ -429,6 +486,182 @@ For IL6 systems, engagement with NSA and Defense Security Service is required.",
 
             _ => $"Impact Level {impactLevel} not found. Valid levels are IL2, IL4, IL5, and IL6."
         };
+    }
+
+    [KernelFunction("get_stig_cross_reference")]
+    [Description("Get comprehensive STIG cross-reference with NIST controls, CCIs, and DoD instructions. " +
+                 "Shows complete compliance mapping for a STIG including all related frameworks and Azure implementation details. " +
+                 "Use when users ask 'Show me all mappings for STIG V-XXXXX' or 'What NIST controls does this STIG satisfy?'")]
+    public async Task<string> GetStigCrossReferenceAsync(
+        [Description("STIG ID (e.g., V-219153) or Vuln ID to get cross-reference for")] string stigId,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Getting STIG cross-reference for {StigId}", stigId);
+        
+        try
+        {
+            return await _stigService.GetStigCrossReferenceAsync(stigId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting STIG cross-reference for {StigId}", stigId);
+            return $"Error retrieving STIG cross-reference for {stigId}. Please check logs for details.";
+        }
+    }
+
+    [KernelFunction("get_azure_stigs")]
+    [Description("Get all STIGs applicable to a specific Azure service. " +
+                 "Filters STIG controls by Azure service type (e.g., Storage, Compute, Networking, Identity, Kubernetes). " +
+                 "Use when users ask 'What STIGs apply to Azure Storage?' or 'Show me compute STIGs'")]
+    public async Task<string> GetAzureStigsAsync(
+        [Description("Azure service name (e.g., Azure Storage, Azure Virtual Machines, Azure Kubernetes Service, Azure AD, Azure Virtual Network)")] string azureService,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Getting Azure STIGs for service: {AzureService}", azureService);
+        
+        try
+        {
+            var stigs = await _stigService.GetAzureStigsAsync(azureService, cancellationToken);
+            
+            if (!stigs.Any())
+                return $@"No STIGs found for Azure service: {azureService}.
+
+Available services: Azure AD, Azure Virtual Machines, Azure Storage, Azure SQL Database, Azure Kubernetes Service, 
+Azure Virtual Network, Azure Front Door, Azure Log Analytics, Azure Backup, Azure Key Vault, Azure App Service, 
+Azure Functions, Azure Cosmos DB, Azure API Management, Azure Service Bus, Azure Container Registry, Azure Monitor, 
+Azure Firewall, Network Security Group, Azure Policy, Microsoft Defender for Cloud, Azure Private Link.";
+
+            var output = $@"# Azure STIGs for {azureService}
+
+Found {stigs.Count} STIG control(s):
+
+";
+            foreach (var stig in stigs.OrderByDescending(s => s.Severity))
+            {
+                output += $@"## {stig.StigId}: {stig.Title}
+
+**Severity:** {stig.Severity}
+**Category:** {stig.Category}
+**NIST Controls:** {string.Join(", ", stig.NistControls)}
+
+{stig.Description}
+
+**Azure Configuration:** {stig.AzureImplementation.GetValueOrDefault("configuration", "N/A")}
+**Azure Policy:** {stig.AzureImplementation.GetValueOrDefault("azurePolicy", "N/A")}
+
+---
+
+";
+            }
+
+            return output;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting Azure STIGs for service {AzureService}", azureService);
+            return $"Error retrieving Azure STIGs for {azureService}. Please check logs for details.";
+        }
+    }
+
+    [KernelFunction("get_compliance_summary")]
+    [Description("Get comprehensive compliance summary for a NIST 800-53 control. " +
+                 "Shows complete mapping: NIST control details + related STIGs + DoD instructions + implementation guidance. " +
+                 "One-stop lookup for all compliance information. " +
+                 "Use when users ask 'Show me everything about AC-4' or 'Complete compliance info for SC-28'")]
+    public async Task<string> GetComplianceSummaryAsync(
+        [Description("NIST 800-53 control ID (e.g., AC-4, SC-28, AU-2)")] string nistControlId,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Getting compliance summary for NIST control {NistControlId}", nistControlId);
+        
+        try
+        {
+            var output = $"# Compliance Summary: {nistControlId}\n\n";
+
+            // 1. Get DoD Instructions
+            output += "## DoD Instructions\n\n";
+            var dodInstructions = await _dodInstructionService.GetInstructionsByControlAsync(nistControlId, cancellationToken);
+            
+            if (dodInstructions.Any())
+            {
+                foreach (var instruction in dodInstructions)
+                {
+                    var mapping = instruction.ControlMappings?
+                        .FirstOrDefault(m => m.NistControlId.Equals(nistControlId, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (mapping != null)
+                    {
+                        output += $"### {instruction.Title}\n\n";
+                        output += $"**Instruction ID:** {instruction.InstructionId}\n";
+                        output += $"**Section:** {mapping.Section}\n";
+                        output += $"**Requirement:** {mapping.Requirement}\n";
+                        
+                        if (!string.IsNullOrEmpty(mapping.ImpactLevel))
+                            output += $"**Applicable Impact Levels:** {mapping.ImpactLevel}\n";
+                        
+                        output += $"**URL:** {instruction.Url}\n\n";
+                    }
+                }
+            }
+            else
+            {
+                output += "*No DoD instructions mapped to this control yet.*\n\n";
+            }
+
+            // 2. Get related STIGs
+            output += "## Related STIG Controls\n\n";
+            var stigs = await _stigService.GetStigsByNistControlAsync(nistControlId, cancellationToken);
+            
+            if (stigs.Any())
+            {
+                output += $"Found {stigs.Count} STIG control(s):\n\n";
+                
+                foreach (var stig in stigs.OrderByDescending(s => s.Severity))
+                {
+                    output += $"### {stig.StigId}: {stig.Title}\n\n";
+                    output += $"**Severity:** {stig.Severity}\n";
+                    output += $"**Category:** {stig.Category}\n";
+                    output += $"**CCI:** {string.Join(", ", stig.CciRefs)}\n\n";
+                    output += $"{stig.Description}\n\n";
+                    
+                    // Add Azure implementation if available
+                    if (stig.AzureImplementation != null && stig.AzureImplementation.Any())
+                    {
+                        output += "**Azure Implementation:**\n";
+                        output += $"- Service: {stig.AzureImplementation.GetValueOrDefault("service", "N/A")}\n";
+                        output += $"- Configuration: {stig.AzureImplementation.GetValueOrDefault("configuration", "N/A")}\n";
+                        
+                        if (stig.AzureImplementation.TryGetValue("azurePolicy", out var policy))
+                            output += $"- Azure Policy: {policy}\n";
+                        
+                        if (stig.AzureImplementation.TryGetValue("automation", out var automation))
+                        {
+                            output += "\n**Automation Command:**\n```bash\n";
+                            output += automation;
+                            output += "\n```\n";
+                        }
+                    }
+                    
+                    output += "\n---\n\n";
+                }
+            }
+            else
+            {
+                output += "*No STIGs mapped to this control yet.*\n\n";
+            }
+
+            output += "## Quick Reference\n\n";
+            output += $"**NIST Control:** {nistControlId}\n";
+            output += $"**DoD Instructions:** {dodInstructions.Count} found\n";
+            output += $"**STIGs:** {stigs.Count} found\n";
+
+            return output;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting compliance summary for {NistControlId}", nistControlId);
+            return $"Error retrieving compliance summary for {nistControlId}. Please check logs for details.";
+        }
     }
 
     #endregion

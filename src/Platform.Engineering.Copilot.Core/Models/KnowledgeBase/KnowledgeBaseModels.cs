@@ -81,6 +81,37 @@ public class DoDInstruction
     public List<string> RelatedNistControls { get; set; } = new();
     public List<string> RelatedStigIds { get; set; } = new();
     public string Applicability { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Detailed NIST control mappings with section references and requirements
+    /// </summary>
+    public List<DoDControlMapping> ControlMappings { get; set; } = new();
+}
+
+/// <summary>
+/// Mapping between a DoD Instruction and specific NIST 800-53 controls
+/// </summary>
+public class DoDControlMapping
+{
+    /// <summary>
+    /// NIST 800-53 control ID (e.g., "AC-2", "SC-7")
+    /// </summary>
+    public string NistControlId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Specific section within the DoD Instruction (e.g., "Enclosure 3, Section 2.a")
+    /// </summary>
+    public string Section { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// The specific requirement text from the instruction
+    /// </summary>
+    public string Requirement { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Impact levels where this requirement applies (e.g., "ALL", "IL4,IL5,IL6")
+    /// </summary>
+    public string ImpactLevel { get; set; } = "ALL";
 }
 
 /// <summary>

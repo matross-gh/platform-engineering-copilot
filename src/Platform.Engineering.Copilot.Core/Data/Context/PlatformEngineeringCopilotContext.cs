@@ -47,7 +47,8 @@ public class PlatformEngineeringCopilotContext : DbContext
     public DbSet<EnvironmentSynchronization> EnvironmentSynchronizations { get; set; }
 
     // Navy Flankspeed ServiceCreation
-    public DbSet<ServiceCreationRequest> ServiceCreationRequests { get; set; }
+    // TODO: Uncomment when ServiceCreationRequest model is implemented
+    // public DbSet<ServiceCreationRequest> ServiceCreationRequests { get; set; }
 
     // Governance and Approval Workflows
     public DbSet<ApprovalWorkflowEntity> ApprovalWorkflows { get; set; }

@@ -17,10 +17,10 @@ curl -X POST http://localhost:5100/api/chat/intelligent-query \
 |------|----------|--------|------|--------|
 | **Compliance Scan** | "check", "scan", "assess" + existing resources | ComplianceAgent | 30-60s | Compliance report |
 | **Template Gen** | "create", "deploy" (no "actually") | InfrastructureAgent | 10-30s | Bicep code |
-| **Actual Provision** | "actually provision", "make it live" | All 5 agents | 60-180s | Real Azure resources ⚠️ |
+| **Actual Provision** | "actually provision", "make it live" | Infrastructure + Environment agents | 60-180s | Real Azure resources ⚠️ |
 | **Info/Guidance** | "what are", "how do I", "best practices" | 1 agent | 5-15s | Documentation |
 
-> **� Key Difference:** "Deploy AKS" → generates template. "Actually provision this AKS" → creates real resources.
+> **🔑 Key Difference:** "Deploy AKS" → generates template. "Actually provision this AKS" → creates real resources.
 
 ---
 
@@ -37,7 +37,7 @@ Deploy an AKS cluster with 3 nodes in usgovvirginia
 **Expected Output:**
 - ✅ Bicep template files generated (main.bicep, modules/*)
 - ✅ Shows file paths and configuration summary
-- ✅ **NO** "resources created" message
+- ✅ **NO** "resources created" message until phase 2 complete
 - ⏱️ Time: 15-30 seconds
 
 **Test 2: Multi-Resource Template**
@@ -526,13 +526,14 @@ Use this to verify correct behavior:
 ## 🤖 Conversational Requirements Gathering
 
 > **✨ NEW: All Agents Support Conversational Requirements Gathering**  
-> All 6 agents now use a conversational approach to gather requirements BEFORE taking action:
+> All 5 primary agents (Infrastructure, CostManagement, Compliance, Environment, Discovery) use a conversational approach to gather requirements BEFORE taking action:
 > - **InfrastructureAgent**: Asks about environment, security, monitoring, scaling, integrations
 > - **ComplianceAgent**: Asks about subscription, scope, framework, control families
 > - **CostManagementAgent**: Asks about analysis scope, breakdown preferences, optimization focus
 > - **DiscoveryAgent**: Asks about resource types, search criteria, output format
 > - **EnvironmentAgent**: Asks about environment type, location, configuration level
-> - **ServiceCreationAgent**: Progressive questioning through 4 phases (mission basics, technical, compliance, budget)
+>
+> **Note:** ServiceCreation functionality is planned but not yet implemented. Service Wizard functionality is available via ServiceWizardPlugin.
 >
 > **Expected Conversation Flow:**
 > 1. User makes initial request (may be vague or detailed)
@@ -545,7 +546,6 @@ Use this to verify correct behavior:
 > - Ask ONLY for missing critical information
 > - Use smart defaults for non-critical details
 > - Check SharedMemory for context from previous agents
-> - Progressive disclosure (ServiceCreationAgent asks 2-4 questions at a time across 4 phases)
 
 ---
 
@@ -1333,41 +1333,39 @@ Is my staging environment configured the same as production?
 
 ---
 
-### 🚀 ServiceCreationAgent (Mission/Team ServiceCreation)
+### 🚀 Service Wizard (Mission/Team Onboarding)
 
-> **🤖 Conversational Requirements Gathering**  
-> ServiceCreationAgent uses progressive questioning through 4 phases: mission basics → technical → compliance → budget.
+> **⚠️ Note:** ServiceCreation agent is defined in AgentType enum but not yet implemented. Service onboarding functionality is currently provided via **ServiceWizardPlugin** (see PHASE1.md for implementation details).
+>
+> **Current Implementation:** ServiceWizardPlugin provides an 8-step interactive wizard for mission/team onboarding with progressive questioning.
 
-**Test 6.1: New Mission ServiceCreation (Conversational - Multi-Turn)**
+**Test 6.1: Service Wizard Availability (Plugin-Based)**
 ```
-Turn 1: "We have a new mission coming online called Project Lighthouse"
-Turn 2: (Agent asks Phase 1 questions: mission owner, classification, timeline)
-Turn 3: "Owner: CDR Sarah Johnson, sarah.johnson@navy.mil, NSWC. Classification: CUI. Timeline: 90 days"
-Turn 4: (Agent asks Phase 2 questions: workload type, scale, compute, storage)
-Turn 5: "Web app with microservices, 5000 users, need AKS and SQL database"
-Turn 6: (Agent asks Phase 3 questions: compliance framework, ATO requirements, security)
-Turn 7: "Need FedRAMP High, yes ATO required in 90 days, need Zero Trust"
-Turn 8: (Agent asks Phase 4 questions: budget, constraints)
-Turn 9: "$50k/month budget, must use usgovvirginia region"
+How do I onboard a new mission?
 ```
 **Expected Behavior:**
-- Agent asks 2-4 questions per turn (not all at once)
-- Builds on previous answers to ask relevant follow-ups
-- After Phase 4 complete, **IMMEDIATELY calls create_ServiceCreation_request**
-- No confirmation needed - just creates ServiceCreation with all gathered requirements
+- System should recognize service onboarding query
+- May route to ServiceWizardPlugin or provide guidance
+- Should explain available service creation workflows
 
 **Validation:**
-- ✅ Progressive questioning (not overwhelming)
-- ✅ Context maintained across all turns
-- ✅ For CUI classification, automatically includes compliance questions
-- ✅ For AKS requirement, includes security/networking questions
-- ✅ Final ServiceCreation request includes all gathered info
+- ✅ Query recognized and handled appropriately
+- ✅ User receives guidance on service onboarding process
+- ✅ No errors about missing ServiceCreationAgent
 
-**Test 6.2: Minimal Information ServiceCreation (Conversational)**
+**Test 6.2: Future ServiceCreation Agent (Planned)**
 ```
-I need to onboard a new mission
+Note: Full ServiceCreationAgent implementation is planned for future release.
+Current functionality via ServiceWizardPlugin includes:
+- 8-step interactive wizard
+- DoD compliance validation
+- Mission metadata collection
+- Automated approval workflows
 ```
-**Expected Behavior:**
+
+**Related Documentation:**
+- See [PHASE1.md](./PHASE1.md) for ServiceWizardPlugin implementation details
+- See [AGENT-ORCHESTRATION.md](./AGENT-ORCHESTRATION.md) for agent architecture
 1. Agent asks: ""What's the mission name? Who is the mission owner (name, email, org)? What's the data classification? What's the timeline?""
 2. User provides basic info
 3. Agent continues with technical questions
@@ -1457,39 +1455,33 @@ Turn 3: User answers ALL agents: "subscription 453c..., summary, last month by s
 
 ### Collaborative Execution (Complex Workflows with Conversational Gathering)
 
-**Test 9.1: Complete Mission Deployment (Conversational - Multi-Turn)**
+**Test 9.1: Complete Infrastructure Deployment (Conversational - Multi-Turn)**
 ```
-Turn 1: "I'm starting a new mission called Secure Ops Platform for NSWC"
-Turn 2: (ServiceCreationAgent Phase 1: mission owner, classification, timeline)
-Turn 3: "Owner: CDR Sarah Johnson, sarah@navy.mil. Classification: CUI. Timeline: 90 days"
-Turn 4: (ServiceCreationAgent Phase 2: workload, scale, compute, storage)
-Turn 5: "Web app, 5000 users, AKS + SQL + Key Vault, usgovvirginia, subscription 453c..."
-Turn 6: (ServiceCreationAgent Phase 3: compliance, ATO, security)
-Turn 7: "FedRAMP High, yes ATO in 90 days, Zero Trust required"
-Turn 8: (ServiceCreationAgent Phase 4: budget, constraints)
-Turn 9: "$50k/month budget"
-Turn 10: (ServiceCreationAgent creates request → InfrastructureAgent asks: "Confirm AKS configuration?")
-Turn 11: "yes, proceed with FedRAMP compliant template"
-Turn 12: (InfrastructureAgent generates → EnvironmentAgent asks: "Should I deploy?")
-Turn 13: "yes, deploy to usgovvirginia"
-Turn 14: (EnvironmentAgent deploys → ComplianceAgent confirms: "Scan new resources?")
-Turn 15: "yes"
-Turn 16: (ComplianceAgent scans → CostManagementAgent confirms: "Estimate costs?")
-Turn 17: "yes"
+Turn 1: "I need to deploy a new AKS cluster for a production workload"
+Turn 2: (InfrastructureAgent asks: environment type, location, security requirements)
+Turn 3: "Production, usgovvirginia, FedRAMP High, Zero Trust, subscription 453c..."
+Turn 4: (InfrastructureAgent asks: monitoring, scaling, integrations)
+Turn 5: "Yes monitoring, autoscaling 3-10 nodes, integrate with Key Vault"
+Turn 6: (InfrastructureAgent generates FedRAMP-compliant template)
+Turn 7: (EnvironmentAgent asks: "Should I deploy this to usgovvirginia?")
+Turn 8: "yes, proceed"
+Turn 9: (EnvironmentAgent deploys → ComplianceAgent confirms: "Scan new resources?")
+Turn 10: "yes"
+Turn 11: (ComplianceAgent scans → CostManagementAgent confirms: "Estimate costs?")
+Turn 12: "yes"
 ```
 **Expected:**
-- ServiceCreationAgent: Progressive 4-phase questioning → creates request
-- InfrastructureAgent: Uses ServiceCreation data, confirms only template type → generates
+- InfrastructureAgent: Asks environment/security questions → generates template
 - EnvironmentAgent: Uses template from SharedMemory, confirms deploy → deploys
 - ComplianceAgent: Uses resource group from SharedMemory, confirms scan → scans
 - CostManagementAgent: Uses resources from SharedMemory, confirms estimate → estimates
 
 **Validation:**
-- ✅ All 5 agents invoked in sequence
+- ✅ All 4 agents invoked in sequence (Infrastructure → Environment → Compliance → Cost)
 - ✅ Each agent checks SharedMemory before asking questions
-- ✅ No redundant questions (subscription, location, etc. asked once)
+- ✅ No redundant questions (subscription, location asked once)
 - ✅ User only confirms intent, not re-provides data
-- ✅ Full mission deployment with compliance and cost tracking
+- ✅ Full deployment with compliance and cost tracking
 
 ---
 
@@ -1611,11 +1603,17 @@ I need to know what resources I have and how much they're costing me. Break down
 
 ### Collaborative Execution (Complex Workflows)
 
-**Test 9.1: Complete Mission Deployment**
+**Test 9.1: Complete Infrastructure Deployment with Compliance**
 ```
-I'm starting a new mission called "Secure Operations Platform" for NSWC. We need a complete setup: onboard the mission, provision infrastructure (AKS, SQL, Key Vault) in USGov Virginia, configure it properly, check compliance, and set up cost tracking with a $50k/month budget.
+I need a production AKS cluster in USGov Virginia with SQL database and Key Vault, configure for FedRAMP High, check compliance, and set up cost tracking with a $50k/month budget.
 ```
-**Expected:** ServiceCreationAgent → InfrastructureAgent → EnvironmentAgent → ComplianceAgent → CostManagementAgent
+**Expected:** InfrastructureAgent → EnvironmentAgent → ComplianceAgent → CostManagementAgent
+
+**Validation:**
+- ✅ Infrastructure generates FedRAMP-compliant templates
+- ✅ Environment deploys to usgovvirginia
+- ✅ Compliance scans for NIST 800-53 controls
+- ✅ Cost tracking configured with budget alert
 
 **Test 9.2: Environment Migration**
 ```
@@ -2144,7 +2142,13 @@ We're deploying a new mission-critical application for SPAWAR. The application i
 
 Please help me get this set up and ensure everything is compliant.
 ```
-**Expected:** Full multi-agent orchestration (ServiceCreation → Infrastructure → Environment → Compliance → Cost)
+**Expected:** Multi-agent orchestration (Infrastructure → Environment → Compliance → Cost)
+
+**Validation:**
+- ✅ InfrastructureAgent generates FedRAMP-compliant templates
+- ✅ EnvironmentAgent configures private VNets and security
+- ✅ ComplianceAgent validates RMF requirements
+- ✅ CostManagementAgent sets up budget alerts at $25k threshold
 
 ---
 
@@ -2391,13 +2395,12 @@ Use this checklist to verify conversational requirements gathering is working co
 - [ ] Context is maintained throughout conversation
 - [ ] Each agent confirms intent but doesn't re-ask for data
 
-### ServiceCreationAgent Progressive Questioning
-- [ ] Asks 2-4 questions per turn (not overwhelming)
-- [ ] Progresses through 4 phases: basics → technical → compliance → budget
-- [ ] Builds on previous answers for follow-up questions
-- [ ] For classified missions, includes compliance/ATO questions
-- [ ] For large-scale missions, includes performance/cost questions
-- [ ] After Phase 4 complete, creates ServiceCreation request immediately
+### Service Wizard (Plugin-Based, Not Agent)
+**Note:** ServiceCreation functionality currently provided via ServiceWizardPlugin
+- [ ] Wizard provides 8-step interactive flow
+- [ ] Includes DoD compliance validation
+- [ ] Mission metadata collection
+- [ ] See PHASE1.md for implementation details
 
 ### Error Handling
 - [ ] Agent handles very vague requests gracefully (asks clarifying questions)
@@ -2415,7 +2418,7 @@ Use this checklist to verify conversational requirements gathering is working co
 | Agent asks same question twice | Not checking conversation history | Agent must review previous messages before asking |
 | Agent asks for confirmation after user answers | Over-cautious prompting | After user provides answers, call function immediately |
 | Multi-agent workflow asks for subscription ID 3 times | Not checking SharedMemory | Each agent must check SharedMemory for context first |
-| ServiceCreationAgent overwhelms with 10+ questions at once | No progressive disclosure | Ask 2-4 questions per turn across 4 phases |
+| Agent overwhelms with too many questions at once | No progressive disclosure | Ask 2-5 targeted questions per turn |
 | Agent generates template without asking questions | Missing conversational trigger | Agent must ask questions BEFORE calling functions |
 | Agent provides guidance but doesn't call function | Response-only mode | Agent must CALL FUNCTIONS, not just explain what it would do |
 
@@ -2429,7 +2432,8 @@ Use this checklist to verify conversational requirements gathering is working co
 - **CostManagementAgent**: 2-4 questions (scope, time period, breakdown, optimization focus)
 - **DiscoveryAgent**: 2-3 questions (resource types, scope, output format)
 - **EnvironmentAgent**: 3-4 questions (environment type, location, configuration level)
-- **ServiceCreationAgent**: 8-12 questions across 4 phases (2-4 per phase)
+
+**Note:** ServiceWizardPlugin (8-step wizard) is available for mission/team onboarding workflows
 
 ### Conversational Flow Patterns
 

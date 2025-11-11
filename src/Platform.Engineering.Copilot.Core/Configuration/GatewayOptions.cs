@@ -33,8 +33,10 @@ public class GatewayOptions
 /// </summary>
 public class AzureGatewayOptions
 {
+    public const string SectionName = "Gateway:Azure";
+
     /// <summary>
-    /// Azure subscription ID
+    /// Default Azure subscription ID to use for resource operations
     /// </summary>
     public string? SubscriptionId { get; set; }
 
@@ -44,14 +46,14 @@ public class AzureGatewayOptions
     public string? TenantId { get; set; }
 
     /// <summary>
-    /// Whether to use managed identity
+    /// Azure cloud environment (AzureCloud, AzureGovernment, etc.)
     /// </summary>
-    public bool UseManagedIdentity { get; set; } = true;
+    public string CloudEnvironment { get; set; } = "AzureCloud";
 
     /// <summary>
-    /// Azure cloud environment (AzureCloud, AzureGovernment, AzureChina, AzureGermany)
+    /// Whether to use managed identity for authentication
     /// </summary>
-    public string? CloudEnvironment { get; set; }
+    public bool UseManagedIdentity { get; set; }
 
     /// <summary>
     /// Whether Azure integration is enabled

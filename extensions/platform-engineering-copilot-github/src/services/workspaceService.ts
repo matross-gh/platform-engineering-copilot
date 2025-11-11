@@ -176,11 +176,22 @@ export class WorkspaceService {
         if (templateType === 'bicep') {
             // Organize Bicep files
             for (const [fileName, content] of files.entries()) {
-                const relativePath = fileName.endsWith('.json') 
-                    ? fileName // parameters file in root
-                    : fileName.includes('module') 
-                        ? `modules/${fileName}` // modules in subfolder
-                        : fileName; // main files in root
+                // Use filename as-is if it already includes a path, otherwise organize into modules/
+                let relativePath: string;
+                
+                if (fileName.includes('/')) {
+                    // Already has a path (e.g., "modules/acr.bicep"), use as-is
+                    relativePath = fileName;
+                } else if (fileName.endsWith('.json') || fileName === 'main.bicep' || fileName === 'README.md') {
+                    // Root files: parameters.json, main.bicep, README.md
+                    relativePath = fileName;
+                } else if (fileName.includes('module') || fileName.endsWith('.bicep')) {
+                    // Module files without path, put in modules/ folder
+                    relativePath = `modules/${fileName}`;
+                } else {
+                    // Everything else in root
+                    relativePath = fileName;
+                }
 
                 fileStructure.push({
                     relativePath,

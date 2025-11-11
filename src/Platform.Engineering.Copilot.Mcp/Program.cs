@@ -14,7 +14,6 @@ using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
 using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
 using Platform.Engineering.Copilot.Environment.Core.Extensions;
 using Platform.Engineering.Copilot.Discovery.Core.Extensions;
-using Platform.Engineering.Copilot.ServiceCreation.Core.Extensions;
 using Platform.Engineering.Copilot.Document.Core.Extensions;
 using Serilog;
 using Platform.Engineering.Copilot.Security.Agent.Extensions;
@@ -209,12 +208,6 @@ class Program
         {
             builder.Services.AddDiscoveryAgent();
             logger.LogInformation("✅ Discovery agent enabled");
-        }
-
-        if (agentConfig.IsAgentEnabled("ServiceCreation"))
-        {
-            builder.Services.AddServiceCreationAgent();
-            logger.LogInformation("✅ ServiceCreation agent enabled");
         }
 
         if (agentConfig.IsAgentEnabled("Security"))

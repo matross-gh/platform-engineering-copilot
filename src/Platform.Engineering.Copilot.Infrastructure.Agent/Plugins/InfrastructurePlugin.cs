@@ -377,6 +377,31 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
             // Map resource type to compute platform
             var computePlatform = MapResourceTypeToComputePlatform(resourceType);
 
+            // Get Azure best practices from MCP server
+            string? bestPracticesGuidance = null;
+            try
+            {
+                await _azureMcpClient.InitializeAsync(cancellationToken);
+                _logger.LogInformation("📚 Fetching Azure best practices for {ResourceType} via Azure MCP", resourceType);
+
+                var toolName = infraFormat == InfrastructureFormat.Terraform ? "azureterraformbestpractices" : "get_bestpractices";
+                var bestPractices = await _azureMcpClient.CallToolAsync(toolName, 
+                    new Dictionary<string, object?>
+                    {
+                        ["resourceTypes"] = resourceType
+                    }, cancellationToken);
+
+                if (bestPractices.Success)
+                {
+                    bestPracticesGuidance = bestPractices.Result?.ToString();
+                    _logger.LogInformation("✅ Retrieved Azure best practices guidance ({Length} chars)", bestPracticesGuidance?.Length ?? 0);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "⚠️ Could not retrieve best practices from Azure MCP - continuing without them");
+            }
+
             // Create template generation request with resource-specific defaults
             var request = BuildTemplateGenerationRequest(
                 resourceType, 
@@ -386,6 +411,12 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
                 location, 
                 nodeCount, 
                 subscriptionId);
+
+            // Add best practices to description if available
+            if (!string.IsNullOrEmpty(bestPracticesGuidance))
+            {
+                request.Description = $"{request.Description}\n\n=== AZURE BEST PRACTICES ===\n{bestPracticesGuidance}";
+            }
 
             // Generate the template
             var result = await _templateGenerator.GenerateTemplateAsync(request, cancellationToken);
@@ -433,42 +464,28 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
             response.AppendLine($"📄 **Generated {result.Files.Count} Files:**");
             response.AppendLine();
 
-            // List all files
+            // List files with sizes (don't include full code blocks to avoid token limits)
             foreach (var file in result.Files.OrderBy(f => f.Key))
             {
-                var lineCount = file.Value.Split('\n').Length;
-                response.AppendLine($"- `{file.Key}` ({lineCount} lines)");
+                var lines = file.Value.Split('\n').Length;
+                var sizeKb = file.Value.Length / 1024.0;
+                response.AppendLine($"- `{file.Key}` ({lines} lines, {sizeKb:F1} KB)");
             }
-
-            // Show main file content only
-            var mainFile = result.Files.FirstOrDefault(f => f.Key.Contains("main.bicep") || f.Key.Contains("main.tf"));
-            if (mainFile.Key != null)
-            {
-                response.AppendLine();
-                response.AppendLine($"### 📁 {mainFile.Key}");
-                response.AppendLine();
-                response.AppendLine("```" + (infraFormat == InfrastructureFormat.Bicep ? "bicep" : "hcl"));
-                response.AppendLine(mainFile.Value);
-                response.AppendLine("```");
-                response.AppendLine();
-            }
-
-            response.AppendLine("💡 **To view other module files**, ask:");
-            response.AppendLine("- \"Show me the cluster.bicep file\"");
-            response.AppendLine("- \"Show me the network.bicep file\"");
-            response.AppendLine("- Or \"Show me all the files\"");
+            
+            response.AppendLine();
+            response.AppendLine("💡 **To view the code:** Ask me to \"Show all generated files\" or \"Show the [filename]\" to see specific files.");
             response.AppendLine();
 
             response.AppendLine("💡 **Next Steps:**");
             if (infraFormat == InfrastructureFormat.Bicep)
             {
-                response.AppendLine("1. Save the template as `main.bicep`");
+                response.AppendLine("1. Click **'📁 Create Project in Workspace'** below to save all files");
                 response.AppendLine("2. Review and customize parameters");
                 response.AppendLine("3. Deploy: `az deployment group create --resource-group <rg-name> --template-file main.bicep`");
             }
             else
             {
-                response.AppendLine("1. Save the template as `main.tf`");
+                response.AppendLine("1. Click **'📁 Create Project in Workspace'** below to save all files");
                 response.AppendLine("2. Review and customize terraform parameters");
                 response.AppendLine("3. Run `terraform init`");
                 response.AppendLine("4. Run `terraform plan` to review changes");
@@ -540,6 +557,31 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
             // Map resource type to compute platform
             var computePlatform = MapResourceTypeToComputePlatform(effectiveResourceType);
 
+            // Get Azure best practices from MCP server
+            string? bestPracticesGuidance = null;
+            try
+            {
+                await _azureMcpClient.InitializeAsync(cancellationToken);
+                _logger.LogInformation("📚 Fetching Azure best practices for {ResourceType} via Azure MCP", effectiveResourceType);
+
+                var toolName = infraFormat == InfrastructureFormat.Terraform ? "azureterraformbestpractices" : "get_bestpractices";
+                var bestPractices = await _azureMcpClient.CallToolAsync(toolName, 
+                    new Dictionary<string, object?>
+                    {
+                        ["resourceTypes"] = effectiveResourceType
+                    }, cancellationToken);
+
+                if (bestPractices.Success)
+                {
+                    bestPracticesGuidance = bestPractices.Result?.ToString();
+                    _logger.LogInformation("✅ Retrieved Azure best practices guidance ({Length} chars)", bestPracticesGuidance?.Length ?? 0);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "⚠️ Could not retrieve best practices from Azure MCP - continuing without them");
+            }
+
             // Create template generation request with resource-specific defaults
             var request = BuildTemplateGenerationRequest(
                 effectiveResourceType, 
@@ -549,6 +591,12 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
                 location, 
                 nodeCount, 
                 subscriptionId);
+
+            // Add best practices to description if available
+            if (!string.IsNullOrEmpty(bestPracticesGuidance))
+            {
+                request.Description = $"{request.Description}\n\n=== AZURE BEST PRACTICES ===\n{bestPracticesGuidance}";
+            }
 
             // Use compliance enhancer to inject controls and validate
             var result = await _complianceEnhancer.EnhanceWithComplianceAsync(
@@ -600,38 +648,36 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
             response.AppendLine("📄 **Generated Files:**");
             response.AppendLine();
 
-            // List files with sizes instead of dumping all content
-            foreach (var file in result.Files)
+            // List files with sizes (don't include full code blocks to avoid token limits)
+            foreach (var file in result.Files.OrderBy(f => f.Key))
             {
                 var lines = file.Value.Split('\n').Length;
-                var size = file.Value.Length;
-                var sizeKb = size / 1024.0;
+                var sizeKb = file.Value.Length / 1024.0;
                 response.AppendLine($"- `{file.Key}` ({lines} lines, {sizeKb:F1} KB)");
             }
+            
             response.AppendLine();
-            response.AppendLine("💡 **To view the code:** Ask me to \"Show the [filename]\" or \"Display all generated files\"");
+            response.AppendLine("💡 **To view the code:** Ask me to \"Show all generated files\" or \"Show the [filename]\" to see specific files.");
             response.AppendLine();
 
             response.AppendLine("💡 **Next Steps:**");
             if (infraFormat == InfrastructureFormat.Bicep)
             {
-                response.AppendLine("1. Ask me to \"Show the main.bicep file\" to view the complete template");
+                response.AppendLine("1. Click **'📁 Create Project in Workspace'** below to save all files");
                 response.AppendLine("2. Review the compliance-enhanced template");
                 response.AppendLine("3. Verify all required NIST controls are implemented");
-                response.AppendLine("4. Save the main template as `main.bicep`");
-                response.AppendLine("5. Save the other module templates as `**.bicep` and customize parameters if needed");
-                response.AppendLine("6. Deploy: `az deployment group create --resource-group <rg-name> --template-file main.bicep`");
-                response.AppendLine("7. After deployment, validate that all compliance controls are properly configured and active");
+                response.AppendLine("4. Customize parameters in `parameters.json` if needed");
+                response.AppendLine("5. Deploy: `az deployment group create --resource-group <rg-name> --template-file main.bicep`");
+                response.AppendLine("6. After deployment, validate that all compliance controls are properly configured and active");
             }
             else
             {
-                response.AppendLine("1. Ask me to \"Show the main.tf file\" to view the complete template");
+                response.AppendLine("1. Click **'📁 Create Project in Workspace'** below to save all files");
                 response.AppendLine("2. Review the compliance-enhanced template");
                 response.AppendLine("3. Verify all required NIST controls are implemented");
-                response.AppendLine("4. Save the template as `main.tf`");
-                response.AppendLine("5. Run `terraform init` and `terraform plan`");
-                response.AppendLine("6. Deploy with `terraform apply`");
-                response.AppendLine("7. After deployment, validate that all compliance controls are properly configured and active");
+                response.AppendLine("4. Run `terraform init` and `terraform plan`");
+                response.AppendLine("5. Deploy with `terraform apply`");
+                response.AppendLine("6. After deployment, validate that all compliance controls are properly configured and active");
             }
 
             return response.ToString();
@@ -1242,7 +1288,7 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
 
     // ========== AZURE MCP ENHANCED FUNCTIONS ==========
 
-    [KernelFunction("generate_infrastructure_template")]
+    [KernelFunction("generate_template_with_best_practices")]
     [Description("Generate Azure infrastructure templates with built-in Microsoft best practices and schema validation. " +
                  "Combines dynamic template generation with Azure MCP best practices guidance and Bicep schema validation. " +
                  "Use when you want infrastructure templates that follow Azure Well-Architected Framework by default.")]
@@ -1817,6 +1863,31 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
                 return $"❌ Invalid template type: {templateType}. Must be one of: Bicep, Terraform, ARM";
             }
 
+            // Get Azure best practices from MCP server
+            string? bestPracticesGuidance = null;
+            try
+            {
+                await _azureMcpClient.InitializeAsync(cancellationToken);
+                _logger.LogInformation("📚 Fetching Azure best practices for {ResourceType} via Azure MCP", resourceType);
+
+                var toolName = parsedTemplateType == TemplateType.Terraform ? "azureterraformbestpractices" : "get_bestpractices";
+                var bestPractices = await _azureMcpClient.CallToolAsync(toolName, 
+                    new Dictionary<string, object?>
+                    {
+                        ["resourceTypes"] = resourceType
+                    }, cancellationToken);
+
+                if (bestPractices.Success)
+                {
+                    bestPracticesGuidance = bestPractices.Result?.ToString();
+                    _logger.LogInformation("✅ Retrieved Azure best practices guidance ({Length} chars)", bestPracticesGuidance?.Length ?? 0);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "⚠️ Could not retrieve best practices from Azure MCP - continuing without them");
+            }
+
             var request = new IlTemplateRequest
             {
                 ImpactLevel = parsedImpactLevel,
@@ -2105,6 +2176,619 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
             TemplateType.Helm => "yaml",
             _ => "txt"
         };
+    }
+
+    #endregion
+
+    #region Azure MCP Context Configuration
+
+    [KernelFunction("set_azure_subscription")]
+    [Description("Configure the default Azure subscription for the current session. " +
+                 "**CRITICAL**: Call this function when user says 'use subscription X' or 'for all operations'. " +
+                 "This is a CONFIGURATION-ONLY function - NOT for creating/deploying resources. " +
+                 "User phrases that trigger this function: " +
+                 "'Use subscription 12345', 'Set subscription to abc', 'Use subscription X for all operations', " +
+                 "'Switch to subscription Y', 'Change subscription to Z'. " +
+                 "After calling this function, return the success message - do NOT ask follow-up questions.")]
+    public async Task<string> SetAzureSubscriptionAsync(
+        [Description("Azure subscription ID or name to use for all operations")]
+        string subscriptionId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("📋 Setting default Azure subscription: {SubscriptionId}", subscriptionId);
+
+            // Update the MCP configuration
+            var config = _azureMcpClient.GetType()
+                .GetField("_configuration", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.GetValue(_azureMcpClient) as AzureMcpConfiguration;
+
+            if (config != null)
+            {
+                config.SubscriptionId = subscriptionId;
+            }
+
+            // Reinitialize MCP with new context
+            await _azureMcpClient.InitializeAsync(cancellationToken);
+
+            return $@"✅ **Azure Subscription Configured**
+
+Default subscription set to: `{subscriptionId}`
+
+All subsequent Platform Engineering Copilot operations will use this subscription unless explicitly overridden.
+
+💡 **What this means:**
+- Resource queries will target this subscription
+- Deployments will go to this subscription
+- Cost analysis will use this subscription's data";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting Azure subscription");
+            return $"❌ Failed to set subscription: {ex.Message}";
+        }
+    }
+
+    [KernelFunction("set_azure_tenant")]
+    [Description("Configure which Azure tenant/directory to authenticate against for Azure operations. " +
+                 "ONLY use this function when users explicitly want to change the tenant context. " +
+                 "Keywords: 'use tenant', 'set tenant', 'authenticate to tenant', 'switch tenant'. " +
+                 "Examples: 'Use tenant 12345678-aaaa-bbbb-cccc-123456789012', 'Set tenant to abc-123'. " +
+                 "This is a CONFIGURATION function, NOT for creating resources.")]
+    public async Task<string> SetAzureTenantAsync(
+        [Description("Azure tenant ID (GUID) to use for authentication")]
+        string tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("🔐 Setting Azure tenant ID: {TenantId}", tenantId);
+
+            // Update the MCP configuration
+            var config = _azureMcpClient.GetType()
+                .GetField("_configuration", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.GetValue(_azureMcpClient) as AzureMcpConfiguration;
+
+            if (config != null)
+            {
+                config.TenantId = tenantId;
+            }
+
+            // Reinitialize MCP with new context
+            await _azureMcpClient.InitializeAsync(cancellationToken);
+
+            return $@"✅ **Azure Tenant Configured**
+
+Tenant ID set to: `{tenantId}`
+
+All Azure authentication will use this tenant.
+
+💡 **What this means:**
+- Service Principal authentication will use this tenant
+- Resource queries will be scoped to this tenant
+- Multi-tenant scenarios are now properly configured";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting Azure tenant");
+            return $"❌ Failed to set tenant: {ex.Message}";
+        }
+    }
+
+    [KernelFunction("set_authentication_method")]
+    [Description("Set the authentication method for Azure operations. " +
+                 "Use this when users specify how to authenticate. " +
+                 "Methods: 'credential' (Service Principal/Managed Identity/Azure CLI), 'key', 'connectionString'. " +
+                 "Examples: 'Use credential authentication', 'Set authentication to key-based'")]
+    public async Task<string> SetAuthenticationMethodAsync(
+        [Description("Authentication method: credential, key, or connectionString")]
+        string authenticationMethod,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("🔑 Setting authentication method: {Method}", authenticationMethod);
+
+            // Validate authentication method
+            var validMethods = new[] { "credential", "key", "connectionString" };
+            if (!validMethods.Contains(authenticationMethod.ToLower()))
+            {
+                return $@"❌ **Invalid Authentication Method**
+
+Provided: `{authenticationMethod}`
+
+Valid methods:
+- **credential** - Azure Identity SDK (Service Principal, Managed Identity, Azure CLI)
+- **key** - Access key authentication (for Storage, Cosmos DB, etc.)
+- **connectionString** - Connection string authentication
+
+Please specify one of the valid methods.";
+            }
+
+            // Update the MCP configuration
+            var config = _azureMcpClient.GetType()
+                .GetField("_configuration", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.GetValue(_azureMcpClient) as AzureMcpConfiguration;
+
+            if (config != null)
+            {
+                config.AuthenticationMethod = authenticationMethod.ToLower();
+            }
+
+            // Reinitialize MCP with new context
+            await _azureMcpClient.InitializeAsync(cancellationToken);
+
+            var methodDescription = authenticationMethod.ToLower() switch
+            {
+                "credential" => "Azure Identity SDK - Will use Service Principal (AZURE_CLIENT_ID/SECRET), Managed Identity, or Azure CLI credentials",
+                "key" => "Access Key - Uses storage account keys or database keys for authentication",
+                "connectionString" => "Connection String - Uses full connection strings including credentials",
+                _ => "Unknown method"
+            };
+
+            return $@"✅ **Authentication Method Configured**
+
+Method set to: `{authenticationMethod}`
+
+**Details:** {methodDescription}
+
+All Azure MCP operations will use this authentication method.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting authentication method");
+            return $"❌ Failed to set authentication method: {ex.Message}";
+        }
+    }
+
+    [KernelFunction("get_azure_context")]
+    [Description("Get the current Azure context configuration (subscription, tenant, authentication method). " +
+                 "Use this when users ask 'what subscription am I using?' or 'show current Azure settings'.")]
+    public async Task<string> GetAzureContextAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("📋 Retrieving current Azure context");
+
+            // Get the MCP configuration
+            var config = _azureMcpClient.GetType()
+                .GetField("_configuration", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.GetValue(_azureMcpClient) as AzureMcpConfiguration;
+
+            if (config == null)
+            {
+                return "❌ Unable to retrieve Azure context configuration";
+            }
+
+            var response = new StringBuilder();
+            response.AppendLine("# 📋 Current Azure Context");
+            response.AppendLine();
+            response.AppendLine("## Configuration");
+            response.AppendLine();
+            response.AppendLine($"**Subscription ID:** `{config.SubscriptionId ?? "Not set (will use default from credentials)"}`");
+            response.AppendLine($"**Tenant ID:** `{config.TenantId ?? "Not set (will use default from credentials)"}`");
+            response.AppendLine($"**Authentication Method:** `{config.AuthenticationMethod}`");
+            response.AppendLine($"**Read-Only Mode:** `{config.ReadOnly}`");
+            response.AppendLine($"**Debug Mode:** `{config.Debug}`");
+            response.AppendLine();
+
+            if (config.Namespaces?.Any() == true)
+            {
+                response.AppendLine($"**Enabled Services:** {string.Join(", ", config.Namespaces)}");
+            }
+            else
+            {
+                response.AppendLine("**Enabled Services:** All Azure services");
+            }
+
+            response.AppendLine();
+            response.AppendLine("---");
+            response.AppendLine();
+            response.AppendLine("💡 **To change settings:**");
+            response.AppendLine("- Set subscription: \"Use subscription <subscription-id>\"");
+            response.AppendLine("- Set tenant: \"Authenticate using tenant <tenant-id>\"");
+            response.AppendLine("- Set auth method: \"Use 'credential' authentication\"");
+
+            return response.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving Azure context");
+            return $"❌ Failed to get Azure context: {ex.Message}";
+        }
+    }
+
+    #endregion
+
+    #region Azure Documentation Search
+
+    [KernelFunction("search_azure_documentation")]
+    [Description("Provide Azure documentation guidance, best practices, and direct links to official Microsoft Learn documentation. " +
+                 "Use this when users ask to 'search Azure docs', 'find Azure documentation', or need Azure-specific technical information. " +
+                 "Examples: 'Search Azure docs for AKS private cluster', 'Find documentation on Azure Storage encryption', 'How to configure Azure Firewall rules'")]
+    public async Task<string> SearchAzureDocumentationAsync(
+        [Description("Search query or topic (e.g., 'AKS private cluster networking', 'Storage account encryption', 'App Service custom domains')")]
+        string searchQuery,
+        [Description("Optional: Specific Azure service to focus on (e.g., 'AKS', 'Storage', 'App Service', 'Key Vault')")]
+        string? azureService = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("🔍 Generating Azure documentation guidance for: {Query}", searchQuery);
+
+            // Initialize Azure MCP client for live resource queries
+            await _azureMcpClient.InitializeAsync(cancellationToken);
+
+            // Build comprehensive documentation response
+            var response = new StringBuilder();
+            response.AppendLine($"# 📚 Azure Documentation - {searchQuery}");
+            response.AppendLine();
+
+            // Determine the service and provide specific documentation
+            var serviceLower = azureService?.ToLowerInvariant() ?? "";
+            var queryLower = searchQuery.ToLowerInvariant();
+
+            // Detect service from query if not explicitly provided
+            if (string.IsNullOrEmpty(serviceLower))
+            {
+                if (queryLower.Contains("aks") || queryLower.Contains("kubernetes"))
+                    serviceLower = "aks";
+                else if (queryLower.Contains("storage") || queryLower.Contains("blob"))
+                    serviceLower = "storage";
+                else if (queryLower.Contains("app service") || queryLower.Contains("web app"))
+                    serviceLower = "app service";
+                else if (queryLower.Contains("key vault") || queryLower.Contains("keyvault"))
+                    serviceLower = "key vault";
+                else if (queryLower.Contains("sql") || queryLower.Contains("database"))
+                    serviceLower = "sql";
+                else if (queryLower.Contains("functions") || queryLower.Contains("function app"))
+                    serviceLower = "functions";
+                else if (queryLower.Contains("cosmos"))
+                    serviceLower = "cosmos";
+                else if (queryLower.Contains("firewall"))
+                    serviceLower = "firewall";
+                else if (queryLower.Contains("virtual network") || queryLower.Contains("vnet"))
+                    serviceLower = "vnet";
+            }
+
+            // Query live Azure resources using service-specific MCP tools
+            string? liveResourceInfo = null;
+            try
+            {
+                liveResourceInfo = await GetLiveResourceInfoAsync(serviceLower, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not retrieve live Azure resource information for {Service}", serviceLower);
+            }
+
+            // Provide service-specific documentation
+            switch (serviceLower)
+            {
+                case "aks":
+                case "kubernetes":
+                    response.AppendLine("## Azure Kubernetes Service (AKS)");
+                    response.AppendLine();
+                    
+                    // Add live resource information if available
+                    if (!string.IsNullOrEmpty(liveResourceInfo))
+                    {
+                        response.AppendLine("### 🔴 Your AKS Clusters");
+                        response.AppendLine();
+                        response.AppendLine(liveResourceInfo);
+                        response.AppendLine();
+                    }
+                    
+                    if (queryLower.Contains("private") || queryLower.Contains("networking") || queryLower.Contains("network"))
+                    {
+                        response.AppendLine("### Private Cluster Networking");
+                        response.AppendLine();
+                        response.AppendLine("**Private AKS clusters** restrict API server access to private IP addresses for enhanced security.");
+                        response.AppendLine();
+                        response.AppendLine("**Key Concepts:**");
+                        response.AppendLine("- API server endpoint is only accessible from private network");
+                        response.AppendLine("- Requires Azure Private Link for connectivity");
+                        response.AppendLine("- DNS resolution through private DNS zones");
+                        response.AppendLine("- Compatible with Azure CNI or kubenet networking");
+                        response.AppendLine();
+                        response.AppendLine("**Network Configuration:**");
+                        response.AppendLine("- **Azure CNI**: Pods get IPs from VNet subnet");
+                        response.AppendLine("- **Kubenet**: Pods use NAT, nodes get VNet IPs");
+                        response.AppendLine("- **Network Policies**: Calico or Azure Network Policies");
+                        response.AppendLine("- **Ingress**: Application Gateway, NGINX, or Traefik");
+                        response.AppendLine();
+                        response.AppendLine("**Private Cluster Setup:**");
+                        response.AppendLine("```bash");
+                        response.AppendLine("# Create private AKS cluster");
+                        response.AppendLine("az aks create \\");
+                        response.AppendLine("  --resource-group myResourceGroup \\");
+                        response.AppendLine("  --name myPrivateCluster \\");
+                        response.AppendLine("  --enable-private-cluster \\");
+                        response.AppendLine("  --network-plugin azure \\");
+                        response.AppendLine("  --vnet-subnet-id <subnet-id>");
+                        response.AppendLine("```");
+                        response.AppendLine();
+                    }
+                    
+                    response.AppendLine("### Official Documentation");
+                    response.AppendLine("- [AKS Documentation](https://learn.microsoft.com/en-us/azure/aks/)");
+                    response.AppendLine("- [AKS Networking Concepts](https://learn.microsoft.com/en-us/azure/aks/concepts-network)");
+                    response.AppendLine("- [Private AKS Clusters](https://learn.microsoft.com/en-us/azure/aks/private-clusters)");
+                    response.AppendLine("- [Azure CNI Networking](https://learn.microsoft.com/en-us/azure/aks/configure-azure-cni)");
+                    response.AppendLine("- [AKS Best Practices](https://learn.microsoft.com/en-us/azure/aks/best-practices)");
+                    break;
+
+                case "storage":
+                    response.AppendLine("## Azure Storage");
+                    response.AppendLine();
+                    
+                    // Add live resource information if available
+                    if (!string.IsNullOrEmpty(liveResourceInfo))
+                    {
+                        response.AppendLine("### 💾 Your Storage Accounts");
+                        response.AppendLine();
+                        response.AppendLine(liveResourceInfo);
+                        response.AppendLine();
+                    }
+                    
+                    response.AppendLine("### Official Documentation");
+                    response.AppendLine("- [Azure Storage Documentation](https://learn.microsoft.com/en-us/azure/storage/)");
+                    response.AppendLine("- [Storage Security Guide](https://learn.microsoft.com/en-us/azure/storage/common/storage-security-guide)");
+                    response.AppendLine("- [Blob Storage](https://learn.microsoft.com/en-us/azure/storage/blobs/)");
+                    response.AppendLine("- [Storage Encryption](https://learn.microsoft.com/en-us/azure/storage/common/storage-service-encryption)");
+                    break;
+
+                case "app service":
+                    response.AppendLine("## Azure App Service");
+                    response.AppendLine();
+                    
+                    // Add live resource information if available
+                    if (!string.IsNullOrEmpty(liveResourceInfo))
+                    {
+                        response.AppendLine("### 🕸️ Your App Services");
+                        response.AppendLine();
+                        response.AppendLine(liveResourceInfo);
+                        response.AppendLine();
+                    }
+                    
+                    response.AppendLine("### Official Documentation");
+                    response.AppendLine("- [App Service Documentation](https://learn.microsoft.com/en-us/azure/app-service/)");
+                    response.AppendLine("- [App Service Best Practices](https://learn.microsoft.com/en-us/azure/app-service/app-service-best-practices)");
+                    response.AppendLine("- [Custom Domains](https://learn.microsoft.com/en-us/azure/app-service/app-service-web-tutorial-custom-domain)");
+                    break;
+
+                case "key vault":
+                    response.AppendLine("## Azure Key Vault");
+                    response.AppendLine();
+                    
+                    // Add live resource information if available
+                    if (!string.IsNullOrEmpty(liveResourceInfo))
+                    {
+                        response.AppendLine("### 🔑 Your Key Vaults");
+                        response.AppendLine();
+                        response.AppendLine(liveResourceInfo);
+                        response.AppendLine();
+                    }
+                    
+                    response.AppendLine("### Official Documentation");
+                    response.AppendLine("- [Key Vault Documentation](https://learn.microsoft.com/en-us/azure/key-vault/)");
+                    response.AppendLine("- [Key Vault Security](https://learn.microsoft.com/en-us/azure/key-vault/general/security-features)");
+                    response.AppendLine("- [Managed Identities](https://learn.microsoft.com/en-us/azure/key-vault/general/managed-identity)");
+                    break;
+
+                case "sql":
+                    response.AppendLine("## Azure SQL Database");
+                    response.AppendLine();
+                    
+                    // Add live resource information if available
+                    if (!string.IsNullOrEmpty(liveResourceInfo))
+                    {
+                        response.AppendLine("### 🗄️ Your SQL Servers");
+                        response.AppendLine();
+                        response.AppendLine(liveResourceInfo);
+                        response.AppendLine();
+                    }
+                    
+                    response.AppendLine("### Official Documentation");
+                    response.AppendLine("- [Azure SQL Documentation](https://learn.microsoft.com/en-us/azure/azure-sql/)");
+                    response.AppendLine("- [SQL Security](https://learn.microsoft.com/en-us/azure/azure-sql/database/security-overview)");
+                    break;
+
+                case "cosmos":
+                    response.AppendLine("## Azure Cosmos DB");
+                    response.AppendLine();
+                    
+                    // Add live resource information if available
+                    if (!string.IsNullOrEmpty(liveResourceInfo))
+                    {
+                        response.AppendLine("### 📊 Your Cosmos DB Accounts");
+                        response.AppendLine();
+                        response.AppendLine(liveResourceInfo);
+                        response.AppendLine();
+                    }
+                    
+                    response.AppendLine("### Official Documentation");
+                    response.AppendLine("- [Cosmos DB Documentation](https://learn.microsoft.com/en-us/azure/cosmos-db/)");
+                    response.AppendLine("- [Cosmos DB Best Practices](https://learn.microsoft.com/en-us/azure/cosmos-db/best-practice-guide)");
+                    break;
+
+                default:
+                    response.AppendLine("## Azure Documentation Resources");
+                    response.AppendLine();
+                    
+                    // Show general subscription info if available
+                    if (!string.IsNullOrEmpty(liveResourceInfo))
+                    {
+                        response.AppendLine("### Your Azure Resources");
+                        response.AppendLine();
+                        response.AppendLine(liveResourceInfo);
+                        response.AppendLine();
+                    }
+                    
+                    response.AppendLine("### General Resources");
+                    response.AppendLine("- [Azure Documentation Home](https://learn.microsoft.com/en-us/azure/)");
+                    response.AppendLine("- [Azure Architecture Center](https://learn.microsoft.com/en-us/azure/architecture/)");
+                    response.AppendLine("- [Well-Architected Framework](https://learn.microsoft.com/en-us/azure/well-architected/)");
+                    response.AppendLine("- [Azure QuickStart Templates](https://github.com/Azure/azure-quickstart-templates)");
+                    break;
+            }
+
+            response.AppendLine();
+            response.AppendLine("---");
+            response.AppendLine();
+            response.AppendLine("💡 **Need more specific guidance?** Ask about:");
+            response.AppendLine("- Configuration steps for your scenario");
+            response.AppendLine("- Best practices and security recommendations");
+            response.AppendLine("- Code examples and implementation details");
+            response.AppendLine("- Architecture patterns and design decisions");
+
+            _logger.LogInformation("✅ Azure documentation guidance generated successfully");
+            return response.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating Azure documentation guidance");
+            return $@"❌ **Error Accessing Azure Documentation**
+
+An error occurred while generating documentation guidance for: {searchQuery}
+
+**Error:** {ex.Message}
+
+**Please try:**
+1. Visit [Azure Documentation](https://learn.microsoft.com/en-us/azure/) directly
+2. Search [Microsoft Learn](https://learn.microsoft.com/) for your topic
+3. Ask me for more specific configuration guidance
+
+If you need help with a specific Azure service, let me know!";
+        }
+    }
+
+    /// <summary>
+    /// Get live Azure resource information using service-specific MCP tools
+    /// </summary>
+    private async Task<string?> GetLiveResourceInfoAsync(string service, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Querying live Azure resources for service: {Service}", service);
+            
+            var result = service switch
+            {
+                "aks" or "kubernetes" => await GetAksResourcesAsync(cancellationToken),
+                "storage" => await GetStorageResourcesAsync(cancellationToken),
+                "app service" => await GetAppServiceResourcesAsync(cancellationToken),
+                "key vault" => await GetKeyVaultResourcesAsync(cancellationToken),
+                "sql" => await GetSqlResourcesAsync(cancellationToken),
+                "cosmos" => await GetCosmosResourcesAsync(cancellationToken),
+                _ => null
+            };
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not retrieve live resources for {Service}", service);
+            return null;
+        }
+    }
+
+    private async Task<string?> GetAksResourcesAsync(CancellationToken cancellationToken)
+    {
+        var result = await _azureMcpClient.CallToolAsync("aks", new Dictionary<string, object?>(), cancellationToken);
+        
+        if (result.Success && result.Result != null)
+        {
+            var response = new StringBuilder();
+            response.AppendLine("```");
+            response.AppendLine(result.Result.ToString());
+            response.AppendLine("```");
+            return response.ToString();
+        }
+        
+        return null;
+    }
+
+    private async Task<string?> GetStorageResourcesAsync(CancellationToken cancellationToken)
+    {
+        var result = await _azureMcpClient.CallToolAsync("storage", new Dictionary<string, object?>(), cancellationToken);
+        
+        if (result.Success && result.Result != null)
+        {
+            var response = new StringBuilder();
+            response.AppendLine("```");
+            response.AppendLine(result.Result.ToString());
+            response.AppendLine("```");
+            return response.ToString();
+        }
+        
+        return null;
+    }
+
+    private async Task<string?> GetAppServiceResourcesAsync(CancellationToken cancellationToken)
+    {
+        var result = await _azureMcpClient.CallToolAsync("appservice", new Dictionary<string, object?>(), cancellationToken);
+        
+        if (result.Success && result.Result != null)
+        {
+            var response = new StringBuilder();
+            response.AppendLine("```");
+            response.AppendLine(result.Result.ToString());
+            response.AppendLine("```");
+            return response.ToString();
+        }
+        
+        return null;
+    }
+
+    private async Task<string?> GetKeyVaultResourcesAsync(CancellationToken cancellationToken)
+    {
+        var result = await _azureMcpClient.CallToolAsync("keyvault", new Dictionary<string, object?>(), cancellationToken);
+        
+        if (result.Success && result.Result != null)
+        {
+            var response = new StringBuilder();
+            response.AppendLine("```");
+            response.AppendLine(result.Result.ToString());
+            response.AppendLine("```");
+            return response.ToString();
+        }
+        
+        return null;
+    }
+
+    private async Task<string?> GetSqlResourcesAsync(CancellationToken cancellationToken)
+    {
+        var result = await _azureMcpClient.CallToolAsync("sql", new Dictionary<string, object?>(), cancellationToken);
+        
+        if (result.Success && result.Result != null)
+        {
+            var response = new StringBuilder();
+            response.AppendLine("```");
+            response.AppendLine(result.Result.ToString());
+            response.AppendLine("```");
+            return response.ToString();
+        }
+        
+        return null;
+    }
+
+    private async Task<string?> GetCosmosResourcesAsync(CancellationToken cancellationToken)
+    {
+        var result = await _azureMcpClient.CallToolAsync("cosmos", new Dictionary<string, object?>(), cancellationToken);
+        
+        if (result.Success && result.Result != null)
+        {
+            var response = new StringBuilder();
+            response.AppendLine("```");
+            response.AppendLine(result.Result.ToString());
+            response.AppendLine("```");
+            return response.ToString();
+        }
+        
+        return null;
     }
 
     #endregion

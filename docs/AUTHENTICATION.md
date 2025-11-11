@@ -1,8 +1,118 @@
 # Azure Authentication Guide
 
+> **Quick Start:** [Jump to 5-minute setup](#quick-start-5-minutes) | **Comprehensive Guide:** [Full documentation](#comprehensive-guide)
+
+---
+
+## Table of Contents
+
+1. [Quick Start (5 Minutes)](#quick-start-5-minutes)
+2. [Comprehensive Guide](#comprehensive-guide)
+   - [Overview](#overview)
+   - [Authentication Architecture](#authentication-architecture)
+   - [Setup Instructions](#setup-instructions)
+   - [User Authentication Flow](#user-authentication-flow)
+   - [Subscription ID Handling](#subscription-id-handling)
+   - [Troubleshooting](#troubleshooting)
+   - [Security Best Practices](#security-best-practices)
+3. [Configuration Reference](#configuration-reference)
+4. [Testing Your Setup](#testing-your-setup)
+
+---
+
+## Quick Start (5 Minutes)
+
+### For Developers (Local Development)
+
+**Get up and running in 3 commands:**
+
+```bash
+# 1. Login to Azure Government
+az cloud set --name AzureUSGovernment
+az login
+
+# 2. Set tenant ID (required for Azure Government)
+export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
+
+# 3. Run the application
+cd src/Platform.Engineering.Copilot.API
+dotnet run
+```
+
+**For Azure Commercial instead:**
+```bash
+az cloud set --name AzureCloud
+az login
+```
+
+✅ **Done!** The application automatically uses your Azure CLI credentials.
+
+### For End Users (Chat Interface)
+
+1. **Login once:** Run `az login` on your machine
+2. **Use the chat:** All Azure operations run with YOUR permissions
+3. **Example queries:**
+   ```
+   "Show me all my Azure subscriptions"
+   "List all resource groups"
+   "What AKS clusters are deployed?"
+   ```
+
+### For Production Deployment
+
+```bash
+# 1. Enable Managed Identity
+az webapp identity assign \
+  --name your-app-name \
+  --resource-group your-resource-group
+
+# 2. Grant permissions
+PRINCIPAL_ID=$(az webapp identity show \
+  --name your-app-name \
+  --resource-group your-resource-group \
+  --query principalId -o tsv)
+
+az role assignment create \
+  --assignee $PRINCIPAL_ID \
+  --role "Reader" \
+  --scope "/subscriptions/your-subscription-id"
+
+# 3. Set UseManagedIdentity: true in appsettings.json
+```
+
+### Quick Troubleshooting
+
+```bash
+# Not seeing subscriptions?
+az login
+
+# Authorization failed?
+# Request RBAC permissions from Azure admin
+
+# Azure CLI not found?
+brew install azure-cli  # macOS
+```
+
+**Need more details?** Continue reading the [Comprehensive Guide](#comprehensive-guide) below.
+
+---
+
+## Comprehensive Guide
+
 ## Overview
 
 The Platform Engineering Copilot uses **Azure DefaultAzureCredential** for secure, credential-free authentication to Azure resources. This approach eliminates the need for hardcoded credentials in configuration files and supports multiple authentication methods automatically.
+
+### Key Benefits
+
+- ✅ **No Hardcoded Credentials** - Never store credentials in configuration files
+- ✅ **User-Level Security** - Each user uses their own Azure identity
+- ✅ **Automatic Token Management** - Azure SDK handles token refresh
+- ✅ **Production Ready** - Managed Identity for Azure deployments
+- ✅ **Audit Trail** - All actions logged under user's identity in Azure Activity Log
+- ✅ **Multi-Cloud Support** - Works with Azure Government and Azure Commercial
+
+---
 
 ## Authentication Architecture
 
@@ -56,6 +166,8 @@ Located in `appsettings.json`:
 - `CloudEnvironment`: Set to `AzureGovernment` for Azure Government or `AzurePublicCloud` for commercial Azure
 - `Enabled`: Set to `true` to enable Azure resource operations
 
+---
+
 ## Setup Instructions
 
 ### For Local Development (Azure CLI Authentication)
@@ -69,79 +181,86 @@ This is the **recommended approach** for developers working on their local machi
 
 #### Step-by-Step Setup
 
-1. **Install Azure CLI** (if not already installed)
+**1. Install Azure CLI** (if not already installed)
 
-   ```bash
-   # macOS
-   brew install azure-cli
-   
-   # Windows
-   winget install -e --id Microsoft.AzureCLI
-   
-   # Linux
-   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-   ```
+```bash
+# macOS
+brew install azure-cli
 
-2. **Login to Azure**
+# Windows
+winget install -e --id Microsoft.AzureCLI
 
-   For **Azure Government** (default):
-   ```bash
-   az cloud set --name AzureUSGovernment
-   az login
-   ```
+# Linux
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+```
 
-   For **Azure Commercial**:
-   ```bash
-   az cloud set --name AzureCloud
-   az login
-   ```
+**2. Login to Azure**
 
-3. **Set Your Tenant ID** (Required for Azure Government)
+For **Azure Government** (default):
+```bash
+az cloud set --name AzureUSGovernment
+az login
+```
 
-   ```bash
-   export AZURE_TENANT_ID="your-tenant-id-here"
-   ```
+For **Azure Commercial**:
+```bash
+az cloud set --name AzureCloud
+az login
+```
 
-   To find your tenant ID:
-   ```bash
-   az account show --query tenantId -o tsv
-   ```
+**3. Set Your Tenant ID** (Required for Azure Government)
 
-4. **Verify Your Login**
+```bash
+export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
+```
 
-   ```bash
-   # List your subscriptions
-   az account list --output table
-   
-   # Set default subscription (optional)
-   az account set --subscription "your-subscription-id"
-   ```
+**Make it persistent across sessions:**
+```bash
+# For zsh (macOS default)
+echo 'export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv 2>/dev/null)' >> ~/.zshrc
 
-5. **Configure the Application**
+# For bash
+echo 'export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv 2>/dev/null)' >> ~/.bashrc
+```
 
-   Update `appsettings.json` or `appsettings.Development.json`:
-   ```json
-   {
-     "Gateway": {
-       "Azure": {
-         "UseManagedIdentity": false,
-         "CloudEnvironment": "AzureGovernment",
-         "Enabled": true
-       }
-     }
-   }
-   ```
+**4. Verify Your Login**
 
-   Setting `UseManagedIdentity: false` prioritizes Azure CLI credentials during development.
+```bash
+# List your subscriptions
+az account list --output table
 
-6. **Run the Application**
+# Set default subscription (optional)
+az account set --subscription "your-subscription-id"
 
-   ```bash
-   cd src/Platform.Engineering.Copilot.API
-   dotnet run
-   ```
+# Verify current subscription
+az account show
+```
 
-   The application will automatically use your Azure CLI credentials!
+**5. Configure the Application**
+
+Update `appsettings.Development.json`:
+```json
+{
+  "Gateway": {
+    "Azure": {
+      "UseManagedIdentity": false,
+      "CloudEnvironment": "AzureGovernment",
+      "Enabled": true
+    }
+  }
+}
+```
+
+Setting `UseManagedIdentity: false` prioritizes Azure CLI credentials during development.
+
+**6. Run the Application**
+
+```bash
+cd src/Platform.Engineering.Copilot.API
+dotnet run
+```
+
+The application will automatically use your Azure CLI credentials!
 
 #### How It Works
 
@@ -150,6 +269,8 @@ When you run `az login`:
 - `AzureCliCredential` reads these credentials automatically
 - Your personal Azure permissions are used for all Azure operations
 - **No credentials are stored in the application or configuration files**
+
+---
 
 ### For Production Deployment (Managed Identity)
 
@@ -162,79 +283,79 @@ This is the **recommended approach** for production deployments in Azure.
 
 #### Step-by-Step Setup
 
-1. **Enable Managed Identity** on your Azure resource
+**1. Enable Managed Identity** on your Azure resource
 
-   For **Azure App Service**:
-   ```bash
-   az webapp identity assign \
-     --name your-app-name \
-     --resource-group your-resource-group
-   ```
+For **Azure App Service**:
+```bash
+az webapp identity assign \
+  --name your-app-name \
+  --resource-group your-resource-group
+```
 
-   For **Azure Container Apps**:
-   ```bash
-   az containerapp identity assign \
-     --name your-app-name \
-     --resource-group your-resource-group
-   ```
+For **Azure Container Apps**:
+```bash
+az containerapp identity assign \
+  --name your-app-name \
+  --resource-group your-resource-group
+```
 
-   For **Azure Kubernetes Service (AKS)**:
-   ```bash
-   az aks update \
-     --name your-aks-cluster \
-     --resource-group your-resource-group \
-     --enable-managed-identity
-   ```
+For **Azure Kubernetes Service (AKS)**:
+```bash
+az aks update \
+  --name your-aks-cluster \
+  --resource-group your-resource-group \
+  --enable-managed-identity
+```
 
-2. **Grant RBAC Permissions**
+**2. Grant RBAC Permissions**
 
-   Assign the necessary roles to the managed identity. Common roles:
+Assign the necessary roles to the managed identity:
 
-   ```bash
-   # Get the managed identity principal ID
-   PRINCIPAL_ID=$(az webapp identity show \
-     --name your-app-name \
-     --resource-group your-resource-group \
-     --query principalId -o tsv)
-   
-   # Grant Reader access to subscription
-   az role assignment create \
-     --assignee $PRINCIPAL_ID \
-     --role "Reader" \
-     --scope "/subscriptions/your-subscription-id"
-   
-   # Grant Contributor access to specific resource group (if needed)
-   az role assignment create \
-     --assignee $PRINCIPAL_ID \
-     --role "Contributor" \
-     --scope "/subscriptions/your-subscription-id/resourceGroups/your-rg"
-   ```
+```bash
+# Get the managed identity principal ID
+PRINCIPAL_ID=$(az webapp identity show \
+  --name your-app-name \
+  --resource-group your-resource-group \
+  --query principalId -o tsv)
 
-   **Common Roles Needed:**
-   - `Reader` - Read access to Azure resources
-   - `Contributor` - Create/modify Azure resources
-   - `Cost Management Reader` - Access to cost data
-   - `Security Reader` - Access to security center data
-   - `Monitoring Reader` - Access to monitoring data
+# Grant Reader access to subscription
+az role assignment create \
+  --assignee $PRINCIPAL_ID \
+  --role "Reader" \
+  --scope "/subscriptions/your-subscription-id"
 
-3. **Configure the Application**
+# Grant Contributor access to specific resource group (if needed)
+az role assignment create \
+  --assignee $PRINCIPAL_ID \
+  --role "Contributor" \
+  --scope "/subscriptions/your-subscription-id/resourceGroups/your-rg"
+```
 
-   Update `appsettings.json` for production:
-   ```json
-   {
-     "Gateway": {
-       "Azure": {
-         "UseManagedIdentity": true,
-         "CloudEnvironment": "AzureGovernment",
-         "Enabled": true
-       }
-     }
-   }
-   ```
+**Common Roles Needed:**
+- `Reader` - Read access to Azure resources
+- `Contributor` - Create/modify Azure resources
+- `Cost Management Reader` - Access to cost data
+- `Security Reader` - Access to security center data
+- `Monitoring Reader` - Access to monitoring data
 
-4. **Deploy the Application**
+**3. Configure the Application**
 
-   The application will automatically use the managed identity - no additional configuration needed!
+Update `appsettings.json` for production:
+```json
+{
+  "Gateway": {
+    "Azure": {
+      "UseManagedIdentity": true,
+      "CloudEnvironment": "AzureGovernment",
+      "Enabled": true
+    }
+  }
+}
+```
+
+**4. Deploy the Application**
+
+The application will automatically use the managed identity - no additional configuration needed!
 
 #### How It Works
 
@@ -244,44 +365,48 @@ When deployed to Azure:
 - The identity's RBAC permissions determine what Azure resources can be accessed
 - **No credentials are ever stored or managed by the application**
 
+---
+
 ### For CI/CD Pipelines (Service Principal)
 
 Use environment variables for service principal authentication in automated pipelines.
 
 #### Setup
 
-1. **Create a Service Principal**
+**1. Create a Service Principal**
 
-   ```bash
-   az ad sp create-for-rbac \
-     --name "platform-copilot-cicd" \
-     --role contributor \
-     --scopes /subscriptions/your-subscription-id
-   ```
+```bash
+az ad sp create-for-rbac \
+  --name "platform-copilot-cicd" \
+  --role contributor \
+  --scopes /subscriptions/your-subscription-id
+```
 
-   This outputs:
-   ```json
-   {
-     "appId": "your-app-id",
-     "displayName": "platform-copilot-cicd",
-     "password": "your-password",
-     "tenant": "your-tenant-id"
-   }
-   ```
+This outputs:
+```json
+{
+  "appId": "your-app-id",
+  "displayName": "platform-copilot-cicd",
+  "password": "your-password",
+  "tenant": "your-tenant-id"
+}
+```
 
-2. **Set Environment Variables**
+**2. Set Environment Variables**
 
-   In your CI/CD pipeline, set:
-   ```bash
-   export AZURE_CLIENT_ID="your-app-id"
-   export AZURE_CLIENT_SECRET="your-password"
-   export AZURE_TENANT_ID="your-tenant-id"
-   export AZURE_SUBSCRIPTION_ID="your-subscription-id"
-   ```
+In your CI/CD pipeline, set:
+```bash
+export AZURE_CLIENT_ID="your-app-id"
+export AZURE_CLIENT_SECRET="your-password"
+export AZURE_TENANT_ID="your-tenant-id"
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+```
 
-3. **Run the Application**
+**3. Run the Application**
 
-   `DefaultAzureCredential` will automatically detect and use these environment variables.
+`DefaultAzureCredential` will automatically detect and use these environment variables.
+
+---
 
 ## User Authentication Flow
 
@@ -337,6 +462,8 @@ When users interact with the Platform Engineering Copilot via the chat interface
    - Azure CLI manages token refresh automatically
    - Tokens stored securely by Azure SDK
 
+---
+
 ## Subscription ID Handling
 
 ### How Subscription IDs are Determined
@@ -368,6 +495,8 @@ az account set --subscription "subscription-id-or-name"
 # Verify
 az account show --query name
 ```
+
+---
 
 ## Troubleshooting
 
@@ -435,10 +564,10 @@ az login
 **Solution:**
 ```bash
 # Set tenant ID environment variable
-export AZURE_TENANT_ID="your-tenant-id"
+export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
 
-# Find your tenant ID
-az account show --query tenantId -o tsv
+# Make it persistent
+echo 'export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv 2>/dev/null)' >> ~/.zshrc
 ```
 
 #### Issue: "DefaultAzureCredential failed to retrieve a token"
@@ -472,35 +601,7 @@ Update `appsettings.json`:
 
 This will show detailed authentication attempts in the application logs.
 
-## Environment Variables Reference
-
-### Required Environment Variables
-
-#### For Azure Government (Development)
-```bash
-export AZURE_TENANT_ID="your-tenant-id-here"
-```
-
-#### For Service Principal (CI/CD)
-```bash
-export AZURE_CLIENT_ID="service-principal-app-id"
-export AZURE_CLIENT_SECRET="service-principal-password"
-export AZURE_TENANT_ID="your-tenant-id"
-export AZURE_SUBSCRIPTION_ID="default-subscription-id"  # Optional
-```
-
-### Optional Environment Variables
-
-```bash
-# Override cloud environment
-export AZURE_CLOUD_ENVIRONMENT="AzureGovernment"  # or "AzurePublicCloud"
-
-# Set specific subscription
-export AZURE_SUBSCRIPTION_ID="your-subscription-id"
-
-# Configure credential timeout
-export AZURE_CREDENTIAL_TIMEOUT="30"  # seconds
-```
+---
 
 ## Security Best Practices
 
@@ -553,54 +654,40 @@ export AZURE_CREDENTIAL_TIMEOUT="30"  # seconds
   - Never bypass RBAC checks
   - Validate all Azure operations
 
-## Advanced Scenarios
+---
 
-### Supporting Multiple Users
+## Configuration Reference
 
-The current architecture already supports multiple users:
+### Environment Variables
 
-1. **Local Development**
-   - Each developer runs `az login` with their own credentials
-   - Application uses each user's Azure identity automatically
-   - No configuration changes needed
+#### Required for Azure Government (Development)
+```bash
+export AZURE_TENANT_ID="your-tenant-id-here"
+```
 
-2. **Production (Managed Identity)**
-   - Application runs with system identity
-   - Users authenticate to the chat application (separate auth layer)
-   - Application performs Azure operations on behalf of users
-   - **Note:** All Azure operations run with the managed identity's permissions, not individual user permissions
+#### For Service Principal (CI/CD)
+```bash
+export AZURE_CLIENT_ID="service-principal-app-id"
+export AZURE_CLIENT_SECRET="service-principal-password"
+export AZURE_TENANT_ID="your-tenant-id"
+export AZURE_SUBSCRIPTION_ID="default-subscription-id"  # Optional
+```
 
-### Per-User Token Support (Future Enhancement)
+#### Optional Environment Variables
+```bash
+# Override cloud environment
+export AZURE_CLOUD_ENVIRONMENT="AzureGovernment"  # or "AzurePublicCloud"
 
-To support per-user Azure permissions in production (not currently implemented):
+# Set specific subscription
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
 
-**Architecture:**
-1. User authenticates to the application (OAuth/Azure AD)
-2. Application obtains Azure access token on behalf of user
-3. Token passed through to AzureResourceService
-4. Azure operations run with user's permissions
+# Configure credential timeout
+export AZURE_CREDENTIAL_TIMEOUT="30"  # seconds
+```
 
-**Implementation would require:**
-- Azure AD app registration
-- OAuth 2.0 on-behalf-of flow
-- Token management in ConversationContext
-- Updates to AzureResourceService to accept tokens
+### Configuration Files
 
-**When to implement:**
-- Multi-tenant production deployments
-- When user-level Azure permissions are required
-- When audit trail needs to show individual users
-
-**Current workaround:**
-- Use managed identity with broad permissions
-- Implement application-level authorization
-- Log user actions in application logs
-
-## Configuration Examples
-
-### Development Environment
-
-`appsettings.Development.json`:
+#### Development: `appsettings.Development.json`
 ```json
 {
   "Gateway": {
@@ -627,9 +714,7 @@ To support per-user Azure permissions in production (not currently implemented):
 }
 ```
 
-### Production Environment
-
-`appsettings.json` or `appsettings.Production.json`:
+#### Production: `appsettings.json`
 ```json
 {
   "Gateway": {
@@ -656,9 +741,7 @@ To support per-user Azure permissions in production (not currently implemented):
 }
 ```
 
-### Azure Commercial (Non-Government)
-
-`appsettings.json`:
+#### Azure Commercial (Non-Government)
 ```json
 {
   "Gateway": {
@@ -670,9 +753,7 @@ To support per-user Azure permissions in production (not currently implemented):
     "AzureOpenAI": {
       "Endpoint": "https://your-openai.openai.azure.com/",
       "DeploymentName": "gpt-4o",
-      "UseManagedIdentity": true,
-      "ChatDeploymentName": "gpt-4o",
-      "EmbeddingDeploymentName": "text-embedding-ada-002"
+      "UseManagedIdentity": true
     }
   }
 }
@@ -680,43 +761,43 @@ To support per-user Azure permissions in production (not currently implemented):
 
 **Note:** Use `.azure.com` endpoints for commercial Azure, `.azure.us` for Azure Government.
 
+---
+
 ## Testing Your Setup
 
 ### Quick Verification
 
-1. **Test Azure CLI Authentication**
-   ```bash
-   az account show
-   ```
-   Should display your current subscription.
+**1. Test Azure CLI Authentication**
+```bash
+az account show
+```
+Should display your current subscription.
 
-2. **Test Application Authentication**
-   Start the API and send a test query:
-   ```bash
-   cd src/Platform.Engineering.Copilot.API
-   dotnet run
-   ```
+**2. Test Application Authentication**
+```bash
+cd src/Platform.Engineering.Copilot.API
+dotnet run
+```
 
-3. **Query via Chat**
-   ```
-   "Show me all resource groups in my subscription"
-   ```
+Look for in the logs:
+```
+Azure ARM client initialized successfully for AzureGovernment
+```
 
-   Expected behavior:
-   - Multi-agent system processes query
-   - Discovery agent calls Azure APIs
-   - Returns list of resource groups
-   - Operations run with your Azure permissions
+**3. Query via Chat**
+```
+"Show me all resource groups in my subscription"
+```
 
-4. **Check Application Logs**
-   Look for:
-   ```
-   Azure ARM client initialized successfully for AzureGovernment
-   ```
+Expected behavior:
+- Multi-agent system processes query
+- Discovery agent calls Azure APIs
+- Returns list of resource groups
+- Operations run with your Azure permissions
 
 ### Integration Testing
 
-Use the natural language test cases in `NATURAL-LANGUAGE-TEST-CASES.md`:
+Use these natural language test cases:
 
 ```bash
 # Test resource discovery
@@ -725,9 +806,25 @@ Use the natural language test cases in `NATURAL-LANGUAGE-TEST-CASES.md`:
 # Test with specific subscription
 "List all AKS clusters in subscription 453c2549-4cc5-464f-ba66-acad920823e8"
 
+# Test multi-subscription query
+"Show me all my Azure subscriptions"
+
 # Test deployment (if you have contributor permissions)
 "Deploy a basic storage account in resource group test-rg"
 ```
+
+### Success Criteria
+
+✅ You've successfully configured authentication when:
+
+- You can run `az account show` and see your subscription
+- You can start the API without errors
+- Logs show "Azure ARM client initialized successfully"
+- You can send a query: "Show me all my Azure subscriptions"
+- The system returns actual Azure resources
+- Operations run with your Azure permissions
+
+---
 
 ## Summary
 
@@ -758,24 +855,7 @@ Use the natural language test cases in `NATURAL-LANGUAGE-TEST-CASES.md`:
    - No shared credentials
    - Individual accountability
 
-### Quick Start Commands
-
-```bash
-# Development setup (one-time)
-az cloud set --name AzureUSGovernment
-az login
-export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
-
-# Start the application
-cd src/Platform.Engineering.Copilot.API
-dotnet run
-
-# Test authentication
-az account show
-
-# Set default subscription (optional)
-az account set --subscription "your-subscription-id"
-```
+---
 
 ## Additional Resources
 
@@ -786,18 +866,10 @@ az account set --subscription "your-subscription-id"
 - [Azure RBAC Documentation](https://learn.microsoft.com/en-us/azure/role-based-access-control/overview)
 - [Azure Government Documentation](https://learn.microsoft.com/en-us/azure/azure-government/)
 
-## Support
-
-For issues or questions:
-
-1. Check the [Troubleshooting](#troubleshooting) section above
-2. Enable detailed logging and review application logs
-3. Verify Azure CLI authentication: `az account show`
-4. Check Azure RBAC permissions in Azure Portal
-5. Review Azure Activity Log for authorization errors
-
 ---
 
-**Last Updated:** October 2025  
-**Version:** 1.0  
-**Status:** Production Ready ✅
+**Document Version:** 2.0  
+**Last Updated:** November 2025  
+**Status:** ✅ Consolidated and Production Ready
+
+**Supersedes:** AUTHENTICATION-DOCS.md, AZURE-AUTHENTICATION.md, QUICKSTART-AUTHENTICATION.md

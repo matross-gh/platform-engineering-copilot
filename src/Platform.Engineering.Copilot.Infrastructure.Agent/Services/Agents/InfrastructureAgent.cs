@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
@@ -9,6 +10,7 @@ using Platform.Engineering.Copilot.Core.Plugins;
 using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Core.Services.Agents;
 using Platform.Engineering.Copilot.Core.Services;
+using Platform.Engineering.Copilot.Core.Configuration;
 using Platform.Engineering.Copilot.Infrastructure.Core.Services;
 using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
@@ -27,6 +29,7 @@ public class InfrastructureAgent : ISpecializedAgent
     private readonly IChatCompletionService _chatCompletion;
     private readonly ILogger<InfrastructureAgent> _logger;
     private readonly InfrastructurePlugin _infrastructurePlugin;
+    private readonly string? _defaultSubscriptionId;
 
     public InfrastructureAgent(
         ISemanticKernelService semanticKernelService,
@@ -40,9 +43,11 @@ public class InfrastructureAgent : ISpecializedAgent
         IComplianceAwareTemplateEnhancer complianceEnhancer,
         IPolicyEnforcementService policyEnforcementService,
         SharedMemory sharedMemory,
-        AzureMcpClient azureMcpClient)
+        AzureMcpClient azureMcpClient,
+        IOptions<AzureGatewayOptions> azureOptions)
     {
         _logger = logger;
+        _defaultSubscriptionId = azureOptions.Value.SubscriptionId;
 
         // Create specialized kernel for infrastructure work
         _kernel = semanticKernelService.CreateSpecializedKernel(AgentType.Infrastructure);
@@ -102,8 +107,19 @@ public class InfrastructureAgent : ISpecializedAgent
         {
             var chatHistory = new ChatHistory();
 
+            // Build subscription info if available
+            var subscriptionInfo = !string.IsNullOrEmpty(_defaultSubscriptionId)
+                ? $@"
+
+**🔧 DEFAULT CONFIGURATION:**
+- Default Subscription ID: {_defaultSubscriptionId}
+- When users don't specify a subscription, automatically use the default subscription ID above
+- ALWAYS use the default subscription when available unless user explicitly specifies a different one
+"
+                : "";
+
             // Agent-specific system prompt optimized for infrastructure work
-            chatHistory.AddSystemMessage(@"
+            chatHistory.AddSystemMessage($@"
 You are an Azure infrastructure specialist with deep expertise in:
 - Azure resource provisioning and lifecycle management
 - Infrastructure as Code (Bicep and Terraform)
@@ -113,6 +129,16 @@ You are an Azure infrastructure specialist with deep expertise in:
 - Networking, security groups, and virtual networks
 - Storage accounts, databases, and compute resources
 - Azure best practices for security, scalability, and cost optimization
+- **Azure context configuration (subscription, tenant, authentication settings)**
+{subscriptionInfo}
+
+**CONFIGURATION vs PROVISIONING:**
+- If users say ""Use subscription X"", ""Set tenant Y"", ""Set authentication Z"" → **IMMEDIATELY CALL** `set_azure_subscription`, `set_azure_tenant`, or `set_authentication_method` functions (CONFIGURATION)
+  - DO NOT just acknowledge - you MUST call the function to actually configure the Azure MCP client
+  - Extract the subscription ID/tenant ID from the user's message and pass it to the function
+  - Example: ""Use subscription abc-123"" → Call set_azure_subscription(""abc-123"")
+  - **CRITICAL**: After calling these functions, return the EXACT function result - DO NOT paraphrase or add commentary
+- If users say ""Create resource X"", ""Deploy Y"", ""I need Z"" → Use template generation functions (PROVISIONING)
 
 **ABSOLUTELY CRITICAL: Extract ACTUAL Resource Information!**
 
@@ -277,6 +303,14 @@ The function will be called with:
 - Say ""To set up X, we need to know..."" - NO! Just call the function!
 
 **YOU HAVE PLUGINS/FUNCTIONS - USE THEM! Don't just talk about what you would do!**
+
+**ABSOLUTELY CRITICAL - TEMPLATE GENERATION BEHAVIOR:**
+1. When you call generate_infrastructure_template or generate_compliant_infrastructure_template, the function WILL RETURN THE COMPLETE TEMPLATE CODE
+2. YOU MUST RETURN THAT COMPLETE RESPONSE TO THE USER - DO NOT SUMMARIZE IT!
+3. The function response includes all files in code blocks with details tags
+4. NEVER say 'The template has been generated' and list files without code - that is a summary, not the actual output!
+5. If the function returns code blocks, you MUST include ALL those code blocks in your response to the user
+6. DO NOT truncate, summarize, or paraphrase the template output - return it verbatim!
 
 **When to use each function:**
 - **generate_infrastructure_template**: Default choice for AKS, storage, networking, databases, App Service, Container Apps
@@ -524,7 +558,7 @@ Do NOT write a text response with manual code - CALL THE FUNCTION!
                 {
                     ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions,
                     Temperature = 0.1, // Very low temperature to ensure function calling
-                    MaxTokens = 4000
+                    MaxTokens = 4096 // Azure OpenAI gpt-4o maximum completion tokens
                 },
                 kernel: _kernel);
             _logger.LogInformation("InfrastructureAgent: Completed OpenAI chat completion for conversation {ConversationId}", task.ConversationId);
@@ -538,6 +572,25 @@ Do NOT write a text response with manual code - CALL THE FUNCTION!
             // Check if any functions were called by examining the chat history
             var functionCalls = chatHistory.Where(m => m.Role == Microsoft.SemanticKernel.ChatCompletion.AuthorRole.Tool).ToList();
             _logger.LogInformation("   - Function calls in history: {Count}", functionCalls.Count);
+            
+            // 🔧 SPECIAL HANDLING: For Azure context configuration functions, return the ACTUAL function result
+            // instead of the LLM's paraphrased response
+            string? configurationFunctionResult = null;
+            var lastToolMessage = chatHistory.LastOrDefault(m => m.Role == Microsoft.SemanticKernel.ChatCompletion.AuthorRole.Tool);
+            if (lastToolMessage != null)
+            {
+                var toolContent = lastToolMessage.Content;
+                // Check if this was a configuration function (they all return messages with ✅)
+                if (!string.IsNullOrEmpty(toolContent) && 
+                    (toolContent.Contains("✅ **Azure Subscription Configured**") ||
+                     toolContent.Contains("✅ **Azure Tenant Configured**") ||
+                     toolContent.Contains("✅ **Authentication Method Configured**") ||
+                     toolContent.Contains("📋 **Current Azure Context**")))
+                {
+                    _logger.LogInformation("🔧 Configuration function detected - using raw function result instead of LLM paraphrase");
+                    configurationFunctionResult = toolContent;
+                }
+            }
             
             if (result.Items != null && result.Items.Any())
             {
@@ -561,8 +614,13 @@ Do NOT write a text response with manual code - CALL THE FUNCTION!
             var metadata = ExtractMetadata(result);
             metadata["ExecutionTime"] = executionTime;
 
-            // Clean the response content - remove email signatures
-            var cleanedContent = CleanResponseContent(result.Content ?? "No content generated");
+            // Use configuration function result if available, otherwise use LLM response
+            var responseContent = configurationFunctionResult ?? result.Content ?? "No content generated";
+            
+            // Clean the response content - remove email signatures (but preserve formatting for config messages)
+            var cleanedContent = configurationFunctionResult != null 
+                ? responseContent // Don't clean configuration messages - they're already formatted
+                : CleanResponseContent(responseContent);
 
             // Store result in shared memory for other agents
             memory.AddAgentCommunication(

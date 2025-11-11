@@ -8,7 +8,141 @@
       "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/850001_2014.pdf",
       "relatedNistControls": ["All AC, IA, SC, SI, AU controls"],
       "relatedStigIds": ["All Azure STIGs"],
-      "applicability": "All DoD information systems including cloud platforms"
+      "applicability": "All DoD information systems including cloud platforms",
+      "controlMappings": [
+        {
+          "nistControlId": "AC-2",
+          "section": "Enclosure 3, Section 2.a",
+          "requirement": "Establish, maintain, and review information system accounts",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "AC-3",
+          "section": "Enclosure 3, Section 2.b",
+          "requirement": "Enforce approved authorizations for logical access to information and system resources",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "AC-4",
+          "section": "Enclosure 3, Section 2.c",
+          "requirement": "Enforce approved authorizations for controlling the flow of information within the system and between interconnected systems",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "AC-6",
+          "section": "Enclosure 3, Section 2.d",
+          "requirement": "Employ the principle of least privilege, allowing only authorized accesses for users which are necessary to accomplish assigned tasks",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "AC-17",
+          "section": "Enclosure 3, Section 2.e",
+          "requirement": "Establish and document usage restrictions, configuration/connection requirements, and implementation guidance for each type of remote access allowed",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "SC-7",
+          "section": "Enclosure 4, Section 3.a",
+          "requirement": "Monitor and control communications at the external boundary of the system and at key internal boundaries within the system",
+          "impactLevel": "IL4,IL5,IL6"
+        },
+        {
+          "nistControlId": "SC-8",
+          "section": "Enclosure 4, Section 3.b",
+          "requirement": "Protect the confidentiality and integrity of transmitted information",
+          "impactLevel": "IL4,IL5,IL6"
+        },
+        {
+          "nistControlId": "SC-13",
+          "section": "Enclosure 4, Section 3.c",
+          "requirement": "Implement FIPS-validated or NSA-approved cryptography",
+          "impactLevel": "IL5,IL6"
+        },
+        {
+          "nistControlId": "SC-28",
+          "section": "Enclosure 4, Section 3.d",
+          "requirement": "Protect the confidentiality and integrity of information at rest",
+          "impactLevel": "IL4,IL5,IL6"
+        },
+        {
+          "nistControlId": "AU-2",
+          "section": "Enclosure 5, Section 4.a",
+          "requirement": "Identify the types of events that the system is capable of logging",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "AU-3",
+          "section": "Enclosure 5, Section 4.b",
+          "requirement": "Ensure that audit records contain information that establishes what type of event occurred, when, where, the source, the outcome, and the identity of any individuals or subjects associated with the event",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "AU-6",
+          "section": "Enclosure 5, Section 4.c",
+          "requirement": "Review and analyze information system audit records for indications of inappropriate or unusual activity",
+          "impactLevel": "IL4,IL5,IL6"
+        },
+        {
+          "nistControlId": "AU-9",
+          "section": "Enclosure 5, Section 4.d",
+          "requirement": "Protect audit information and audit logging tools from unauthorized access, modification, and deletion",
+          "impactLevel": "IL5,IL6"
+        },
+        {
+          "nistControlId": "AU-12",
+          "section": "Enclosure 5, Section 4.e",
+          "requirement": "Provide audit record generation capability for the event types the system is capable of auditing",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "IA-2",
+          "section": "Enclosure 6, Section 5.a",
+          "requirement": "Uniquely identify and authenticate organizational users (or processes acting on behalf of organizational users)",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "IA-5",
+          "section": "Enclosure 6, Section 5.b",
+          "requirement": "Manage information system authenticators by verifying, as part of the initial authenticator distribution, the identity of the individual, group, role, or device receiving the authenticator",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "IA-8",
+          "section": "Enclosure 6, Section 5.c",
+          "requirement": "Uniquely identify and authenticate non-organizational users or processes acting on behalf of non-organizational users",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "CM-2",
+          "section": "Enclosure 7, Section 6.a",
+          "requirement": "Develop, document, and maintain under configuration control, a current baseline configuration of the information system",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "CM-6",
+          "section": "Enclosure 7, Section 6.b",
+          "requirement": "Establish and document configuration settings for information technology products employed within the information system using security configuration checklists",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "CM-7",
+          "section": "Enclosure 7, Section 6.c",
+          "requirement": "Configure the information system to provide only essential capabilities",
+          "impactLevel": "IL4,IL5,IL6"
+        },
+        {
+          "nistControlId": "SI-2",
+          "section": "Enclosure 8, Section 7.a",
+          "requirement": "Identify, report, and correct information system flaws",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "SI-4",
+          "section": "Enclosure 8, Section 7.b",
+          "requirement": "Monitor the information system to detect attacks and indicators of potential attacks, unauthorized local, network, and remote connections",
+          "impactLevel": "IL4,IL5,IL6"
+        }
+      ]
     },
     {
       "instructionId": "DoDI 8510.01",
@@ -18,7 +152,57 @@
       "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/851001_2014.pdf",
       "relatedNistControls": ["CA-1", "CA-2", "CA-5", "CA-6", "CA-7", "RA-3", "RA-5", "PM-9"],
       "relatedStigIds": [],
-      "applicability": "All DoD IT systems requiring ATO"
+      "applicability": "All DoD IT systems requiring ATO",
+      "controlMappings": [
+        {
+          "nistControlId": "CA-1",
+          "section": "Section 3.a",
+          "requirement": "Develop, document, and disseminate a security assessment and authorization policy",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "CA-2",
+          "section": "Section 3.b",
+          "requirement": "Develop a security assessment plan that describes the scope of the assessment including security controls and control enhancements under assessment",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "CA-5",
+          "section": "Section 3.c",
+          "requirement": "Develop a plan of action and milestones for the information system to document the planned remedial actions to correct weaknesses or deficiencies",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "CA-6",
+          "section": "Section 3.d",
+          "requirement": "Assign a senior-level executive or manager as the authorizing official",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "CA-7",
+          "section": "Section 3.e",
+          "requirement": "Develop a continuous monitoring strategy and implement continuous monitoring in accordance with the organization-defined continuous monitoring strategy",
+          "impactLevel": "IL4,IL5,IL6"
+        },
+        {
+          "nistControlId": "RA-3",
+          "section": "Section 4.a",
+          "requirement": "Conduct an assessment of risk, including the likelihood and magnitude of harm, from the unauthorized access, use, disclosure, disruption, modification, or destruction of the information system",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "RA-5",
+          "section": "Section 4.b",
+          "requirement": "Monitor information system security alerts and advisories and take appropriate actions in response",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "PM-9",
+          "section": "Section 5.a",
+          "requirement": "Ensure that the organization-wide risk management strategy is implemented consistently across the organization",
+          "impactLevel": "ALL"
+        }
+      ]
     },
     {
       "instructionId": "DoDI 8520.02",
@@ -28,7 +212,39 @@
       "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/852002p.pdf",
       "relatedNistControls": ["IA-2(1)", "IA-2(12)", "IA-5(2)", "SC-8(1)", "SC-17"],
       "relatedStigIds": ["V-219153"],
-      "applicability": "All systems requiring user authentication"
+      "applicability": "All systems requiring user authentication",
+      "controlMappings": [
+        {
+          "nistControlId": "IA-2(1)",
+          "section": "Section 3.1.a",
+          "requirement": "Implement multifactor authentication for network access to privileged accounts using PKI credentials",
+          "impactLevel": "IL5,IL6"
+        },
+        {
+          "nistControlId": "IA-2(12)",
+          "section": "Section 3.1.b",
+          "requirement": "Accept and electronically verify Personal Identity Verification (PIV) credentials",
+          "impactLevel": "IL5,IL6"
+        },
+        {
+          "nistControlId": "IA-5(2)",
+          "section": "Section 3.2.a",
+          "requirement": "For PKI-based authentication, validate certifications by constructing and verifying a certification path to an accepted trust anchor",
+          "impactLevel": "IL5,IL6"
+        },
+        {
+          "nistControlId": "SC-8(1)",
+          "section": "Section 4.1.a",
+          "requirement": "Implement cryptographic mechanisms to prevent unauthorized disclosure of information and detect changes to information during transmission",
+          "impactLevel": "IL5,IL6"
+        },
+        {
+          "nistControlId": "SC-17",
+          "section": "Section 4.2.a",
+          "requirement": "Issue public key certificates under an appropriate certificate policy or obtain public key certificates from an appropriate service provider",
+          "impactLevel": "IL5,IL6"
+        }
+      ]
     },
     {
       "instructionId": "DoDI 8140.01",
@@ -38,7 +254,33 @@
       "url": "https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/814001p.pdf",
       "relatedNistControls": ["AT-1", "AT-2", "AT-3", "PS-2", "PS-3"],
       "relatedStigIds": [],
-      "applicability": "Personnel performing cybersecurity functions"
+      "applicability": "Personnel performing cybersecurity functions",
+      "controlMappings": [
+        {
+          "nistControlId": "AT-2",
+          "section": "Section 2.a",
+          "requirement": "Provide security awareness training to information system users as part of initial training for new users and when required by system changes",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "AT-3",
+          "section": "Section 2.b",
+          "requirement": "Provide role-based security training to personnel with assigned security roles and responsibilities",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "PS-2",
+          "section": "Section 3.a",
+          "requirement": "Assign a risk designation to all organizational positions and establish screening criteria for individuals filling those positions",
+          "impactLevel": "ALL"
+        },
+        {
+          "nistControlId": "PS-3",
+          "section": "Section 3.b",
+          "requirement": "Screen individuals prior to authorizing access to the information system",
+          "impactLevel": "IL5,IL6"
+        }
+      ]
     },
     {
       "instructionId": "CNSSI 1253",
@@ -48,7 +290,45 @@
       "url": "https://www.cnss.gov/CNSS/issuances/Instructions.cfm",
       "relatedNistControls": ["All controls with classified overlays"],
       "relatedStigIds": [],
-      "applicability": "Secret and Top Secret systems"
+      "applicability": "Secret and Top Secret systems",
+      "controlMappings": [
+        {
+          "nistControlId": "SC-7(3)",
+          "section": "Appendix A, Overlay 1",
+          "requirement": "Limit the number of external network connections to the information system",
+          "impactLevel": "IL5,IL6"
+        },
+        {
+          "nistControlId": "SC-7(5)",
+          "section": "Appendix A, Overlay 2",
+          "requirement": "Deny network communications traffic by default and allow network communications traffic by exception",
+          "impactLevel": "IL5,IL6"
+        },
+        {
+          "nistControlId": "SC-28(1)",
+          "section": "Appendix A, Overlay 3",
+          "requirement": "Implement cryptographic mechanisms to prevent unauthorized disclosure and detect unauthorized modifications of information at rest",
+          "impactLevel": "IL5,IL6"
+        },
+        {
+          "nistControlId": "PE-3",
+          "section": "Appendix B, Physical Security",
+          "requirement": "Enforce physical access authorizations by verifying individual access authorizations before granting access to the facility",
+          "impactLevel": "IL6"
+        },
+        {
+          "nistControlId": "PE-6",
+          "section": "Appendix B, Physical Security",
+          "requirement": "Monitor physical access to the information system to detect and respond to physical security incidents",
+          "impactLevel": "IL6"
+        },
+        {
+          "nistControlId": "MA-4(6)",
+          "section": "Appendix C, Maintenance",
+          "requirement": "Use cryptographic mechanisms to protect the confidentiality and integrity of nonlocal maintenance and diagnostic sessions",
+          "impactLevel": "IL6"
+        }
+      ]
     }
   ],
   "impactLevels": [

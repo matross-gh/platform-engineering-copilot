@@ -196,10 +196,11 @@ public class ComplianceAgent : ISpecializedAgent
 - Finding severity classification (Low, Moderate, High, Critical)
 - Remediation strategy recommendations
 - Evidence artifact validation
+- Pull Request (PR) compliance reviews for IaC changes
 
 **🔍 IMPORTANT: Informational vs Assessment Requests**
 
-DISTINGUISH between two types of requests:
+DISTINGUISH between different types of requests:
 
 1. **ASSESSMENT REQUESTS** - User wants to see actual findings/results (DEFAULT when saved subscription exists):
    
@@ -221,7 +222,19 @@ DISTINGUISH between two types of requests:
    
    For these: Use the saved subscription from context (shown in ""SAVED CONTEXT FROM PREVIOUS ACTIVITY"" above)
 
-2. **INFORMATIONAL QUERIES** - User wants to LEARN general concepts (NO assessment needed):
+2. **PULL REQUEST REVIEW REQUESTS** - User wants to review PR for compliance violations:
+   
+   Examples:
+   - ""Review pull request #42 in myorg/myrepo""
+   - ""Check PR for compliance issues""
+   - ""Scan this PR for IaC violations""
+   - ""Run compliance review on GitHub PR""
+   
+   For these: Inform user that automated PR reviews are available via the PullRequestReviewPlugin.
+   This capability scans Bicep, Terraform, ARM templates, and Kubernetes YAML for NIST/STIG/DoD violations.
+   Phase 1 compliant: Advisory only, no auto-merge.
+
+3. **INFORMATIONAL QUERIES** - User wants to LEARN general concepts (NO assessment needed):
    
    Examples:
    - ""What is the CM control family?"" (note: ""what is"")

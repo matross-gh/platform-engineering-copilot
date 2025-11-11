@@ -25,7 +25,7 @@
 
 ## Executive Summary
 
-The Platform Engineering Copilot is an AI-powered infrastructure provisioning and governance platform built on .NET 9.0 and Microsoft Semantic Kernel. The system is centered around a **Model Context Protocol (MCP) Server** that orchestrates 6 specialized AI agents to provide comprehensive cloud infrastructure management, compliance monitoring, cost optimization, and ATO preparation.
+The Platform Engineering Copilot is an AI-powered infrastructure provisioning and governance platform built on .NET 9.0 and Microsoft Semantic Kernel. The system is centered around a **Model Context Protocol (MCP) Server** that orchestrates 5 specialized AI agents (Infrastructure, CostManagement, Compliance, Environment, Discovery) to provide comprehensive cloud infrastructure management, compliance monitoring, cost optimization, and environment lifecycle management.
 
 ### Key Capabilities
 
@@ -96,7 +96,7 @@ The Platform Engineering Copilot is an AI-powered infrastructure provisioning an
 │  │  │  └──────────────────────────────────────────────────┘  │  │  │
 │  │  │                                                         │  │  │
 │  │  │  ┌──────────────────────────────────────────────────┐  │  │  │
-│  │  │  │  2. Cost Optimization Agent                      │  │  │  │
+│  │  │  │  2. Cost Management Agent                        │  │  │  │
 │  │  │  │     • Cost analysis & dashboards                 │  │  │  │
 │  │  │  │     • Budget management & forecasting            │  │  │  │
 │  │  │  │     • Savings recommendations                    │  │  │  │
@@ -107,27 +107,22 @@ The Platform Engineering Copilot is an AI-powered infrastructure provisioning an
 │  │  │  │     • NIST 800-53 Rev 5 assessment               │  │  │  │
 │  │  │  │     • Gap analysis & remediation                 │  │  │  │
 │  │  │  │     • FedRAMP baseline validation                │  │  │  │
+│  │  │  │     • ATO documentation (Document sub-agent)     │  │  │  │
+│  │  │  │     • Code scanning (CodeScanning sub-agent)     │  │  │  │
 │  │  │  └──────────────────────────────────────────────────┘  │  │  │
 │  │  │                                                         │  │  │
 │  │  │  ┌──────────────────────────────────────────────────┐  │  │  │
-│  │  │  │  4. Security Agent                               │  │  │  │
-│  │  │  │     • Security scanning & assessment             │  │  │  │
-│  │  │  │     • Azure Policy integration                   │  │  │  │
-│  │  │  │     • Vulnerability detection                    │  │  │  │
+│  │  │  │  4. Environment Agent                            │  │  │  │
+│  │  │  │     • Environment lifecycle management           │  │  │  │
+│  │  │  │     • Environment cloning & scaling              │  │  │  │
+│  │  │  │     • Configuration management                   │  │  │  │
 │  │  │  └──────────────────────────────────────────────────┘  │  │  │
 │  │  │                                                         │  │  │
 │  │  │  ┌──────────────────────────────────────────────────┐  │  │  │
-│  │  │  │  5. Document Agent                               │  │  │  │
-│  │  │  │     • ATO documentation generation               │  │  │  │
-│  │  │  │     • Evidence collection & organization         │  │  │  │
-│  │  │  │     • Template management                        │  │  │  │
-│  │  │  └──────────────────────────────────────────────────┘  │  │  │
-│  │  │                                                         │  │  │
-│  │  │  ┌──────────────────────────────────────────────────┐  │  │  │
-│  │  │  │  6. ATO Preparation Agent                        │  │  │  │
-│  │  │  │     • End-to-end ATO orchestration               │  │  │  │
-│  │  │  │     • Submission workflow management             │  │  │  │
-│  │  │  │     • Stakeholder coordination                   │  │  │  │
+│  │  │  │  5. Discovery Agent                              │  │  │  │
+│  │  │  │     • Resource discovery & inventory             │  │  │  │
+│  │  │  │     • Health monitoring & diagnostics            │  │  │  │
+│  │  │  │     • Dependency mapping                         │  │  │  │
 │  │  │  └──────────────────────────────────────────────────┘  │  │  │
 │  │  │                                                         │  │  │
 │  │  └─────────────────────────────────────────────────────────┘  │  │
@@ -248,13 +243,17 @@ The MCP Server operates in two modes simultaneously, providing maximum flexibili
 │  ┌────────────────────────────────────────────────┐ │
 │  │         Shared Agent Core                      │ │
 │  │                                                │ │
-│  │  All 6 agents available to both modes:         │ │
+│  │  All 5 primary agents available to both modes: │ │
 │  │  1. Infrastructure Agent                       │ │
-│  │  2. Cost Optimization Agent                    │ │
+│  │  2. Cost Management Agent                      │ │
 │  │  3. Compliance Agent                           │ │
-│  │  4. Security Agent                             │ │
-│  │  5. Document Agent                             │ │
-│  │  6. ATO Preparation Agent                      │ │
+│  │  4. Environment Agent                          │ │
+│  │  5. Discovery Agent                            │ │
+│  │                                                │ │
+│  │  Plus plugin-based capabilities:               │ │
+│  │  • Security Plugin                             │ │
+│  │  • Document Plugin (sub-agent under Compliance)│ │
+│  │  • Diagram Generation Plugin                   │ │
 │  └────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────┘
 ```
@@ -274,7 +273,7 @@ The MCP Server coordinates multiple specialized agents, each responsible for a s
 - **Key Services**: InfrastructureProvisioningService, TemplateGenerationService
 - **Plugin**: InfrastructurePlugin
 
-**2. Cost Optimization Agent**
+**2. Cost Management Agent**
 - **Purpose**: Cost analysis, optimization, and budget management
 - **Capabilities**:
   - **Cost Overview Dashboard**: Total spend, top services, daily trends
@@ -287,7 +286,7 @@ The MCP Server coordinates multiple specialized agents, each responsible for a s
 - **Plugin**: CostManagementPlugin
 
 **3. Compliance Agent**
-- **Purpose**: NIST 800-53 Rev 5 compliance and RMF framework support
+- **Purpose**: NIST 800-53 Rev 5 compliance, ATO documentation, and RMF framework support
 - **Capabilities**:
   - Complete NIST 800-53 Rev 5 control assessment (18 families, 1000+ controls)
   - **Gap Analysis**: Automated compliance gap identification
@@ -296,68 +295,76 @@ The MCP Server coordinates multiple specialized agents, each responsible for a s
   - POAM (Plan of Action & Milestones) creation
   - Risk assessment and scoring
   - Control mapping and evidence collection
-- **Key Services**: RmfComplianceEngine, ComplianceAssessmentService
-- **Plugin**: CompliancePlugin
+  - **ATO Documentation** (via Document sub-agent): SSP, SAR, artifact management
+  - **Code Scanning** (via CodeScanning sub-agent): Security vulnerability detection
+- **Key Services**: RmfComplianceEngine, ComplianceAssessmentService, AtoDocumentationService
+- **Plugins**: CompliancePlugin, DocumentPlugin, AtoPreparationPlugin
+- **Sub-agents**: DocumentAgent, AtoPreparationAgent, CodeScanningAgent
 
-**4. Security Agent**
-- **Purpose**: Security scanning, policy enforcement, and vulnerability management
+**4. Environment Agent**
+- **Purpose**: Environment lifecycle management and scaling operations
 - **Capabilities**:
-  - Security vulnerability scanning
-  - Azure Policy evaluation and enforcement
-  - Threat detection and mitigation
-  - Security posture assessment
-  - Compliance violation identification
-  - Policy exception workflows
-  - Security best practices validation
+  - Environment creation, cloning, and deletion
+  - Environment configuration management
+  - Scaling operations (horizontal/vertical)
+  - Environment health monitoring
+  - Environment promotion workflows (dev → test → prod)
+  - Configuration drift detection
+- **Key Services**: EnvironmentManagementService, ConfigurationService
+- **Plugin**: EnvironmentPlugin
+
+**5. Discovery Agent**
+- **Purpose**: Resource discovery, inventory management, and health monitoring
+- **Capabilities**:
+  - Azure resource discovery across subscriptions
+  - Resource inventory and tagging
+  - Dependency mapping
+  - Health monitoring and diagnostics
+  - Resource relationship tracking
+  - Change detection and alerting
+- **Key Services**: ResourceDiscoveryService, InventoryService
+- **Plugin**: DiscoveryPlugin
+
+### Plugin-Based Capabilities
+
+**Security Plugin** (No standalone agent)
+- Security vulnerability scanning
+- Azure Policy evaluation and enforcement
+- Threat detection and mitigation
+- Security posture assessment
+- Compliance violation identification
+- Security best practices validation
 - **Key Services**: SecurityScanningService, AzurePolicyEngine
-- **Plugin**: SecurityPlugin
 
-**5. Document Agent**
-- **Purpose**: ATO documentation generation and compliance artifact management
-- **Capabilities**:
-  - System Security Plan (SSP) generation
-  - Security Assessment Report (SAR) creation
-  - POAM documentation
-  - Control Implementation Summary
-  - Evidence collection and organization
-  - Document versioning and templates
-  - Artifact management
-- **Key Services**: AtoDocumentationService, DocumentProcessingService
-- **Plugin**: DocumentPlugin
-
-**6. ATO Preparation Agent**
-- **Purpose**: End-to-end ATO package orchestration and submission
-- **Capabilities**:
-  - ATO package orchestration
-  - Submission workflow management
-  - Stakeholder coordination
-  - Timeline and milestone tracking
-  - eMASS integration preparation
-  - Cross-agent coordination for complete ATO packages
-- **Key Services**: AtoPreparationService, WorkflowOrchestrationService
-- **Plugin**: AtoPreparationPlugin
+**Diagram Generation Plugin** (No standalone agent)
+- Mermaid diagram generation
+- Architecture diagram rendering
+- Visual documentation creation
+- **Key Services**: MermaidDiagramService, DiagramRenderService
 
 ### Agent Communication
 
 ```
-User Query → MCP Server → Intent Classification
+User Query → MCP Server → Orchestrator Agent
                               ↓
                     ┌─────────┴──────────┐
-                    │  Agent Router      │
+                    │  Intent Classification │
                     └─────────┬──────────┘
                               ↓
+              ┌───────────────┼───────────────────┐
+              │               │                   │
+              ▼               ▼                   ▼
+    ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+    │Infrastructure│  │  Compliance │  │    Cost     │
+    │    Agent    │  │    Agent    │  │    Mgmt     │
+    └─────────────┘  └─────────────┘  └─────────────┘
+                              │
               ┌───────────────┼───────────────┐
               │               │               │
               ▼               ▼               ▼
     ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-    │Infrastructure│  │  Compliance │  │    Cost     │
-    │    Agent    │  │    Agent    │  │    Agent    │
-    └─────────────┘  └─────────────┘  └─────────────┘
-              │               │               │
-              ▼               ▼               ▼
-    ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-    │  Security   │  │  Document   │  │     ATO     │
-    │    Agent    │  │    Agent    │  │    Agent    │
+    │ Environment │  │  Discovery  │  │  Document   │
+    │    Agent    │  │    Agent    │  │ (sub-agent) │
     └─────────────┘  └─────────────┘  └─────────────┘
               │               │               │
               └───────────────┼───────────────┘
@@ -1572,6 +1579,108 @@ public async Task<bool> DeleteResourceGroupAsync(
 
 ---
 
+## Architecture Diagram Generation
+
+The Platform Engineering Copilot can generate architecture diagrams in Mermaid format from Azure resources, workflows, database schemas, and process descriptions. Diagrams are returned as Mermaid markdown for manual review and deployment (Phase 1 compliant).
+
+### Key Features
+- ✅ Real Azure resource discovery (queries Resource Manager)
+- ✅ 9 diagram types supported (C4, Sequence, ERD, Flowchart, Gantt, State, Class)
+- ✅ Mermaid markdown output (VS Code/GitHub native)
+- ✅ Optional PNG/SVG rendering for presentations
+- ✅ IL5/IL6 compliant (offline rendering, no external APIs)
+
+### Supported Diagram Types
+
+| Type | Use Case | Query Example |
+|------|----------|---------------|
+| **C4 Context** | System context and external actors | `@platform Generate C4 context diagram for payment system` |
+| **C4 Container** | Architecture with containers/services | `@platform Generate C4 container diagram for rg-prod` |
+| **C4 Component** | Components within a container | `@platform Generate C4 component diagram for API service` |
+| **Sequence** | Interaction flow over time | `@platform Show sequence diagram for PR review` |
+| **ERD** | Database schema and relationships | `@platform Diagram database schema` |
+| **Flowchart** | Process flows and decisions | `@platform Flowchart for deployment process` |
+| **Gantt** | Project timeline and milestones | `@platform Generate Gantt chart for ATO timeline` |
+| **State** | State machine transitions | `@platform State diagram for approval workflow` |
+| **Class** | Object-oriented design | `@platform Class diagram for user management` |
+
+### Usage Options
+
+**Option 1: VS Code Preview** ✅ **Recommended**
+1. Ask Copilot to generate diagram
+2. Copy the Mermaid code from the response
+3. Create a new `.md` file and paste the diagram code
+4. Install VS Code Mermaid preview extension (if not installed)
+5. Open preview: `Ctrl+Shift+V` (Windows/Linux) or `Cmd+Shift+V` (Mac)
+6. Review and commit to repository
+
+**Option 2: GitHub Rendering** ✅
+1. Generate diagram via Copilot
+2. Save Mermaid code to repository file (e.g., `docs/architecture.md`)
+3. Commit and push to GitHub
+4. GitHub automatically renders Mermaid diagrams (no plugin required)
+
+**Option 3: Export to PNG/SVG** 🎨 (Optional)
+```
+@platform Generate C4 diagram for rg-prod and export to PNG
+```
+- Requires PuppeteerSharp (already installed)
+- Local headless Chromium rendering
+- Configurable dimensions (default: 1920x1080)
+- Transparent background support
+- IL5/IL6 compliant (no external API calls)
+
+### Example Queries
+
+**C4 Container Diagram (Azure Resources):**
+```
+@platform Generate C4 container diagram for resource group rg-prod
+```
+
+**Sequence Diagram (PR Workflow):**
+```
+@platform Generate sequence diagram for PR review workflow
+```
+
+**ERD (Database Schema):**
+```
+@platform Diagram database schema for user management system
+```
+
+**Flowchart (Deployment Process):**
+```
+@platform Generate flowchart for environment provisioning
+```
+
+### Real Azure Resource Discovery
+
+The diagram generator queries Azure Resource Manager for actual resources and categorizes them:
+- Databases → `ContainerDb` (SQL, Cosmos, PostgreSQL, MySQL, Redis)
+- Queues/Messaging → `ContainerQueue` (Service Bus, Event Hub)
+- Other → `Container` (Web Apps, VMs, Functions)
+
+**Fallback Behavior:** If Azure query fails (permissions, network, etc.), generates sample diagram with instructions.
+
+### IL5/IL6 Compliance
+
+**Phase 1 Compliant Workflow:**
+1. ✅ Copilot generates diagram markdown
+2. ✅ User reviews diagram code
+3. ✅ User saves to workspace/repository
+4. ✅ User commits to version control
+5. ✅ GitHub/VS Code renders automatically
+
+**NO automatic deployment or execution!**
+
+**Optional PNG/SVG Rendering:**
+- ✅ Local execution only (headless Chromium)
+- ✅ No external API calls
+- ✅ Mermaid.js via CDN (can be bundled for air-gapped)
+- ✅ User-initiated (not automatic)
+- ✅ Offline capable
+
+---
+
 ## Support & Documentation
 
 ### Additional Documentation
@@ -1580,14 +1689,15 @@ public async Task<bool> DeleteResourceGroupAsync(
 - **DEPLOYMENT.md** - Deployment instructions
 - **DEVELOPMENT.md** - Development setup
 - **DOCUMENTATION.md** - User guides
-- **docs/** - 18+ refactoring and feature documentation files
+- **docs/README.md** - Comprehensive documentation index
 
 ### Key Documentation Files in `/docs`
 
-- **OPTION-C-IMPLEMENTATION-COMPLETE.md** - Option C refactoring details
-- **SEMANTIC-KERNEL-V2-MIGRATION.md** - SK migration guide
-- **PHASE-9-PLUGIN-REFACTORING-PLAN.md** - Plugin refactoring roadmap
-- **REFACTORING-ARCHITECTURE-DIAGRAM.md** - Visual architecture diagrams
+- **AUTHENTICATION.md** - Complete authentication guide
+- **KNOWLEDGE-BASE.md** - RMF/STIG compliance knowledge base
+- **WORKSPACE-CREATION.md** - Workspace creation feature guide
+- **INTEGRATIONS.md** - GitHub Copilot, M365 Copilot, MCP API integration
+- **AGENT-ORCHESTRATION.md** - Agent configuration and discovery
 
 ### Contact & Contributing
 

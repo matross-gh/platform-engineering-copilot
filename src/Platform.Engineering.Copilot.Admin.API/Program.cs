@@ -10,7 +10,6 @@ using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Cost;
 using Platform.Engineering.Copilot.Core.Interfaces.Deployment;
 using Platform.Engineering.Copilot.Core.Interfaces.GitHub;
-using Platform.Engineering.Copilot.Core.Interfaces.ServiceCreation;
 using Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 using Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
@@ -24,7 +23,6 @@ using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
 using Platform.Engineering.Copilot.Environment.Core.Extensions;
 using Platform.Engineering.Copilot.Discovery.Core.Extensions;
 using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
-using Platform.Engineering.Copilot.ServiceCreation.Core.Extensions;
 using Platform.Engineering.Copilot.Document.Core.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -123,9 +121,6 @@ builder.Services.AddScoped<IDeploymentOrchestrationService, DeploymentOrchestrat
 // Add services needed by EnvironmentManagementEngine
 builder.Services.AddScoped<IGitHubServices, Platform.Engineering.Copilot.Core.Services.GitHubGatewayService>();
 
-// Navy Flankspeed ServiceCreation Service
-builder.Services.AddScoped<IServiceCreationService, Platform.Engineering.Copilot.Core.Services.ServiceCreation.FlankspeedServiceCreationService>();
-
 // Notification Services (Phase 5)
 builder.Services.Configure<Platform.Engineering.Copilot.Core.Configuration.EmailConfiguration>(
     builder.Configuration.GetSection("EmailNotifications"));
@@ -198,7 +193,6 @@ builder.Services.AddInfrastructureAgent();
 builder.Services.AddCostManagementAgent();
 builder.Services.AddEnvironmentAgent();
 builder.Services.AddDiscoveryAgent();
-builder.Services.AddServiceCreationAgent();
 builder.Services.AddSecurityAgent();
 builder.Services.AddDocumentAgent();
 

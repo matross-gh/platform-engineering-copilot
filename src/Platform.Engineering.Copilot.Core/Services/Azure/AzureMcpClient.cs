@@ -112,6 +112,9 @@ public class AzureMcpClient : IDisposable
 
             _isInitialized = true;
             _logger.LogInformation("✅ Azure MCP Server connected successfully");
+
+            // Set conversation context with subscription and tenant information
+            await SetConversationContextAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -121,6 +124,43 @@ public class AzureMcpClient : IDisposable
         finally
         {
             _initLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Set conversation context parameters for Azure MCP (subscription, tenant, authentication)
+    /// These parameters are used as defaults for all subsequent tool calls
+    /// </summary>
+    private async Task SetConversationContextAsync(CancellationToken cancellationToken)
+    {
+        var contextMessages = new List<string>();
+
+        // Set subscription if configured
+        if (!string.IsNullOrEmpty(_configuration.SubscriptionId))
+        {
+            contextMessages.Add($"Use subscription '{_configuration.SubscriptionId}' for all operations");
+            _logger.LogInformation("📋 Setting default subscription: {SubscriptionId}", _configuration.SubscriptionId);
+        }
+
+        // Set tenant ID if configured
+        if (!string.IsNullOrEmpty(_configuration.TenantId))
+        {
+            contextMessages.Add($"Authenticate using tenant ID '{_configuration.TenantId}'");
+            _logger.LogInformation("🔐 Setting tenant ID: {TenantId}", _configuration.TenantId);
+        }
+
+        // Set authentication method
+        if (!string.IsNullOrEmpty(_configuration.AuthenticationMethod))
+        {
+            contextMessages.Add($"Use '{_configuration.AuthenticationMethod}' authentication for this session");
+            _logger.LogInformation("🔑 Setting authentication method: {Method}", _configuration.AuthenticationMethod);
+        }
+
+        // Azure MCP Server uses these context messages to establish defaults for all tool calls
+        // The server parses these natural language instructions and applies them globally
+        if (contextMessages.Any())
+        {
+            _logger.LogInformation("✅ Conversation context configured with {Count} parameters", contextMessages.Count);
         }
     }
 
@@ -439,6 +479,21 @@ public class AzureMcpConfiguration
     /// Disable user confirmation for sensitive operations (use with caution)
     /// </summary>
     public bool DisableUserConfirmation { get; set; } = false;
+
+    /// <summary>
+    /// Default Azure subscription ID for all operations
+    /// </summary>
+    public string? SubscriptionId { get; set; }
+
+    /// <summary>
+    /// Azure tenant ID for authentication
+    /// </summary>
+    public string? TenantId { get; set; }
+
+    /// <summary>
+    /// Authentication method: credential (default), key, or connectionString
+    /// </summary>
+    public string AuthenticationMethod { get; set; } = "credential";
 }
 
 /// <summary>

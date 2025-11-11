@@ -11,7 +11,6 @@ using Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 using Platform.Engineering.Copilot.Core.Interfaces.GitHub;
 using Platform.Engineering.Copilot.Core.Interfaces.Jobs;
 using Platform.Engineering.Copilot.Core.Interfaces.Cache;
-using Platform.Engineering.Copilot.Core.Interfaces.ServiceCreation;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Services.Cache;
 using Platform.Engineering.Copilot.Core.Services.Jobs;
@@ -26,6 +25,7 @@ using Platform.Engineering.Copilot.Core.Services.Validation;
 using Platform.Engineering.Copilot.Core.Services.Validation.Validators;
 using Platform.Engineering.Copilot.Core.Services.ServiceCreation;
 using Platform.Engineering.Copilot.Core.Interfaces.Validation;
+using Platform.Engineering.Copilot.Core.Configuration;
 
 namespace Platform.Engineering.Copilot.Core.Extensions;
 
@@ -39,9 +39,22 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddPlatformEngineeringCopilotCore(this IServiceCollection services)
     {
+        // Register Azure Gateway configuration options
+        services.AddOptions<AzureGatewayOptions>()
+            .BindConfiguration(AzureGatewayOptions.SectionName);
+        
         // Register caching services
         services.AddMemoryCache(); // Required for IMemoryCache
         services.AddSingleton<IIntelligentChatCacheService, IntelligentChatCacheService>();
+        
+        // Register Semantic Text Memory for Service Wizard state management
+#pragma warning disable SKEXP0001 // Type is for evaluation purposes only
+        services.AddSingleton<Microsoft.SemanticKernel.Memory.ISemanticTextMemory>(sp =>
+        {
+            var memoryBuilder = new Microsoft.SemanticKernel.Memory.MemoryBuilder();
+            return memoryBuilder.Build();
+        });
+#pragma warning restore SKEXP0001
         
         // Register Semantic Kernel with Plugins (required by IntelligentChatService)
         // CHANGED TO TRANSIENT to avoid circular dependency deadlock
@@ -137,9 +150,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEmailService, EmailService>();
         services.AddSingleton<ISlackService, SlackService>();
         services.AddSingleton<ITeamsNotificationService, TeamsNotificationService>();
-        
-        // Register Service Creation Service
-        services.AddScoped<IServiceCreationService, FlankspeedServiceCreationService>();
 
         // ========================================
         // MULTI-AGENT SYSTEM REGISTRATION
@@ -172,12 +182,20 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => 
         {
             var config = sp.GetRequiredService<IConfiguration>();
+            var gatewayOptions = new GatewayOptions();
+            config.GetSection(GatewayOptions.SectionName).Bind(gatewayOptions);
+
             return new AzureMcpConfiguration
             {
                 ReadOnly = config.GetValue("AzureMcp:ReadOnly", false),
                 Debug = config.GetValue("AzureMcp:Debug", false),
                 DisableUserConfirmation = config.GetValue("AzureMcp:DisableUserConfirmation", false),
-                Namespaces = config.GetSection("AzureMcp:Namespaces").Get<string[]>()
+                Namespaces = config.GetSection("AzureMcp:Namespaces").Get<string[]>(),
+                
+                // Set subscription and tenant from Gateway configuration or environment variables
+                SubscriptionId = gatewayOptions.Azure.SubscriptionId ?? Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID"),
+                TenantId = gatewayOptions.Azure.TenantId ?? Environment.GetEnvironmentVariable("AZURE_TENANT_ID"),
+                AuthenticationMethod = "credential" // Use Azure Identity SDK (Service Principal, Managed Identity, or Azure CLI)
             };
         });
         services.AddSingleton<AzureMcpClient>();

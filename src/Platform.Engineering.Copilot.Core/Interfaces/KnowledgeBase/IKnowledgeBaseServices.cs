@@ -26,6 +26,11 @@ public interface IStigKnowledgeService
     Task<IReadOnlyList<StigControl>> GetStigsByServiceTypeAsync(StigServiceType serviceType, CancellationToken cancellationToken = default);
     Task<ControlMapping?> GetControlMappingAsync(string nistControlId, CancellationToken cancellationToken = default);
     Task<string> ExplainStigAsync(string stigId, CancellationToken cancellationToken = default);
+    
+    // NEW: Reverse mapping and cross-reference methods
+    Task<IReadOnlyList<string>> GetNistControlsForStigAsync(string stigId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<StigControl>> GetAzureStigsAsync(string azureService, CancellationToken cancellationToken = default);
+    Task<string> GetStigCrossReferenceAsync(string stigId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

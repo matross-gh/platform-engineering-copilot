@@ -9,7 +9,6 @@ using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
 using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
 using Platform.Engineering.Copilot.Environment.Core.Extensions;
 using Platform.Engineering.Copilot.Discovery.Core.Extensions;
-using Platform.Engineering.Copilot.ServiceCreation.Core.Extensions;
 using Platform.Engineering.Copilot.Document.Core.Extensions;
 using Platform.Engineering.Copilot.Security.Agent.Extensions;
 
@@ -64,7 +63,6 @@ builder.Services.AddInfrastructureAgent();
 builder.Services.AddCostManagementAgent();
 builder.Services.AddEnvironmentAgent();
 builder.Services.AddDiscoveryAgent();
-builder.Services.AddServiceCreationAgent();
 builder.Services.AddSecurityAgent();
 builder.Services.AddDocumentAgent();
 

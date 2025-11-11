@@ -18,7 +18,6 @@
     <ProjectReference Include="..\Platform.Engineering.Copilot.CostManagement.Agent\Platform.Engineering.Copilot.CostManagement.Agent.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.Environment.Agent\Platform.Engineering.Copilot.Environment.Agent.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.Discovery.Agent\Platform.Engineering.Copilot.Discovery.Agent.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.ServiceCreation.Agent\Platform.Engineering.Copilot.ServiceCreation.Agent.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.Security.Agent\Platform.Engineering.Copilot.Security.Agent.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.Document.Agent\Platform.Engineering.Copilot.Document.Agent.csproj" />
   </ItemGroup>

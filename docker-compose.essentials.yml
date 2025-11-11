@@ -52,10 +52,11 @@ services:
       - Gateway__Azure__UseManagedIdentity=${AZURE_USE_MANAGED_IDENTITY:-false}
       - Gateway__Azure__Enabled=${AZURE_ENABLED:-true}
       
-      # Azure Service Principal Authentication
+      # Azure Service Principal Authentication (for Azure MCP Server)
       - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
       - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
       - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - AZURE_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}
       
       # Azure OpenAI Configuration
       - Gateway__AzureOpenAI__ApiKey=${AZURE_OPENAI_API_KEY}

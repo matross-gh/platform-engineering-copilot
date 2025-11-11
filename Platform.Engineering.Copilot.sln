@@ -28,8 +28,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Engineering.Copilo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Engineering.Copilot.Discovery.Agent", "src\Platform.Engineering.Copilot.Discovery.Agent\Platform.Engineering.Copilot.Discovery.Agent.csproj", "{027ABD91-9283-4E57-8E6D-6CFD47535891}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Engineering.Copilot.ServiceCreation.Agent", "src\Platform.Engineering.Copilot.ServiceCreation.Agent\Platform.Engineering.Copilot.ServiceCreation.Agent.csproj", "{4BE56644-712E-49C1-8568-CC63F1788E1D}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Engineering.Copilot.Security.Agent", "src\Platform.Engineering.Copilot.Security.Agent\Platform.Engineering.Copilot.Security.Agent.csproj", "{A1C237C0-CC9F-4AD0-9386-9EBC3BB98128}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Platform.Engineering.Copilot.Document.Agent", "src\Platform.Engineering.Copilot.Document.Agent\Platform.Engineering.Copilot.Document.Agent.csproj", "{B125DF3E-7B26-4993-B710-7D6FAC19003D}"

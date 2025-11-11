@@ -19,7 +19,6 @@ COPY src/Platform.Engineering.Copilot.Infrastructure.Agent/*.csproj ./src/Platfo
 COPY src/Platform.Engineering.Copilot.CostManagement.Agent/*.csproj ./src/Platform.Engineering.Copilot.CostManagement.Agent/
 COPY src/Platform.Engineering.Copilot.Environment.Agent/*.csproj ./src/Platform.Engineering.Copilot.Environment.Agent/
 COPY src/Platform.Engineering.Copilot.Discovery.Agent/*.csproj ./src/Platform.Engineering.Copilot.Discovery.Agent/
-COPY src/Platform.Engineering.Copilot.ServiceCreation.Agent/*.csproj ./src/Platform.Engineering.Copilot.ServiceCreation.Agent/
 COPY src/Platform.Engineering.Copilot.Security.Agent/*.csproj ./src/Platform.Engineering.Copilot.Security.Agent/
 COPY src/Platform.Engineering.Copilot.Document.Agent/*.csproj ./src/Platform.Engineering.Copilot.Document.Agent/
 
@@ -34,7 +33,6 @@ COPY src/Platform.Engineering.Copilot.Infrastructure.Agent/. ./src/Platform.Engi
 COPY src/Platform.Engineering.Copilot.CostManagement.Agent/. ./src/Platform.Engineering.Copilot.CostManagement.Agent/
 COPY src/Platform.Engineering.Copilot.Environment.Agent/. ./src/Platform.Engineering.Copilot.Environment.Agent/
 COPY src/Platform.Engineering.Copilot.Discovery.Agent/. ./src/Platform.Engineering.Copilot.Discovery.Agent/
-COPY src/Platform.Engineering.Copilot.ServiceCreation.Agent/. ./src/Platform.Engineering.Copilot.ServiceCreation.Agent/
 COPY src/Platform.Engineering.Copilot.Security.Agent/. ./src/Platform.Engineering.Copilot.Security.Agent/
 COPY src/Platform.Engineering.Copilot.Document.Agent/. ./src/Platform.Engineering.Copilot.Document.Agent/
 

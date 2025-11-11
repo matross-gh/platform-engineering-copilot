@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
@@ -7,6 +8,7 @@ using Platform.Engineering.Copilot.Core.Services.Agents;
 using Platform.Engineering.Copilot.Core.Models.Agents;
 using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Chat;
+using Platform.Engineering.Copilot.Core.Configuration;
 using Platform.Engineering.Copilot.Discovery.Agent;
 
 namespace Platform.Engineering.Copilot.Discovery.Core;
@@ -23,15 +25,18 @@ public class DiscoveryAgent : ISpecializedAgent
     private readonly IChatCompletionService _chatCompletion;
     private readonly ILogger<DiscoveryAgent> _logger;
     private readonly AzureMcpClient _azureMcpClient;
+    private readonly string? _defaultSubscriptionId;
 
     public DiscoveryAgent(
         ISemanticKernelService semanticKernelService,
         ILogger<DiscoveryAgent> logger,
         AzureResourceDiscoveryPlugin AzureResourceDiscoveryPlugin,
-        AzureMcpClient azureMcpClient)
+        AzureMcpClient azureMcpClient,
+        IOptions<AzureGatewayOptions> azureOptions)
     {
         _logger = logger;
         _azureMcpClient = azureMcpClient;
+        _defaultSubscriptionId = azureOptions.Value.SubscriptionId;
         
         // Create specialized kernel for discovery operations
         _kernel = semanticKernelService.CreateSpecializedKernel(AgentType.Discovery);
@@ -118,7 +123,17 @@ public class DiscoveryAgent : ISpecializedAgent
 
     private string BuildSystemPrompt()
     {
-        return @"You are a specialized Resource Discovery and Inventory expert with deep expertise in:
+        var subscriptionInfo = !string.IsNullOrEmpty(_defaultSubscriptionId)
+            ? $@"
+
+**🔧 DEFAULT CONFIGURATION:**
+- Default Subscription ID: {_defaultSubscriptionId}
+- When users don't specify a subscription, automatically use the default subscription ID above
+- ALWAYS use the default subscription when available unless user explicitly specifies a different one"
+            : "";
+
+        return $@"You are a specialized Resource Discovery and Inventory expert with deep expertise in:
+{subscriptionInfo}
 
 **Azure Resource Discovery:**
 - Comprehensive resource inventory across subscriptions
@@ -159,7 +174,7 @@ When a user asks about resources, inventory, or discovery, use a conversational 
   - Specific resource types (VMs, AKS, Storage, Databases, etc.)
   - Resources with specific tags
   - Resources in a specific location
-- **Subscription ID**: If not provided, ask: ""Which subscription should I scan?""
+- **Subscription ID**: Use the default subscription ID unless user specifies a different one
 - **Output Format**: ""How would you like the results?""
   - Summary (count by type)
   - Detailed list with properties
@@ -209,25 +224,17 @@ When a user asks about resources, inventory, or discovery, use a conversational 
 
 **Example Conversation Flow:**
 
-User: ""What resources do I have running?""
-You: ""I'd be happy to discover your Azure resources! To provide the most useful inventory, I need a few details:
+User: ""What resources do I have running?"" or ""List all Azure resources""
+You: **[IMMEDIATELY call discover_azure_resources with the default subscription ID - DO NOT ask for subscription if default is configured]**
 
-1. Which subscription should I scan? (name or subscription ID)
-2. Would you like:
-   - A complete inventory (all resources)
-   - Specific resource types (VMs, AKS, Storage, etc.)
-   - Resources in a particular resource group
-3. How would you like the results? (summary, detailed list, or full inventory report)
+User: ""Discover resources in subscription 453c...""
+You: **[IMMEDIATELY call discover_azure_resources with the specified subscription ID]**
 
-Let me know your preferences!""
-
-User: ""subscription 453c..., all resources, summary""
-You: **[IMMEDIATELY call discover_resources or similar function - DO NOT ask for confirmation]**
-
-**CRITICAL: One Question Cycle Only!**
-- First message: User asks for discovery → Ask for missing critical info
-- Second message: User provides answers → **IMMEDIATELY call the appropriate discovery function**
-- DO NOT ask ""Should I proceed?"" or ""Any adjustments needed?""
+**CRITICAL: Use Available Tools Proactively!**
+- If default subscription is configured, USE IT immediately - don't ask
+- Call discovery functions directly when you have enough information
+- Only ask for clarification on ambiguous requests (e.g., ""which resource type?"")
+- DO NOT ask ""Should I proceed?"" or ""Let me know your preferences!"" when you have subscription ID
 - DO NOT repeat questions - use smart defaults for minor missing details
 
 **Best Practices:**

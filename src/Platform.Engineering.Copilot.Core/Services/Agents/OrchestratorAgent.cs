@@ -283,10 +283,15 @@ Create JSON execution plan:
 
 CRITICAL Rules (apply in order):
 1. **Conversation continuation**: If assistant previously asked questions and user is answering → continue same task
-2. **Compliance scanning** (""check""/""scan""/""assess"" + compliance) → Compliance agent, primaryIntent: ""compliance""
-3. **Template generation** (""create""/""deploy""/""I need"" infra) → Infrastructure ONLY, primaryIntent: ""infrastructure""
-4. **Actual provisioning** (""actually provision""/""make it live"") → All 5 agents Sequential
-5. **Informational** (""What are...""/""How do..."") → Single relevant agent
+2. **Azure context configuration** (""use subscription""/""set tenant""/""set authentication""/""what subscription""/""azure context"") → Infrastructure agent with task description EXACTLY matching user message (prefix with ""Azure config: ""), primaryIntent: ""infrastructure""
+   - CRITICAL: For context config, DO NOT add ""create"", ""deploy"", or ""template"" - just pass the user message
+   - Example: User says ""Use subscription 123"" → task description: ""Azure config: Use subscription 123"" (NOT ""Create infrastructure using subscription 123"")
+3. **Compliance scanning** (""check""/""scan""/""assess"" + compliance) → Compliance agent, primaryIntent: ""compliance""
+4. **Template generation** (""create""/""deploy""/""I need"" infra) → Infrastructure agent, primaryIntent: ""infrastructure""
+5. **Cost analysis** (""cost""/""price""/""estimate"") → Cost Management agent, primaryIntent: ""cost""
+6. **Discovery and inventory** (""list""/""find""/""discover""/""inventory"") → Discovery agent, primaryIntent: ""discovery""
+7. **Actual provisioning** (""actually provision""/""make it live"") → All 5 agents Sequential
+8. **Informational** (""What are...""/""How do..."") → Single relevant agent
 
 Default: Template generation (Infrastructure only) - safe, no real Azure resources.
 
@@ -626,6 +631,14 @@ Synthesized response:";
     {
         var lowerMessage = message.ToLowerInvariant();
 
+        // Azure context management (subscription, tenant, authentication)
+        if (lowerMessage.Contains("use subscription") || lowerMessage.Contains("set subscription") ||
+            lowerMessage.Contains("use tenant") || lowerMessage.Contains("set tenant") ||
+            lowerMessage.Contains("set authentication") || lowerMessage.Contains("what subscription") ||
+            lowerMessage.Contains("get azure context") || lowerMessage.Contains("azure context") ||
+            lowerMessage.Contains("current subscription"))
+            return AgentType.Infrastructure;
+
         if (lowerMessage.Contains("provision") || lowerMessage.Contains("create") ||
             lowerMessage.Contains("deploy") || lowerMessage.Contains("bicep") ||
             lowerMessage.Contains("terraform"))
@@ -836,6 +849,23 @@ Synthesized response:";
         
         if (requiresMultipleAgents)
             return null;
+        
+        // AZURE CONTEXT CONFIGURATION - Unambiguous Infrastructure agent requests
+        // Check this EARLY before other patterns (to avoid false matches)
+        var isAzureContextConfig = 
+            lowerMessage.Contains("use subscription") || lowerMessage.Contains("set subscription") ||
+            lowerMessage.Contains("use tenant") || lowerMessage.Contains("set tenant") ||
+            lowerMessage.Contains("set authentication") || lowerMessage.Contains("what subscription") ||
+            lowerMessage.Contains("get azure context") || lowerMessage.Contains("azure context") ||
+            lowerMessage.Contains("current subscription");
+        
+        _logger.LogInformation("🔍 Fast-path Azure context check: isAzureContextConfig={IsConfig}, message={Message}", 
+            isAzureContextConfig, lowerMessage.Substring(0, Math.Min(50, lowerMessage.Length)));
+        
+        if (isAzureContextConfig)
+        {
+            return AgentType.Infrastructure;
+        }
         
         // COMPLIANCE AGENT - Distinguish between informational queries and actual assessments
         var isComplianceRelated = lowerMessage.Contains("compliance") || lowerMessage.Contains("nist") || 

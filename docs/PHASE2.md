@@ -1,4 +1,4 @@
-# Phase 2 Compliance Mapping - Platform Engineering Copilot
+# Phase 2 Mapping - Platform Engineering Copilot
 
 > **Current Phase:** Phase 2 - Operational Copilot (Controlled Execution + Guardrails)  
 > **Previous Phase:** Phase 1 - Foundational Copilot ✅ COMPLETE

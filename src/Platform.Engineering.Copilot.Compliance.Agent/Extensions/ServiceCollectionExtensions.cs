@@ -10,6 +10,7 @@ using Platform.Engineering.Copilot.Core.Interfaces.Cache;
 using Platform.Engineering.Copilot.Core.Services.Cache;
 using Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
 using Platform.Engineering.Copilot.Compliance.Agent.Services.KnowledgeBase;
+using Platform.Engineering.Copilot.Compliance.Agent.Services.PullRequest;
 using Platform.Engineering.Copilot.Core.Services.Compliance;
 using Platform.Engineering.Copilot.Core.Services.Jobs;
 using Platform.Engineering.Copilot.Compliance.Agent.Plugins;
@@ -24,6 +25,7 @@ using Platform.Engineering.Copilot.Compliance.Agent.Services.Infrastructure;
 using Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 using Platform.Engineering.Copilot.Core.Services.Notifications;
 using Platform.Engineering.Copilot.Core.Interfaces.Jobs;
+using Platform.Engineering.Copilot.Core.Configuration;
 
 namespace Platform.Engineering.Copilot.Compliance.Core.Extensions;
 
@@ -129,6 +131,9 @@ public static class ServiceCollectionExtensions
         // Register Compliance Metrics Service - Singleton (no DbContext dependency)
         services.AddSingleton<ComplianceMetricsService>();
         
+        // Register Governance Engine - Scoped (policy enforcement and approval workflows)
+        services.AddScoped<IGovernanceEngine, Platform.Engineering.Copilot.Compliance.Agent.Services.Governance.GovernanceEngine>();
+        
         // Register ATO Compliance Engine - Scoped (requires DbContext)
         services.AddScoped<IAtoComplianceEngine, AtoComplianceEngine>();
         
@@ -137,6 +142,23 @@ public static class ServiceCollectionExtensions
 
         // Register Code Scanning Engine - Scoped (orchestrates security analysis tools)
         services.AddScoped<ICodeScanningEngine, CodeScanningEngine>();
+        
+        // Register Pull Request Review Services - Scoped (GitHub API integration for IaC compliance)
+        services.AddHttpClient("GitHub", client =>
+        {
+            client.DefaultRequestHeaders.Add("User-Agent", "Platform-Engineering-Copilot");
+            client.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+            client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
+        });
+        services.AddScoped<GitHubPullRequestService>();
+        services.AddScoped<PullRequestReviewService>();
+        
+        // Configure GitHub settings (for PR reviews)
+        services.AddOptions<GitHubConfiguration>()
+            .Configure<IConfiguration>((settings, configuration) =>
+            {
+                configuration.GetSection("Gateway:GitHub").Bind(settings);
+            });
         
         // Register Infrastructure Remediation Service - Scoped (requires HttpClient and Azure services)
         services.AddScoped<IInfrastructureRemediationService, InfrastructureRemediationService>();
@@ -169,6 +191,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CodeScanningPlugin>();
         services.AddScoped<AtoPreparationPlugin>();
         services.AddScoped<DocumentGenerationPlugin>();
+        services.AddScoped<PullRequestReviewPlugin>();
         
         // Register SharedMemory as singleton (shared across all agents for context)
         services.AddSingleton<SharedMemory>();
@@ -198,12 +221,20 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(sp => 
         {
             var config = sp.GetRequiredService<IConfiguration>();
+            var gatewayOptions = new GatewayOptions();
+            config.GetSection(GatewayOptions.SectionName).Bind(gatewayOptions);
+
             return new AzureMcpConfiguration
             {
                 ReadOnly = config.GetValue("AzureMcp:ReadOnly", false),
                 Debug = config.GetValue("AzureMcp:Debug", false),
                 DisableUserConfirmation = config.GetValue("AzureMcp:DisableUserConfirmation", false),
-                Namespaces = config.GetSection("AzureMcp:Namespaces").Get<string[]>()
+                Namespaces = config.GetSection("AzureMcp:Namespaces").Get<string[]>(),
+                
+                // Set subscription and tenant from Gateway configuration or environment variables
+                SubscriptionId = gatewayOptions.Azure.SubscriptionId ?? Environment.GetEnvironmentVariable("AZURE_SUBSCRIPTION_ID"),
+                TenantId = gatewayOptions.Azure.TenantId ?? Environment.GetEnvironmentVariable("AZURE_TENANT_ID"),
+                AuthenticationMethod = "credential" // Use Azure Identity SDK (Service Principal, Managed Identity, or Azure CLI)
             };
         });
         services.AddSingleton<AzureMcpClient>();

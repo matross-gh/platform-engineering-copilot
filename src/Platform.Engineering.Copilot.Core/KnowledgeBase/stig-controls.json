@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "version": "3.0",
-    "lastUpdated": "2025-11-09",
-    "totalStigs": 32,
+    "version": "3.1",
+    "lastUpdated": "2025-01-09",
+    "totalStigs": 40,
     "categories": [
       "Identity",
       "Network",
@@ -934,6 +934,241 @@
         "configuration": "Encryption, Key Vault",
         "azurePolicy": "Require CMK on Service Bus",
         "automation": "az servicebus namespace encryption create --namespace-name <namespace> --resource-group <rg> --encryption-config key-name=<key> key-vault-uri=<uri>"
+      }
+    },
+    {
+      "stigId": "V-220100",
+      "vulnId": "SV-220100r879735_rule",
+      "ruleId": "SV-220100r879735_rule",
+      "title": "Azure Virtual Networks must implement network segmentation",
+      "description": "Virtual Networks must implement proper network segmentation using subnets and NSGs. Network segmentation prevents lateral movement and enforces boundary protection for IL5/IL6 workloads.",
+      "severity": "High",
+      "checkText": "Verify VNets use multiple subnets with appropriate NSGs. Check for default-deny rules and proper subnet isolation. If production and non-production workloads share subnets without segmentation, this is a finding.",
+      "fixText": "Implement network segmentation: 1. Create separate subnets for different tiers (web, app, data). 2. Apply NSGs to each subnet. 3. Configure default-deny inbound/outbound rules. 4. Allow only required traffic between subnets. 5. Use service tags for Azure services.",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SC-7(5)",
+        "SC-7(21)"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314",
+        "CCI-002530"
+      ],
+      "category": "Network Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Network",
+      "azureImplementation": {
+        "service": "Azure Virtual Network",
+        "configuration": "Subnets, NSG Rules, Route Tables",
+        "azurePolicy": "Enforce NSG on all subnets",
+        "automation": "az network vnet subnet update --name <subnet> --vnet-name <vnet> --resource-group <rg> --network-security-group <nsg>"
+      }
+    },
+    {
+      "stigId": "V-220101",
+      "vulnId": "SV-220101r879736_rule",
+      "ruleId": "SV-220101r879736_rule",
+      "title": "Azure Private Link must be used for PaaS services",
+      "description": "Private Link must be used for all PaaS services to eliminate public internet exposure. Services must be accessible only through private endpoints within VNets for IL5/IL6 compliance.",
+      "severity": "High",
+      "checkText": "Check all PaaS resources for private endpoint configuration. Verify public access is disabled. If Storage, SQL, Key Vault, or other PaaS services allow public access for IL5/IL6 workloads, this is a finding.",
+      "fixText": "Configure Private Link: 1. Create private endpoints for each PaaS service. 2. Disable public network access. 3. Configure private DNS zones. 4. Update applications to use private endpoint FQDN. 5. Remove firewall exceptions.",
+      "nistControls": [
+        "AC-4",
+        "SC-7",
+        "SC-7(3)",
+        "AC-3"
+      ],
+      "cciRefs": [
+        "CCI-001414",
+        "CCI-002314"
+      ],
+      "category": "Network Security",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Network",
+      "azureImplementation": {
+        "service": "Azure Private Link",
+        "configuration": "Private Endpoint, Private DNS Zone",
+        "azurePolicy": "Require private endpoints on PaaS services",
+        "automation": "az network private-endpoint create --name <pe> --resource-group <rg> --vnet-name <vnet> --subnet <subnet> --private-connection-resource-id <resource-id> --group-ids <group> --connection-name <connection>"
+      }
+    },
+    {
+      "stigId": "V-220102",
+      "vulnId": "SV-220102r879770_rule",
+      "ruleId": "SV-220102r879770_rule",
+      "title": "Azure Front Door must use Web Application Firewall",
+      "description": "Azure Front Door must have Web Application Firewall (WAF) enabled with managed rule sets. WAF protects against OWASP Top 10 vulnerabilities and provides DDoS protection.",
+      "severity": "High",
+      "checkText": "Verify Front Door has WAF enabled. Check WAF policy is associated with all routing rules. Verify managed rule sets (Default Rule Set 2.1, Bot Manager 1.0) are enabled. If WAF is disabled or not configured properly, this is a finding.",
+      "fixText": "Enable WAF on Front Door: 1. Create WAF policy with Prevention mode. 2. Enable Default Rule Set 2.1. 3. Enable Bot Manager 1.0. 4. Associate WAF policy with all Front Door routing rules. 5. Configure custom rules for application-specific threats.",
+      "nistControls": [
+        "SC-5",
+        "SC-7",
+        "SI-10",
+        "SI-11"
+      ],
+      "cciRefs": [
+        "CCI-001094",
+        "CCI-002385"
+      ],
+      "category": "Boundary Protection",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Network",
+      "azureImplementation": {
+        "service": "Azure Front Door",
+        "configuration": "WAF Policy, Managed Rules",
+        "azurePolicy": "Require WAF on Front Door",
+        "automation": "az network front-door waf-policy create --name <policy> --resource-group <rg> --mode Prevention && az network front-door waf-policy managed-rules add --policy-name <policy> --resource-group <rg> --type DefaultRuleSet --version 2.1"
+      }
+    },
+    {
+      "stigId": "V-220103",
+      "vulnId": "SV-220103r879809_rule",
+      "ruleId": "SV-220103r879809_rule",
+      "title": "Azure Log Analytics workspaces must be configured for data retention",
+      "description": "Log Analytics workspaces must retain logs for minimum 365 days for IL5 and 730 days for IL6. Audit logs must be immutable and protected from deletion.",
+      "severity": "Medium",
+      "checkText": "Check Log Analytics workspace retention settings. Verify retention is 365+ days for IL5 and 730+ days for IL6. Check if workspace is configured with Microsoft Sentinel for immutable logs. If retention is insufficient, this is a finding.",
+      "fixText": "Configure log retention: 1. Set workspace retention to 365 days minimum (730 for IL6). 2. Enable Microsoft Sentinel for immutable logs. 3. Configure data export to Storage Account with immutability policy. 4. Enable Purge Protection on Log Analytics workspace.",
+      "nistControls": [
+        "AU-4",
+        "AU-9",
+        "AU-9(2)",
+        "AU-11"
+      ],
+      "cciRefs": [
+        "CCI-000162",
+        "CCI-000163",
+        "CCI-001348"
+      ],
+      "category": "Audit and Accountability",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Monitoring",
+      "azureImplementation": {
+        "service": "Azure Log Analytics",
+        "configuration": "Workspace Retention, Data Export",
+        "azurePolicy": "Enforce minimum retention on Log Analytics",
+        "automation": "az monitor log-analytics workspace update --workspace-name <workspace> --resource-group <rg> --retention-time 365"
+      }
+    },
+    {
+      "stigId": "V-220104",
+      "vulnId": "SV-220104r879810_rule",
+      "ruleId": "SV-220104r879810_rule",
+      "title": "Network Watcher must be enabled in all regions",
+      "description": "Azure Network Watcher must be enabled in all Azure regions where resources are deployed. Network Watcher provides network monitoring, diagnostics, and security analysis capabilities required for continuous monitoring.",
+      "severity": "Medium",
+      "checkText": "Verify Network Watcher is enabled in all regions with deployed resources. Check NSG Flow Logs are configured. If Network Watcher is not enabled or flow logs are not configured, this is a finding.",
+      "fixText": "Enable Network Watcher: 1. Enable Network Watcher in all active regions. 2. Configure NSG Flow Logs for all NSGs. 3. Send flow logs to Log Analytics workspace. 4. Enable Traffic Analytics. 5. Configure connection monitors for critical connections.",
+      "nistControls": [
+        "SI-4",
+        "SI-4(2)",
+        "SI-4(5)",
+        "AU-2"
+      ],
+      "cciRefs": [
+        "CCI-001263",
+        "CCI-001312"
+      ],
+      "category": "Information System Monitoring",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Monitoring",
+      "azureImplementation": {
+        "service": "Azure Network Watcher",
+        "configuration": "NSG Flow Logs, Traffic Analytics",
+        "azurePolicy": "Enable Network Watcher in all regions",
+        "automation": "az network watcher configure --resource-group <rg> --locations <region> --enabled true && az network watcher flow-log create --nsg <nsg> --storage-account <storage> --resource-group <rg> --workspace <workspace> --traffic-analytics true"
+      }
+    },
+    {
+      "stigId": "V-220105",
+      "vulnId": "SV-220105r879873_rule",
+      "ruleId": "SV-220105r879873_rule",
+      "title": "Azure Backup must be configured for critical workloads",
+      "description": "Azure Backup must be configured for all critical VMs, databases, and storage accounts. Backup policies must meet RTO/RPO requirements and backups must be immutable with soft delete enabled.",
+      "severity": "Medium",
+      "checkText": "Verify Azure Backup is configured for critical resources. Check backup policies meet organizational RTO/RPO. Verify soft delete and immutability are enabled. If backups are not configured or lack protection, this is a finding.",
+      "fixText": "Configure Azure Backup: 1. Create Recovery Services Vault. 2. Enable soft delete and immutability. 3. Configure backup policies for VMs (daily, 30-day retention minimum). 4. Enable backup for SQL, File Shares, and Blobs. 5. Test restore procedures quarterly.",
+      "nistControls": [
+        "CP-9",
+        "CP-9(1)",
+        "CP-10",
+        "SC-28"
+      ],
+      "cciRefs": [
+        "CCI-000537",
+        "CCI-001350"
+      ],
+      "category": "Contingency Planning",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Platform",
+      "azureImplementation": {
+        "service": "Azure Backup",
+        "configuration": "Recovery Services Vault, Backup Policies",
+        "azurePolicy": "Require backup on VMs and databases",
+        "automation": "az backup vault create --name <vault> --resource-group <rg> && az backup protection enable-for-vm --vault-name <vault> --resource-group <rg> --vm <vm> --policy-name DefaultPolicy"
+      }
+    },
+    {
+      "stigId": "V-220106",
+      "vulnId": "SV-220106r879887_rule",
+      "ruleId": "SV-220106r879887_rule",
+      "title": "Azure resources must use Azure RBAC for access control",
+      "description": "All Azure resources must use Azure role-based access control (RBAC) with least privilege. Classic administrators and management certificates must not be used. Privileged roles require justification and approval.",
+      "severity": "High",
+      "checkText": "Verify all resource access uses Azure RBAC. Check for classic administrators. Verify privileged roles (Owner, Contributor) have business justification. If classic administrators exist or privileged roles lack justification, this is a finding.",
+      "fixText": "Implement Azure RBAC: 1. Remove all classic administrators. 2. Use built-in roles (Reader, Contributor, Owner) with least privilege. 3. Use custom roles for specific needs. 4. Implement PIM for privileged roles. 5. Review role assignments quarterly.",
+      "nistControls": [
+        "AC-2",
+        "AC-3",
+        "AC-6",
+        "AC-6(1)"
+      ],
+      "cciRefs": [
+        "CCI-000015",
+        "CCI-002220"
+      ],
+      "category": "Identity and Access Management",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Identity",
+      "azureImplementation": {
+        "service": "Azure RBAC",
+        "configuration": "Role Assignments, Custom Roles",
+        "azurePolicy": "Audit classic administrators",
+        "automation": "az role assignment create --role <role> --assignee <user-or-sp> --scope <resource-id>"
+      }
+    },
+    {
+      "stigId": "V-220107",
+      "vulnId": "SV-220107r879888_rule",
+      "ruleId": "SV-220107r879888_rule",
+      "title": "Azure Managed Identities must be used instead of service principals",
+      "description": "Managed identities must be used for all Azure resource authentication. Service principals with static credentials should only be used when managed identities are not supported. Credential rotation is required for service principals.",
+      "severity": "Medium",
+      "checkText": "Review all service principals and applications. Verify managed identities are used where supported. Check service principal credential age and rotation policy. If static credentials are used where managed identities are supported, this is a finding.",
+      "fixText": "Implement managed identities: 1. Enable system-assigned or user-assigned managed identities on resources. 2. Grant managed identity access to required resources via RBAC. 3. Update application code to use DefaultAzureCredential. 4. Decommission service principals where managed identities are used. 5. For remaining service principals, implement 90-day credential rotation.",
+      "nistControls": [
+        "IA-5",
+        "IA-5(1)",
+        "IA-5(7)",
+        "SC-12"
+      ],
+      "cciRefs": [
+        "CCI-000196",
+        "CCI-000197",
+        "CCI-001941"
+      ],
+      "category": "Identity and Access Management",
+      "stigFamily": "Azure STIG",
+      "serviceType": "Identity",
+      "azureImplementation": {
+        "service": "Azure Managed Identity",
+        "configuration": "System-assigned or User-assigned Identity",
+        "azurePolicy": "Audit service principals without managed identity",
+        "automation": "az vm identity assign --name <vm> --resource-group <rg> && az role assignment create --role <role> --assignee <identity-id> --scope <resource-id>"
       }
     }
   ],

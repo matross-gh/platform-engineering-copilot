@@ -1189,7 +1189,7 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
 
     // ========== AZURE MCP ENHANCED FUNCTIONS ==========
 
-    [KernelFunction("discover_azure_resources_with_guidance")]
+    [KernelFunction("discover_resources_with_guidance")]
     [Description("Discover Azure resources with best practices and optimization recommendations. " +
                  "Combines fast SDK-based resource discovery with Azure MCP best practices guidance. " +
                  "Use when you want actionable recommendations along with your resource inventory.")]
@@ -1314,7 +1314,7 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
         }
     }
 
-    [KernelFunction("get_resource_details_with_diagnostics")]
+    [KernelFunction("get_resource_with_diagnostics")]
     [Description("Get comprehensive resource details with AppLens diagnostics and troubleshooting guidance. " +
                  "Combines SDK resource data with Azure MCP's AppLens diagnostics for deep analysis. " +
                  "Use when troubleshooting resource issues or performing detailed health analysis.")]

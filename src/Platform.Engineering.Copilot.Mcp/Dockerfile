@@ -12,7 +12,6 @@ COPY ["src/Platform.Engineering.Copilot.CostManagement.Agent/Platform.Engineerin
 COPY ["src/Platform.Engineering.Copilot.Security.Agent/Platform.Engineering.Copilot.Security.Agent.csproj", "src/Platform.Engineering.Copilot.Security.Agent/"]
 COPY ["src/Platform.Engineering.Copilot.Document.Agent/Platform.Engineering.Copilot.Document.Agent.csproj", "src/Platform.Engineering.Copilot.Document.Agent/"]
 COPY ["src/Platform.Engineering.Copilot.Environment.Agent/Platform.Engineering.Copilot.Environment.Agent.csproj", "src/Platform.Engineering.Copilot.Environment.Agent/"]
-COPY ["src/Platform.Engineering.Copilot.ServiceCreation.Agent/Platform.Engineering.Copilot.ServiceCreation.Agent.csproj", "src/Platform.Engineering.Copilot.ServiceCreation.Agent/"]
 COPY ["src/Platform.Engineering.Copilot.Discovery.Agent/Platform.Engineering.Copilot.Discovery.Agent.csproj", "src/Platform.Engineering.Copilot.Discovery.Agent/"]
 
 # Restore dependencies
@@ -33,6 +32,17 @@ RUN dotnet publish "Platform.Engineering.Copilot.Mcp.csproj" -c Release -o /app/
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 EXPOSE 5100
+
+# Install Node.js for Azure MCP Server support
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Verify Node.js and npm installation
+RUN node --version && npm --version
 
 # Copy published app
 COPY --from=publish /app/publish .
