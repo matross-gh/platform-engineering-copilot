@@ -185,15 +185,42 @@ Create `src/Platform.Engineering.Copilot.Mcp/appsettings.Development.json`:
     "DefaultConnection": "Data Source=../../../platform_engineering_copilot_management.db"
   },
   "AgentConfiguration": {
-    "EnabledAgents": {
-      "Infrastructure": true,
-      "CostManagement": true,
-      "Environment": true,
-      "Discovery": true,
-      "ServiceCreation": true,
-      "Compliance": true,
-      "Security": true,
-      "Document": false
+    "InfrastructureAgent": {
+      "Enabled": true,
+      "Temperature": 0.4,
+      "MaxTokens": 8000,
+      "DefaultRegion": "usgovvirginia"
+    },
+    "ComplianceAgent": {
+      "Enabled": true,
+      "Temperature": 0.2,
+      "MaxTokens": 6000,
+      "DefaultFramework": "NIST80053"
+    },
+    "CostManagementAgent": {
+      "Enabled": true,
+      "Temperature": 0.3,
+      "DefaultCurrency": "USD"
+    },
+    "DiscoveryAgent": {
+      "Enabled": true,
+      "Temperature": 0.3,
+      "EnableHealthMonitoring": true
+    },
+    "EnvironmentAgent": {
+      "Enabled": true
+    },
+    "SecurityAgent": {
+      "Enabled": true
+    },
+    "KnowledgeBaseAgent": {
+      "Enabled": true
+    },
+    "ServiceCreationAgent": {
+      "Enabled": true
+    },
+    "DocumentAgent": {
+      "Enabled": false
     }
   }
 }
@@ -1180,7 +1207,7 @@ dotnet test Platform.Engineering.Copilot.sln
    - Review [AGENT-ORCHESTRATION.md](./AGENT-ORCHESTRATION.md) - Agent configuration
 
 2. **Configure Agents**
-   - Edit `appsettings.json` → `AgentConfiguration.EnabledAgents`
+   - Edit `appsettings.json` → `AgentConfiguration:{AgentName}:Enabled`
    - See [AGENT-ORCHESTRATION.md](./AGENT-ORCHESTRATION.md#agent-configuration)
 
 3. **Explore Features**

@@ -24,9 +24,9 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
 {
     private readonly IInfrastructureProvisioningService _infrastructureService;
     private readonly IDynamicTemplateGenerator _templateGenerator;
-    private readonly INetworkTopologyDesignService _networkDesignService;
-    private readonly IPredictiveScalingEngine _scalingEngine;
-    private readonly IComplianceAwareTemplateEnhancer _complianceEnhancer;
+    private readonly INetworkTopologyDesignService? _networkDesignService;
+    private readonly IPredictiveScalingEngine? _scalingEngine;
+    private readonly IComplianceAwareTemplateEnhancer? _complianceEnhancer;
     private readonly IPolicyEnforcementService _policyEnforcementService;
     private readonly SharedMemory _sharedMemory;
     private readonly AzureMcpClient _azureMcpClient;
@@ -37,9 +37,9 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
         Kernel kernel,
         IInfrastructureProvisioningService infrastructureService,
         IDynamicTemplateGenerator templateGenerator,
-        INetworkTopologyDesignService networkDesignService,
-        IPredictiveScalingEngine scalingEngine,
-        IComplianceAwareTemplateEnhancer complianceEnhancer,
+        INetworkTopologyDesignService? networkDesignService,
+        IPredictiveScalingEngine? scalingEngine,
+        IComplianceAwareTemplateEnhancer? complianceEnhancer,
         IPolicyEnforcementService policyEnforcementService,
         SharedMemory sharedMemory,
         AzureMcpClient azureMcpClient)
@@ -598,11 +598,21 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
                 request.Description = $"{request.Description}\n\n=== AZURE BEST PRACTICES ===\n{bestPracticesGuidance}";
             }
 
-            // Use compliance enhancer to inject controls and validate
-            var result = await _complianceEnhancer.EnhanceWithComplianceAsync(
-                request, 
-                complianceFramework, 
-                cancellationToken);
+            // Use compliance enhancer to inject controls and validate (if enabled)
+            TemplateGenerationResult result;
+            if (_complianceEnhancer != null)
+            {
+                result = await _complianceEnhancer.EnhanceWithComplianceAsync(
+                    request, 
+                    complianceFramework, 
+                    cancellationToken);
+            }
+            else
+            {
+                // Fallback to basic template generation without compliance enhancement
+                _logger.LogWarning("Compliance enhancement is disabled. Generating template without compliance controls.");
+                result = await _templateGenerator.GenerateTemplateAsync(request, cancellationToken);
+            }
 
             if (!result.Success)
             {
@@ -705,6 +715,11 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
     {
         try
         {
+            if (_networkDesignService == null)
+            {
+                return "❌ Network topology design is disabled. Enable 'EnableNetworkDesign' in configuration to use this feature.";
+            }
+
             _logger.LogInformation("Designing network topology: AddressSpace={AddressSpace}, Tiers={Tiers}, Bastion={Bastion}, Firewall={Firewall}, Gateway={Gateway}",
                 addressSpace, tierCount, includeBastion, includeFirewall, includeGateway);
 
@@ -806,6 +821,11 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
     {
         try
         {
+            if (_networkDesignService == null)
+            {
+                return "❌ Subnet calculation is disabled. Enable 'EnableNetworkDesign' in configuration to use this feature.";
+            }
+
             _logger.LogInformation("Calculating subnet CIDRs for {AddressSpace} with {Count} subnets",
                 addressSpace, requiredSubnets);
 
@@ -864,6 +884,11 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
     {
         try
         {
+            if (_scalingEngine == null)
+            {
+                return "❌ Predictive scaling is disabled. Enable 'EnablePredictiveScaling' in configuration to use this feature.";
+            }
+
             _logger.LogInformation("Predicting scaling needs for resource: {ResourceId}, Hours: {Hours}",
                 resourceId, predictionHoursAhead);
 
@@ -934,6 +959,11 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
     {
         try
         {
+            if (_scalingEngine == null)
+            {
+                return "❌ Scaling optimization is disabled. Enable 'EnablePredictiveScaling' in configuration to use this feature.";
+            }
+
             _logger.LogInformation("Optimizing scaling configuration for: {ResourceId}", resourceId);
 
             var optimizedConfig = await _scalingEngine.OptimizeScalingConfigurationAsync(resourceId);
@@ -998,6 +1028,11 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
     {
         try
         {
+            if (_scalingEngine == null)
+            {
+                return "❌ Scaling performance analysis is disabled. Enable 'EnablePredictiveScaling' in configuration to use this feature.";
+            }
+
             _logger.LogInformation("Analyzing scaling performance for: {ResourceId}, Days: {Days}",
                 resourceId, daysToAnalyze);
 
@@ -2181,166 +2216,12 @@ public class InfrastructurePlugin : BaseSupervisorPlugin
     #endregion
 
     #region Azure MCP Context Configuration
-
-    [KernelFunction("set_azure_subscription")]
-    [Description("Configure the default Azure subscription for the current session. " +
-                 "**CRITICAL**: Call this function when user says 'use subscription X' or 'for all operations'. " +
-                 "This is a CONFIGURATION-ONLY function - NOT for creating/deploying resources. " +
-                 "User phrases that trigger this function: " +
-                 "'Use subscription 12345', 'Set subscription to abc', 'Use subscription X for all operations', " +
-                 "'Switch to subscription Y', 'Change subscription to Z'. " +
-                 "After calling this function, return the success message - do NOT ask follow-up questions.")]
-    public async Task<string> SetAzureSubscriptionAsync(
-        [Description("Azure subscription ID or name to use for all operations")]
-        string subscriptionId,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("📋 Setting default Azure subscription: {SubscriptionId}", subscriptionId);
-
-            // Update the MCP configuration
-            var config = _azureMcpClient.GetType()
-                .GetField("_configuration", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.GetValue(_azureMcpClient) as AzureMcpConfiguration;
-
-            if (config != null)
-            {
-                config.SubscriptionId = subscriptionId;
-            }
-
-            // Reinitialize MCP with new context
-            await _azureMcpClient.InitializeAsync(cancellationToken);
-
-            return $@"✅ **Azure Subscription Configured**
-
-Default subscription set to: `{subscriptionId}`
-
-All subsequent Platform Engineering Copilot operations will use this subscription unless explicitly overridden.
-
-💡 **What this means:**
-- Resource queries will target this subscription
-- Deployments will go to this subscription
-- Cost analysis will use this subscription's data";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error setting Azure subscription");
-            return $"❌ Failed to set subscription: {ex.Message}";
-        }
-    }
-
-    [KernelFunction("set_azure_tenant")]
-    [Description("Configure which Azure tenant/directory to authenticate against for Azure operations. " +
-                 "ONLY use this function when users explicitly want to change the tenant context. " +
-                 "Keywords: 'use tenant', 'set tenant', 'authenticate to tenant', 'switch tenant'. " +
-                 "Examples: 'Use tenant 12345678-aaaa-bbbb-cccc-123456789012', 'Set tenant to abc-123'. " +
-                 "This is a CONFIGURATION function, NOT for creating resources.")]
-    public async Task<string> SetAzureTenantAsync(
-        [Description("Azure tenant ID (GUID) to use for authentication")]
-        string tenantId,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("🔐 Setting Azure tenant ID: {TenantId}", tenantId);
-
-            // Update the MCP configuration
-            var config = _azureMcpClient.GetType()
-                .GetField("_configuration", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.GetValue(_azureMcpClient) as AzureMcpConfiguration;
-
-            if (config != null)
-            {
-                config.TenantId = tenantId;
-            }
-
-            // Reinitialize MCP with new context
-            await _azureMcpClient.InitializeAsync(cancellationToken);
-
-            return $@"✅ **Azure Tenant Configured**
-
-Tenant ID set to: `{tenantId}`
-
-All Azure authentication will use this tenant.
-
-💡 **What this means:**
-- Service Principal authentication will use this tenant
-- Resource queries will be scoped to this tenant
-- Multi-tenant scenarios are now properly configured";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error setting Azure tenant");
-            return $"❌ Failed to set tenant: {ex.Message}";
-        }
-    }
-
-    [KernelFunction("set_authentication_method")]
-    [Description("Set the authentication method for Azure operations. " +
-                 "Use this when users specify how to authenticate. " +
-                 "Methods: 'credential' (Service Principal/Managed Identity/Azure CLI), 'key', 'connectionString'. " +
-                 "Examples: 'Use credential authentication', 'Set authentication to key-based'")]
-    public async Task<string> SetAuthenticationMethodAsync(
-        [Description("Authentication method: credential, key, or connectionString")]
-        string authenticationMethod,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("🔑 Setting authentication method: {Method}", authenticationMethod);
-
-            // Validate authentication method
-            var validMethods = new[] { "credential", "key", "connectionString" };
-            if (!validMethods.Contains(authenticationMethod.ToLower()))
-            {
-                return $@"❌ **Invalid Authentication Method**
-
-Provided: `{authenticationMethod}`
-
-Valid methods:
-- **credential** - Azure Identity SDK (Service Principal, Managed Identity, Azure CLI)
-- **key** - Access key authentication (for Storage, Cosmos DB, etc.)
-- **connectionString** - Connection string authentication
-
-Please specify one of the valid methods.";
-            }
-
-            // Update the MCP configuration
-            var config = _azureMcpClient.GetType()
-                .GetField("_configuration", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.GetValue(_azureMcpClient) as AzureMcpConfiguration;
-
-            if (config != null)
-            {
-                config.AuthenticationMethod = authenticationMethod.ToLower();
-            }
-
-            // Reinitialize MCP with new context
-            await _azureMcpClient.InitializeAsync(cancellationToken);
-
-            var methodDescription = authenticationMethod.ToLower() switch
-            {
-                "credential" => "Azure Identity SDK - Will use Service Principal (AZURE_CLIENT_ID/SECRET), Managed Identity, or Azure CLI credentials",
-                "key" => "Access Key - Uses storage account keys or database keys for authentication",
-                "connectionString" => "Connection String - Uses full connection strings including credentials",
-                _ => "Unknown method"
-            };
-
-            return $@"✅ **Authentication Method Configured**
-
-Method set to: `{authenticationMethod}`
-
-**Details:** {methodDescription}
-
-All Azure MCP operations will use this authentication method.";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error setting authentication method");
-            return $"❌ Failed to set authentication method: {ex.Message}";
-        }
-    }
+    
+    // NOTE: Configuration functions are now provided by the shared ConfigurationPlugin in Core
+    // All agents automatically have access to:
+    // - set_azure_subscription, get_azure_subscription, clear_azure_subscription, show_config
+    // - set_azure_tenant (tenant ID configuration)
+    // - set_authentication_method (credential/key/connectionString)
 
     [KernelFunction("get_azure_context")]
     [Description("Get the current Azure context configuration (subscription, tenant, authentication method). " +

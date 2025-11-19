@@ -23,7 +23,8 @@ using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
 using Platform.Engineering.Copilot.Environment.Core.Extensions;
 using Platform.Engineering.Copilot.Discovery.Core.Extensions;
 using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
-using Platform.Engineering.Copilot.Document.Core.Extensions;
+using Platform.Engineering.Copilot.KnowledgeBase.Agent.Extensions;
+using Platform.Engineering.Copilot.Core.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -140,6 +141,9 @@ builder.Services.AddSingleton<ITeamsNotificationService,
 // Add Memory Cache (needed by NistControlsService)
 builder.Services.AddMemoryCache();
 
+// Register Platform.Engineering.Copilot.Core services (includes OrchestratorAgent, SemanticKernelService, etc.)
+builder.Services.AddPlatformEngineeringCopilotCore();
+
 // Add ComplianceMetricsService (needed by NistControlsService)
 builder.Services.AddScoped<ComplianceMetricsService>();
 
@@ -187,14 +191,25 @@ builder.Services.AddScoped<ITemplateAdminService, TemplateAdminService>();
 // Register Azure Pricing Service for cost estimates
 builder.Services.AddScoped<IAzurePricingService, AzurePricingService>();
 
+// Configure agent options from nested AgentConfiguration sections
+builder.Services.Configure<Platform.Engineering.Copilot.Infrastructure.Agent.Configuration.InfrastructureAgentOptions>(
+    builder.Configuration.GetSection("AgentConfiguration:InfrastructureAgent"));
+builder.Services.Configure<Platform.Engineering.Copilot.Compliance.Core.Configuration.ComplianceAgentOptions>(
+    builder.Configuration.GetSection("AgentConfiguration:ComplianceAgent"));
+builder.Services.Configure<Platform.Engineering.Copilot.CostManagement.Core.Configuration.CostManagementAgentOptions>(
+    builder.Configuration.GetSection("AgentConfiguration:CostManagementAgent"));
+builder.Services.Configure<Platform.Engineering.Copilot.Discovery.Core.Configuration.DiscoveryAgentOptions>(
+    builder.Configuration.GetSection("AgentConfiguration:DiscoveryAgent"));
+
 // Add domain-specific agents and plugins
-builder.Services.AddComplianceAgent();
+builder.Services.AddComplianceAgent(builder.Configuration);
 builder.Services.AddInfrastructureAgent();
 builder.Services.AddCostManagementAgent();
 builder.Services.AddEnvironmentAgent();
 builder.Services.AddDiscoveryAgent();
 builder.Services.AddSecurityAgent();
-builder.Services.AddDocumentAgent();
+var knowledgeBaseConfig = builder.Configuration.GetSection("AgentConfiguration:KnowledgeBaseAgent");
+builder.Services.AddKnowledgeBaseAgent(knowledgeBaseConfig);
 
 // NOTE: DeploymentPollingService removed - legacy service from Extensions project
 
@@ -231,6 +246,14 @@ app.UseCors();
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
+
+// Health check endpoint
+app.MapGet("/health", () => Results.Ok(new 
+{ 
+    status = "healthy",
+    service = "Platform Engineering Copilot Admin API",
+    version = "1.0.0"
+}));
 
 Console.WriteLine("==============================================");
 Console.WriteLine("Supervisor Platform Admin API");

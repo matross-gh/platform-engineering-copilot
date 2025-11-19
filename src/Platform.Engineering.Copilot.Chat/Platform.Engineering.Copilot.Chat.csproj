@@ -41,7 +41,7 @@
     <ProjectReference Include="..\Platform.Engineering.Copilot.Environment.Agent\Platform.Engineering.Copilot.Environment.Agent.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.Discovery.Agent\Platform.Engineering.Copilot.Discovery.Agent.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.Security.Agent\Platform.Engineering.Copilot.Security.Agent.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Document.Agent\Platform.Engineering.Copilot.Document.Agent.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.KnowledgeBase.Agent\Platform.Engineering.Copilot.KnowledgeBase.Agent.csproj" />
   </ItemGroup>
 
   <Target Name="DebugEnsureNodeEnv" BeforeTargets="Build" Condition=" '$(Configuration)' == 'Debug' And !Exists('$(SpaRoot)node_modules') ">

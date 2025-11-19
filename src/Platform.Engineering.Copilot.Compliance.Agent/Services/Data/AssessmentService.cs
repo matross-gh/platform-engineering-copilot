@@ -55,7 +55,7 @@ public class AssessmentService
                 InitiatedBy = "System", // Not tracked in AtoComplianceAssessment
                 StartedAt = assessment.StartTime.UtcDateTime,
                 CompletedAt = assessment.EndTime.UtcDateTime,
-                Duration = assessment.Duration
+                Duration = assessment.Duration.Ticks // Convert TimeSpan to ticks (long)
             };
 
             // Map findings
@@ -438,7 +438,7 @@ public class AssessmentService
             EndTime = entity.CompletedAt.HasValue 
                 ? new DateTimeOffset(entity.CompletedAt.Value) 
                 : DateTimeOffset.UtcNow,
-            Duration = entity.Duration ?? TimeSpan.Zero,
+            Duration = entity.Duration.HasValue ? TimeSpan.FromTicks(entity.Duration.Value) : TimeSpan.Zero,
             ControlFamilyResults = controlFamilyResults,
             OverallComplianceScore = (double)entity.ComplianceScore,
             TotalFindings = entity.TotalFindings,

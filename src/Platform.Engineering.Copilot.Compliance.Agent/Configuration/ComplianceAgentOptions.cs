@@ -10,6 +10,42 @@ public class ComplianceAgentOptions
     public const string SectionName = "ComplianceAgent";
 
     /// <summary>
+    /// Temperature for AI responses (0.0 - 2.0)
+    /// Lower = more focused and deterministic, Higher = more creative
+    /// Default: 0.2 (very focused for compliance accuracy)
+    /// </summary>
+    [Range(0.0, 2.0)]
+    public double Temperature { get; set; } = 0.2;
+
+    /// <summary>
+    /// Maximum tokens for chat completion requests
+    /// Default: 6000 (sufficient for compliance assessments)
+    /// </summary>
+    [Range(1, 128000)]
+    public int MaxTokens { get; set; } = 6000;
+
+    /// <summary>
+    /// Enable automated remediation of compliance findings
+    /// When true, agent can automatically apply fixes to non-compliant resources
+    /// Default: true
+    /// </summary>
+    public bool EnableAutomatedRemediation { get; set; } = true;
+
+    /// <summary>
+    /// Default compliance framework to use
+    /// Options: "NIST80053", "FedRAMPHigh", "DoD IL5", "SOC2", "GDPR"
+    /// Default: "NIST80053"
+    /// </summary>
+    public string DefaultFramework { get; set; } = "NIST80053";
+
+    /// <summary>
+    /// Default compliance baseline to apply
+    /// Options: "FedRAMPHigh", "FedRAMPModerate", "DoD IL5", "DoD IL4"
+    /// Default: "FedRAMPHigh"
+    /// </summary>
+    public string DefaultBaseline { get; set; } = "FedRAMPHigh";
+
+    /// <summary>
     /// Azure OpenAI configuration for compliance AI capabilities
     /// </summary>
     public AzureOpenAIOptions AzureOpenAI { get; set; } = new();
@@ -28,6 +64,139 @@ public class ComplianceAgentOptions
     /// NIST controls service configuration
     /// </summary>
     public NistControlsOptions NistControls { get; set; } = new();
+
+    /// <summary>
+    /// Defender for Cloud integration configuration (optional)
+    /// </summary>
+    public DefenderForCloudOptions DefenderForCloud { get; set; } = new();
+
+    /// <summary>
+    /// Code scanning configuration
+    /// </summary>
+    public CodeScanningOptions CodeScanning { get; set; } = new();
+
+    /// <summary>
+    /// Evidence storage configuration
+    /// </summary>
+    public EvidenceOptions Evidence { get; set; } = new();
+}
+
+/// <summary>
+/// Defender for Cloud integration configuration (optional)
+/// Disabled by default for backward compatibility
+/// </summary>
+public class DefenderForCloudOptions
+{
+    /// <summary>
+    /// Enable Defender for Cloud integration (default: false)
+    /// Set to true to fetch and map DFC findings to NIST controls
+    /// </summary>
+    public bool Enabled { get; set; } = false;
+
+    /// <summary>
+    /// Include DFC secure score in compliance reports
+    /// </summary>
+    public bool IncludeSecureScore { get; set; } = true;
+
+    /// <summary>
+    /// Map DFC findings to NIST 800-53 controls
+    /// </summary>
+    public bool MapToNistControls { get; set; } = true;
+
+    /// <summary>
+    /// Cache duration for DFC findings (minutes)
+    /// </summary>
+    [Range(5, 1440)]
+    public int CacheDurationMinutes { get; set; } = 60;
+
+    /// <summary>
+    /// Enable intelligent deduplication of findings across sources
+    /// Merges duplicate findings from DFC and compliance scans
+    /// </summary>
+    public bool EnableDeduplication { get; set; } = true;
+
+    /// <summary>
+    /// Azure subscription ID for Defender for Cloud
+    /// </summary>
+    public string? SubscriptionId { get; set; }
+
+    /// <summary>
+    /// Log Analytics workspace ID for Defender data
+    /// </summary>
+    public string? WorkspaceId { get; set; }
+}
+
+/// <summary>
+/// Code scanning configuration for secrets detection, dependency scanning, and STIG checks
+/// </summary>
+public class CodeScanningOptions
+{
+    /// <summary>
+    /// Enable secrets detection in code repositories
+    /// Default: true
+    /// </summary>
+    public bool EnableSecretsDetection { get; set; } = true;
+
+    /// <summary>
+    /// Enable dependency vulnerability scanning
+    /// Default: true
+    /// </summary>
+    public bool EnableDependencyScanning { get; set; } = true;
+
+    /// <summary>
+    /// Enable STIG (Security Technical Implementation Guide) compliance checks
+    /// Default: true
+    /// </summary>
+    public bool EnableStigChecks { get; set; } = true;
+
+    /// <summary>
+    /// Patterns to detect secrets in code
+    /// Default patterns include: API_KEY, PASSWORD, SECRET, TOKEN
+    /// </summary>
+    public List<string> SecretPatterns { get; set; } = new()
+    {
+        "API_KEY",
+        "PASSWORD",
+        "SECRET",
+        "TOKEN"
+    };
+}
+
+/// <summary>
+/// Evidence storage configuration for compliance artifacts
+/// </summary>
+public class EvidenceOptions
+{
+    /// <summary>
+    /// Azure Storage Account name for evidence storage
+    /// Default: "complianceevidence"
+    /// </summary>
+    public string StorageAccount { get; set; } = "complianceevidence";
+
+    /// <summary>
+    /// Container name for evidence storage
+    /// Default: "evidence"
+    /// </summary>
+    public string Container { get; set; } = "evidence";
+
+    /// <summary>
+    /// Evidence retention period in days
+    /// Default: 2555 days (~7 years for compliance requirements)
+    /// </summary>
+    [Range(1, 3650)]
+    public int RetentionDays { get; set; } = 2555;
+
+    /// <summary>
+    /// Enable blob versioning for evidence
+    /// Default: true
+    /// </summary>
+    public bool EnableVersioning { get; set; } = true;
+
+    /// <summary>
+    /// Enable immutability for evidence (WORM - Write Once, Read Many)
+    /// Default: true
+    /// </summary>
+    public bool EnableImmutability { get; set; } = true;
 }
 
 /// <summary>
@@ -313,7 +482,7 @@ public class NistControlsOptions
     /// HTTP client timeout in seconds
     /// </summary>
     [Range(10, 300)]
-    public int TimeoutSeconds { get; set; } = 30;
+    public int TimeoutSeconds { get; set; } = 60;
 
     /// <summary>
     /// Cache duration in hours

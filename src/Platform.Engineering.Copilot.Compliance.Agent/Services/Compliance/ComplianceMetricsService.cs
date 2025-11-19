@@ -24,7 +24,7 @@ public class ComplianceMetricsService : IDisposable
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         
-        _meter = new Meter("Platform.Engineering.Copilot.Governance.Compliance", "1.0.0");
+        _meter = new Meter("Platform.Engineering.Copilot.Compliance", "1.0.0");
         
         // Counters
         _scanRequestCounter = _meter.CreateCounter<int>(
@@ -230,7 +230,7 @@ public static class ComplianceLoggingExtensions
 /// </summary>
 public static class ComplianceActivitySource
 {
-    private static readonly ActivitySource _activitySource = new("Platform.Engineering.Copilot.Governance.Compliance", "1.0.0");
+    private static readonly ActivitySource _activitySource = new("Platform.Engineering.Copilot.Compliance", "1.0.0");
 
     public static ActivitySource Instance => _activitySource;
 

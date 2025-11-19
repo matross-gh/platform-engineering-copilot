@@ -10,9 +10,9 @@ COPY ["src/Platform.Engineering.Copilot.Compliance.Agent/Platform.Engineering.Co
 COPY ["src/Platform.Engineering.Copilot.Infrastructure.Agent/Platform.Engineering.Copilot.Infrastructure.Agent.csproj", "src/Platform.Engineering.Copilot.Infrastructure.Agent/"]
 COPY ["src/Platform.Engineering.Copilot.CostManagement.Agent/Platform.Engineering.Copilot.CostManagement.Agent.csproj", "src/Platform.Engineering.Copilot.CostManagement.Agent/"]
 COPY ["src/Platform.Engineering.Copilot.Security.Agent/Platform.Engineering.Copilot.Security.Agent.csproj", "src/Platform.Engineering.Copilot.Security.Agent/"]
-COPY ["src/Platform.Engineering.Copilot.Document.Agent/Platform.Engineering.Copilot.Document.Agent.csproj", "src/Platform.Engineering.Copilot.Document.Agent/"]
 COPY ["src/Platform.Engineering.Copilot.Environment.Agent/Platform.Engineering.Copilot.Environment.Agent.csproj", "src/Platform.Engineering.Copilot.Environment.Agent/"]
 COPY ["src/Platform.Engineering.Copilot.Discovery.Agent/Platform.Engineering.Copilot.Discovery.Agent.csproj", "src/Platform.Engineering.Copilot.Discovery.Agent/"]
+COPY ["src/Platform.Engineering.Copilot.KnowledgeBase.Agent/Platform.Engineering.Copilot.KnowledgeBase.Agent.csproj", "src/Platform.Engineering.Copilot.KnowledgeBase.Agent/"]
 
 # Restore dependencies
 RUN dotnet restore "src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj"
@@ -33,11 +33,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 EXPOSE 5100
 
-# Install Node.js for Azure MCP Server support
+# Install Node.js and npm for Azure MCP Server support using official binary distribution
 RUN apt-get update && \
-    apt-get install -y curl && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
+    apt-get install -y curl xz-utils && \
+    curl -fsSL https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-arm64.tar.xz -o node.tar.xz && \
+    tar -xf node.tar.xz -C /usr/local --strip-components=1 && \
+    rm node.tar.xz && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

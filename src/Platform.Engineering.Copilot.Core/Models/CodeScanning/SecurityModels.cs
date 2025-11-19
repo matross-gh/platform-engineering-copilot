@@ -138,6 +138,7 @@ public class SecretDetectionResult
     public List<DetectedSecret> Secrets { get; set; } = new();
     public Dictionary<string, int> SecretsByType { get; set; } = new();
     public List<string> ScannedPaths { get; set; } = new();
+    public List<string> PatternsUsed { get; set; } = new();
     public double SecurityScore { get; set; }
 }
 
@@ -155,6 +156,7 @@ public class DetectedSecret
     public string RemediationAdvice { get; set; } = string.Empty;
     public bool IsConfirmed { get; set; }
     public DateTimeOffset FirstDetected { get; set; }
+    public string Pattern { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -171,6 +173,7 @@ public class IacSecurityAssessment
     public List<IacSecurityFinding> Findings { get; set; } = new();
     public Dictionary<string, int> FindingsByCategory { get; set; } = new();
     public double SecurityScore { get; set; }
+    public bool StigChecksEnabled { get; set; }
 }
 
 /// <summary>
@@ -188,6 +191,8 @@ public class IacSecurityFinding
     public string RemediationAdvice { get; set; } = string.Empty;
     public List<string> ComplianceFrameworks { get; set; } = new();
     public bool IsAutoRemediable { get; set; }
+    public string? Category { get; set; }
+    public string? StigId { get; set; }
 }
 
 /// <summary>
@@ -355,6 +360,7 @@ public class SecurityEvidencePackage
     public Dictionary<string, SecurityEvidence> Evidence { get; set; } = new();
     public List<ComplianceMapping> ComplianceMappings { get; set; } = new();
     public string ExecutiveSummary { get; set; } = string.Empty;
+    public string? StorageUri { get; set; }
 }
 
 /// <summary>

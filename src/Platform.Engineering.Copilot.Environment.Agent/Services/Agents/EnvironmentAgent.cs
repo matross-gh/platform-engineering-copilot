@@ -6,8 +6,9 @@ using Platform.Engineering.Copilot.Core.Interfaces.Agents;
 using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 using Platform.Engineering.Copilot.Core.Services.Agents;
 using Platform.Engineering.Copilot.Core.Models.Agents;
+using Platform.Engineering.Copilot.Environment.Agent.Plugins;
 
-namespace Platform.Engineering.Copilot.Environment.Core;
+namespace Platform.Engineering.Copilot.Environment.Agent.Services.Agents;
 
 /// <summary>
 /// Specialized agent for environment management (lifecycle, cloning, scaling)
@@ -24,7 +25,8 @@ public class EnvironmentAgent : ISpecializedAgent
     public EnvironmentAgent(
         ISemanticKernelService semanticKernelService,
         ILogger<EnvironmentAgent> logger,
-        EnvironmentManagementPlugin environmentPlugin)
+        EnvironmentManagementPlugin environmentPlugin,
+        Platform.Engineering.Copilot.Core.Plugins.ConfigurationPlugin configurationPlugin)
     {
         _logger = logger;
         _environmentPlugin = environmentPlugin;
@@ -33,6 +35,9 @@ public class EnvironmentAgent : ISpecializedAgent
         _kernel = semanticKernelService.CreateSpecializedKernel(AgentType.Environment);
         _chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
 
+        // Register shared configuration plugin (set_azure_subscription, get_azure_subscription, etc.)
+        _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(configurationPlugin, "ConfigurationPlugin"));
+        
         // Register environment management plugin
         _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(environmentPlugin, "EnvironmentManagementPlugin"));
 

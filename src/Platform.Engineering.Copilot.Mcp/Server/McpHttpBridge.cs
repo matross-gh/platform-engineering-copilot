@@ -45,17 +45,58 @@ public class McpHttpBridge
                     return;
                 }
 
-                context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>()
-                    .LogInformation("HTTP: Processing chat request for conversation: {ConversationId}", 
-                        requestBody.ConversationId ?? "new");
+                var logger = context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>();
+                logger.LogInformation("HTTP: Processing chat request for conversation: {ConversationId}", 
+                    requestBody.ConversationId ?? "new");
 
-                var result = await chatTool.ProcessRequestAsync(
-                    requestBody.Message,
-                    requestBody.ConversationId,
-                    requestBody.Context,
-                    context.RequestAborted);
+                // Process file attachments if present
+                List<string>? uploadedFilePaths = null;
+                if (requestBody.Attachments != null && requestBody.Attachments.Any())
+                {
+                    logger.LogInformation("Processing {Count} file attachments", requestBody.Attachments.Count);
+                    uploadedFilePaths = await ProcessFileAttachmentsAsync(requestBody.Attachments, logger);
+                    
+                    // Add file paths to context
+                    requestBody.Context ??= new Dictionary<string, object>();
+                    requestBody.Context["uploaded_files"] = uploadedFilePaths;
+                    
+                    // Enhance message with file information
+                    var fileInfo = string.Join(", ", uploadedFilePaths.Select(Path.GetFileName));
+                    requestBody.Message = $"[Uploaded files: {fileInfo}]\n\n{requestBody.Message}";
+                }
 
-                await context.Response.WriteAsJsonAsync(result);
+                try
+                {
+                    var result = await chatTool.ProcessRequestAsync(
+                        requestBody.Message,
+                        requestBody.ConversationId,
+                        requestBody.Context,
+                        context.RequestAborted);
+
+                    await context.Response.WriteAsJsonAsync(result);
+                }
+                finally
+                {
+                    // Clean up uploaded files
+                    if (uploadedFilePaths != null)
+                    {
+                        foreach (var filePath in uploadedFilePaths)
+                        {
+                            try
+                            {
+                                if (File.Exists(filePath))
+                                {
+                                    File.Delete(filePath);
+                                    logger.LogDebug("Cleaned up temporary file: {FilePath}", filePath);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.LogWarning(ex, "Failed to delete temporary file: {FilePath}", filePath);
+                            }
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -79,6 +120,61 @@ public class McpHttpBridge
         _logger.LogInformation("   POST   /mcp/chat - Process chat request");
         _logger.LogInformation("   GET    /health - Health check");
     }
+
+    /// <summary>
+    /// Process file attachments by saving base64-encoded content to temp directory
+    /// </summary>
+    private static async Task<List<string>> ProcessFileAttachmentsAsync(
+        List<FileAttachment> attachments,
+        ILogger logger)
+    {
+        var uploadedPaths = new List<string>();
+        var tempDir = Path.Combine(Path.GetTempPath(), "mcp-attachments", Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+
+        foreach (var attachment in attachments)
+        {
+            try
+            {
+                // Validate file size (max 50MB)
+                if (attachment.Size > 50 * 1024 * 1024)
+                {
+                    logger.LogWarning("Skipping attachment {FileName} - size {Size} bytes exceeds 50MB limit",
+                        attachment.FileName, attachment.Size);
+                    continue;
+                }
+
+                // Decode base64 content
+                byte[] fileBytes;
+                try
+                {
+                    fileBytes = Convert.FromBase64String(attachment.Base64Content);
+                }
+                catch (FormatException ex)
+                {
+                    logger.LogError(ex, "Failed to decode base64 content for {FileName}", attachment.FileName);
+                    continue;
+                }
+
+                // Sanitize filename
+                var sanitizedFileName = Path.GetFileName(attachment.FileName);
+                var filePath = Path.Combine(tempDir, sanitizedFileName);
+
+                // Write file to disk
+                await File.WriteAllBytesAsync(filePath, fileBytes);
+
+                uploadedPaths.Add(filePath);
+                logger.LogInformation("Saved attachment: {FileName} ({Size} bytes) to {Path}",
+                    sanitizedFileName, fileBytes.Length, filePath);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error processing attachment: {FileName}", attachment.FileName);
+            }
+        }
+
+        return uploadedPaths;
+    }
 }
 
 // Generic request model
@@ -87,4 +183,14 @@ public class ChatRequest
     public string Message { get; set; } = string.Empty;
     public string? ConversationId { get; set; }
     public Dictionary<string, object>? Context { get; set; }
+    public List<FileAttachment>? Attachments { get; set; }
+}
+
+// File attachment model (base64-encoded)
+public class FileAttachment
+{
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+    public string Base64Content { get; set; } = string.Empty;
+    public long Size { get; set; }
 }

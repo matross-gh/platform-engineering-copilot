@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Models.Compliance;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
+using Platform.Engineering.Copilot.Compliance.Agent.Extensions;
 
 namespace Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
 
@@ -66,6 +67,6 @@ public class DefaultComplianceScanner : IComplianceScanner
         }
 
         await Task.Delay(100, cancellationToken); // Simulate scan work
-        return findings;
+        return findings.WithAutoRemediationInfo().WithSource("NIST Scanner");
     }
 }

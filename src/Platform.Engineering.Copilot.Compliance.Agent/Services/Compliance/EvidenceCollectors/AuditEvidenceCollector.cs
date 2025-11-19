@@ -31,8 +31,11 @@ public class AuditEvidenceCollector : IEvidenceCollector
         string controlFamily, 
         CancellationToken cancellationToken = default)
     {
-        await Task.Delay(50, cancellationToken);
-        return new List<ComplianceEvidence>();
+        // Collect all audit evidence and filter for configuration-type evidence
+        var allEvidence = await CollectLogEvidenceAsync(subscriptionId, controlFamily, cancellationToken);
+        return allEvidence.Where(e => 
+            e.EvidenceType == "StorageAccountConfiguration" ||
+            e.EvidenceType == "AuditReviewProcess").ToList();
     }
 
     public async Task<List<ComplianceEvidence>> CollectLogEvidenceAsync(
@@ -189,7 +192,9 @@ public class AuditEvidenceCollector : IEvidenceCollector
         string controlFamily, 
         CancellationToken cancellationToken = default)
     {
-        await Task.Delay(50, cancellationToken);
+        // TODO: Implement Azure Policy evidence for audit requirements (AU-2, AU-3)
+        // Should collect: Diagnostic settings policies, log retention policies
+        _logger.LogWarning("Azure Policy evidence collection not yet implemented for Audit family");
         return new List<ComplianceEvidence>();
     }
 
@@ -198,7 +203,8 @@ public class AuditEvidenceCollector : IEvidenceCollector
         string controlFamily, 
         CancellationToken cancellationToken = default)
     {
-        await Task.Delay(50, cancellationToken);
+        // This is not part of Audit family - redirect to proper collector if needed
+        _logger.LogWarning("CollectAccessControlEvidenceAsync called on AuditEvidenceCollector - use AccessControlEvidenceCollector instead");
         return new List<ComplianceEvidence>();
     }
 }

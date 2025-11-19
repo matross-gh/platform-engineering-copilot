@@ -4,6 +4,8 @@ using Platform.Engineering.Copilot.Core.Models.Compliance;
 using Platform.Engineering.Copilot.Compliance.Agent.Services;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Compliance.Core.Data.Entities;
+using Microsoft.Extensions.Options;
+using Platform.Engineering.Copilot.Compliance.Core.Configuration;
 
 namespace Platform.Engineering.Copilot.Core.Services.TemplateGeneration;
 
@@ -17,6 +19,7 @@ public class ComplianceAwareTemplateEnhancer : IComplianceAwareTemplateEnhancer
     private readonly IDynamicTemplateGenerator _templateGenerator;
     private readonly IAzurePolicyService _policyService;
     private readonly INistControlsService _nistService;
+    private readonly ComplianceAgentOptions _options;
 
     // Compliance framework mappings
     private static readonly Dictionary<string, List<string>> ComplianceFrameworkControls = new()
@@ -32,27 +35,32 @@ public class ComplianceAwareTemplateEnhancer : IComplianceAwareTemplateEnhancer
         ILogger<ComplianceAwareTemplateEnhancer> logger,
         IDynamicTemplateGenerator templateGenerator,
         IAzurePolicyService policyService,
-        INistControlsService nistService)
+        INistControlsService nistService,
+        IOptions<ComplianceAgentOptions> options)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _templateGenerator = templateGenerator ?? throw new ArgumentNullException(nameof(templateGenerator));
         _policyService = policyService ?? throw new ArgumentNullException(nameof(policyService));
         _nistService = nistService ?? throw new ArgumentNullException(nameof(nistService));
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     public async Task<TemplateGenerationResult> EnhanceWithComplianceAsync(
         TemplateGenerationRequest request,
-        string complianceFramework = "FedRAMP-High",
+        string? complianceFramework = null,
         CancellationToken cancellationToken = default)
     {
         if (request == null)
             throw new ArgumentNullException(nameof(request));
         
-        if (string.IsNullOrWhiteSpace(complianceFramework))
-            throw new ArgumentException("Compliance framework cannot be null or empty", nameof(complianceFramework));
+        // Use provided framework or fall back to configured default
+        complianceFramework = string.IsNullOrWhiteSpace(complianceFramework) 
+            ? _options.DefaultFramework 
+            : complianceFramework;
 
-        _logger.LogInformation("Enhancing template for {ServiceName} with {Framework} compliance", 
-            request.ServiceName, complianceFramework);
+        _logger.LogInformation("Enhancing template for {ServiceName} with {Framework} compliance (from {Source})", 
+            request.ServiceName, complianceFramework, 
+            string.IsNullOrWhiteSpace(complianceFramework) ? "configuration default" : "parameter");
 
         try
         {

@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Services.Agents;
+using Platform.Engineering.Copilot.Core.Services.TokenManagement;
+using Platform.Engineering.Copilot.Core.Models.Chat;
 using Platform.Engineering.Copilot.Core.Models.IntelligentChat;
 using Platform.Engineering.Copilot.Core.Models.Agents;
 using Platform.Engineering.Copilot.Core.Interfaces.Chat;
@@ -16,6 +18,7 @@ public class IntelligentChatService : IIntelligentChatService
 {
     private readonly ILogger<IntelligentChatService> _logger;
     private readonly OrchestratorAgent _orchestrator;
+    private readonly TokenManagementHelper _tokenManagement;
 
     // Conversation storage (TODO: Replace with distributed cache for production)
     private static readonly Dictionary<string, ConversationContext> _conversations = new();
@@ -23,10 +26,12 @@ public class IntelligentChatService : IIntelligentChatService
 
     public IntelligentChatService(
         ILogger<IntelligentChatService> logger,
-        OrchestratorAgent orchestrator)
+        OrchestratorAgent orchestrator,
+        TokenManagementHelper tokenManagement)
     {
         _logger = logger;
         _orchestrator = orchestrator;
+        _tokenManagement = tokenManagement;
         
         _logger.LogInformation("✅ Pure Multi-Agent IntelligentChatService initialized");
     }
@@ -146,10 +151,31 @@ public class IntelligentChatService : IIntelligentChatService
             context.MessageCount++;
             context.LastActivityAt = DateTime.UtcNow;
 
-            // Keep only last 20 messages to avoid context bloat
-            if (context.MessageHistory.Count > 20)
+            // Use ChatBuilder for token-aware history management
+            if (_tokenManagement.IsEnabled)
             {
-                context.MessageHistory = context.MessageHistory.TakeLast(20).ToList();
+                var options = ChatBuilderOptions.CreateDefault(_tokenManagement.Options.DefaultModelName);
+                var historyResult = _tokenManagement.BuildChatHistory(context, options);
+
+                if (historyResult.WasTruncated)
+                {
+                    _logger.LogInformation(
+                        "💾 Chat history optimized: {Messages} messages, {Tokens} tokens ({Utilization:F1}% utilization)",
+                        historyResult.MessageCount,
+                        historyResult.TokenCount,
+                        historyResult.UtilizationPercentage);
+
+                    // Update context with optimized messages
+                    context.MessageHistory = historyResult.Messages;
+                }
+            }
+            else
+            {
+                // Fallback: Keep only last 20 messages if token management disabled
+                if (context.MessageHistory.Count > 20)
+                {
+                    context.MessageHistory = context.MessageHistory.TakeLast(20).ToList();
+                }
             }
 
             // Track used agents

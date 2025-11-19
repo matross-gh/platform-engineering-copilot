@@ -14,9 +14,9 @@ using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
 using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
 using Platform.Engineering.Copilot.Environment.Core.Extensions;
 using Platform.Engineering.Copilot.Discovery.Core.Extensions;
-using Platform.Engineering.Copilot.Document.Core.Extensions;
 using Serilog;
 using Platform.Engineering.Copilot.Security.Agent.Extensions;
+using Platform.Engineering.Copilot.KnowledgeBase.Agent.Extensions;
 
 namespace Platform.Engineering.Copilot.Mcp;
 
@@ -171,58 +171,73 @@ class Program
         builder.Services.Configure<Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration>(
             builder.Configuration.GetSection(Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration.SectionName));
         
+        // Configure individual agent options from nested sections
+        builder.Services.Configure<Platform.Engineering.Copilot.Infrastructure.Agent.Configuration.InfrastructureAgentOptions>(
+            builder.Configuration.GetSection("AgentConfiguration:InfrastructureAgent"));
+        builder.Services.Configure<Platform.Engineering.Copilot.Compliance.Core.Configuration.ComplianceAgentOptions>(
+            builder.Configuration.GetSection("AgentConfiguration:ComplianceAgent"));
+        builder.Services.Configure<Platform.Engineering.Copilot.CostManagement.Core.Configuration.CostManagementAgentOptions>(
+            builder.Configuration.GetSection("AgentConfiguration:CostManagementAgent"));
+        builder.Services.Configure<Platform.Engineering.Copilot.Discovery.Core.Configuration.DiscoveryAgentOptions>(
+            builder.Configuration.GetSection("AgentConfiguration:DiscoveryAgent"));
+        
         // Add domain-specific agents and plugins based on configuration
-        var agentConfig = builder.Configuration
-            .GetSection(Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration.SectionName)
-            .Get<Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration>() 
-            ?? new Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration();
+        var agentConfigSection = builder.Configuration.GetSection(Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration.SectionName);
+        var agentConfig = new Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration();
+        agentConfig.SetConfiguration(agentConfigSection);
 
         var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger("AgentLoader");
         logger.LogInformation("🔧 Loading agents based on configuration...");
 
+        int enabledCount = 0;
+
         if (agentConfig.IsAgentEnabled("Compliance"))
         {
-            builder.Services.AddComplianceAgent();
             logger.LogInformation("✅ Compliance agent enabled");
+            enabledCount++;
         }
-
+        
         if (agentConfig.IsAgentEnabled("Infrastructure"))
         {
-            builder.Services.AddInfrastructureAgent();
             logger.LogInformation("✅ Infrastructure agent enabled");
+            enabledCount++;
         }
 
         if (agentConfig.IsAgentEnabled("CostManagement"))
         {
-            builder.Services.AddCostManagementAgent();
             logger.LogInformation("✅ CostManagement agent enabled");
+            enabledCount++;
         }
 
         if (agentConfig.IsAgentEnabled("Environment"))
         {
             builder.Services.AddEnvironmentAgent();
             logger.LogInformation("✅ Environment agent enabled");
+            enabledCount++;
         }
 
         if (agentConfig.IsAgentEnabled("Discovery"))
         {
-            builder.Services.AddDiscoveryAgent();
             logger.LogInformation("✅ Discovery agent enabled");
+            enabledCount++;
         }
 
         if (agentConfig.IsAgentEnabled("Security"))
         {
             builder.Services.AddSecurityAgent();
             logger.LogInformation("✅ Security agent enabled");
+            enabledCount++;
         }
 
-        if (agentConfig.IsAgentEnabled("Document"))
+        if (agentConfig.IsAgentEnabled("KnowledgeBase"))
         {
-            builder.Services.AddDocumentAgent();
-            logger.LogInformation("✅ Document agent enabled");
+            var knowledgeBaseConfig = builder.Configuration.GetSection("AgentConfiguration:KnowledgeBaseAgent");
+            builder.Services.AddKnowledgeBaseAgent(knowledgeBaseConfig);
+            logger.LogInformation("✅ Knowledge Base agent enabled");
+            enabledCount++;
         }
 
-        logger.LogInformation($"🚀 Loaded {agentConfig.EnabledAgents.Count(kvp => kvp.Value)} of {agentConfig.EnabledAgents.Count} available agents");
+        logger.LogInformation($"🚀 Loaded {enabledCount} agents");
 
         // Register MCP Chat Tool - Scoped to match IIntelligentChatService
         builder.Services.AddScoped<PlatformEngineeringCopilotTools>();
@@ -231,6 +246,22 @@ class Program
         builder.Services.AddSingleton<McpHttpBridge>();
 
         var app = builder.Build();
+
+        // Apply database migrations automatically
+        using (var scope = app.Services.CreateScope())
+        {
+            try
+            {
+                var context = scope.ServiceProvider.GetRequiredService<PlatformEngineeringCopilotContext>();
+                logger.LogInformation("🔄 Ensuring database is created...");
+                context.Database.EnsureCreated();
+                logger.LogInformation("✅ Database created/verified successfully");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "❌ Failed to create/verify database");
+            }
+        }
 
         // Configure URLs
         app.Urls.Add($"http://0.0.0.0:{port}");

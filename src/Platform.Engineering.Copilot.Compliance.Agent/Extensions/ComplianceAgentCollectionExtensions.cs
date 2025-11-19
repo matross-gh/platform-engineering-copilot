@@ -6,12 +6,15 @@ using Polly;
 using Polly.Extensions.Http;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 using Platform.Engineering.Copilot.Core.Interfaces.Audits;
-using Platform.Engineering.Copilot.Core.Interfaces.KnowledgeBase;
 using Platform.Engineering.Copilot.Core.Configuration;
 using Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
-using Platform.Engineering.Copilot.Compliance.Agent.Services.KnowledgeBase;
-using Platform.Engineering.Copilot.Compliance.Agent.Plugins;
+using Platform.Engineering.Copilot.Compliance.Core.Configuration;
 using Platform.Engineering.Copilot.Core.Services.Audits;
+using Platform.Engineering.Copilot.Core.Interfaces.Services.DiagramGeneration;
+using Platform.Engineering.Copilot.Core.Services.DocumentProcessing;
+using Platform.Engineering.Copilot.Core.Services.DiagramGeneration;
+using Platform.Engineering.Copilot.Core.Services.Analyzers;
+using Platform.Engineering.Copilot.Compliance.Agent.Plugins;
 
 namespace Platform.Engineering.Copilot.Compliance.Agent.Extensions;
 
@@ -28,12 +31,12 @@ public static class ComplianceAgentCollectionExtensions
         IConfiguration configuration)
     {
         // Configuration
-        services.Configure<NistControlsOptions>(
-            configuration.GetSection(NistControlsOptions.SectionName));
+        services.Configure<Platform.Engineering.Copilot.Core.Configuration.NistControlsOptions>(
+            configuration.GetSection(Platform.Engineering.Copilot.Core.Configuration.NistControlsOptions.SectionName));
 
         // Validation of configuration
-        services.AddOptionsWithValidateOnStart<NistControlsOptions>()
-            .Bind(configuration.GetSection(NistControlsOptions.SectionName))
+        services.AddOptionsWithValidateOnStart<Platform.Engineering.Copilot.Core.Configuration.NistControlsOptions>()
+            .Bind(configuration.GetSection(Platform.Engineering.Copilot.Core.Configuration.NistControlsOptions.SectionName))
             .Validate(options => !string.IsNullOrWhiteSpace(options.BaseUrl), 
                 "NIST controls base URL must be configured");
 
@@ -50,28 +53,56 @@ public static class ComplianceAgentCollectionExtensions
         services.AddSingleton<INistControlsService, NistControlsService>();
         services.AddSingleton<ComplianceMetricsService>();
         
-        // Knowledge Base Services (RMF, STIG, DoD Instructions, Workflows)
-        services.AddSingleton<IRmfKnowledgeService, RmfKnowledgeService>();
-        services.AddSingleton<IStigKnowledgeService, StigKnowledgeService>();
-        services.AddSingleton<IDoDInstructionService, DoDInstructionService>();
-        services.AddSingleton<IDoDWorkflowService, DoDWorkflowService>();
+        // Knowledge Base Services (used by both KnowledgeBase.Agent plugin and AtoComplianceEngine)
+        services.AddSingleton<Platform.Engineering.Copilot.Core.Interfaces.KnowledgeBase.IRmfKnowledgeService, Platform.Engineering.Copilot.KnowledgeBase.Agent.Services.KnowledgeBase.RmfKnowledgeService>();
+        services.AddSingleton<Platform.Engineering.Copilot.Core.Interfaces.KnowledgeBase.IStigKnowledgeService, Platform.Engineering.Copilot.KnowledgeBase.Agent.Services.KnowledgeBase.StigKnowledgeService>();
+        services.AddSingleton<Platform.Engineering.Copilot.Core.Interfaces.KnowledgeBase.IDoDInstructionService, Platform.Engineering.Copilot.KnowledgeBase.Agent.Services.KnowledgeBase.DoDInstructionService>();
+        services.AddSingleton<Platform.Engineering.Copilot.Core.Interfaces.KnowledgeBase.IDoDWorkflowService, Platform.Engineering.Copilot.KnowledgeBase.Agent.Services.KnowledgeBase.DoDWorkflowService>();
         
-        // Knowledge Base Plugin for Semantic Kernel
-        services.AddSingleton<KnowledgeBasePlugin>();
+        // Knowledge Base Plugin is now in KnowledgeBase.Agent - use AddKnowledgeBaseAgent() to register
         
-        // ATO Compliance Engine and supporting services
-        services.AddSingleton<IAtoComplianceEngine, AtoComplianceEngine>();
-        services.AddSingleton<IAtoRemediationEngine, AtoRemediationEngine>();
+        // NOTE: ATO Compliance/Remediation Engines are now registered as Scoped in AddComplianceAgent()
+        // DO NOT register them here as Singleton to avoid lifetime conflicts
+        
         services.AddSingleton<IAuditLoggingService, AuditLoggingService>();
-        
+
         // NOTE: IComplianceService is obsolete - use IAtoComplianceEngine instead
         // ComplianceServiceAdapter removed as it's no longer needed
-        
+
         // Legacy services for backward compatibility (health checks, etc.)
         services.AddSingleton<ComplianceValidationService>();
         
+        // Defender for Cloud integration (optional - disabled by default)
+        var dfcEnabled = configuration.GetValue<bool>("ComplianceAgent:DefenderForCloud:Enabled", false);
+        if (dfcEnabled)
+        {
+            services.Configure<DefenderForCloudOptions>(
+                configuration.GetSection("ComplianceAgent:DefenderForCloud"));
+            
+            services.AddSingleton<IDefenderForCloudService, DefenderForCloudService>();
+        }
+        else
+        {
+            // Register null implementation for graceful degradation
+            services.AddSingleton<IDefenderForCloudService, NullDefenderForCloudService>();
+        }
+        
         // Azure Resource Health monitoring service - DISABLED due to missing AzureOptions
         // services.AddSingleton<IAzureResourceHealthService, AzureResourceHealthService>();
+        
+        // Register Architecture Diagram Analyzer
+        services.AddScoped<IArchitectureDiagramAnalyzer, ArchitectureDiagramAnalyzer>();
+        
+        // Register Document Processing Service
+        services.AddScoped<IDocumentProcessingService, DocumentProcessingService>();
+        
+        // Register Diagram Generation Services (Week 1)
+        services.AddScoped<IMermaidDiagramService, MermaidDiagramService>();
+        services.AddSingleton<IDiagramRenderService, DiagramRenderService>(); // Singleton for browser reuse
+        
+        // Register Plugins
+        services.AddScoped<DocumentPlugin>();
+        services.AddScoped<DiagramGenerationPlugin>();
 
         // Memory caching for NIST controls
         services.AddMemoryCache();
@@ -87,7 +118,7 @@ public static class ComplianceAgentCollectionExtensions
         // Logging enhancement
         services.AddLogging(builder =>
         {
-            builder.AddFilter("Platform.Engineering.Copilot.Governance", LogLevel.Information);
+            builder.AddFilter("Platform.Engineering.Copilot.Compliance", LogLevel.Information);
             builder.AddFilter("System.Net.Http.HttpClient.INistControlsService", LogLevel.Warning);
         });
 

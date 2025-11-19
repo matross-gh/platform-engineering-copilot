@@ -50,7 +50,7 @@ public class ComplianceAssessment
     
     public DateTime StartedAt { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAt { get; set; }
-    public TimeSpan? Duration { get; set; }
+    public long? Duration { get; set; } // Duration in ticks (maps to BIGINT)
     
     // Navigation properties
     public virtual ICollection<ComplianceFinding> Findings { get; set; } = new List<ComplianceFinding>();

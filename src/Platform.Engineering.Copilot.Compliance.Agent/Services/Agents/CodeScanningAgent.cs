@@ -27,7 +27,8 @@ public class CodeScanningAgent : ISpecializedAgent
     public CodeScanningAgent(
         ISemanticKernelService semanticKernelService,
         ILogger<CodeScanningAgent> logger,
-        CodeScanningPlugin codeScanningPlugin)
+        CodeScanningPlugin codeScanningPlugin,
+        Platform.Engineering.Copilot.Core.Plugins.ConfigurationPlugin configurationPlugin)
     {
         _logger = logger;
         
@@ -46,6 +47,9 @@ public class CodeScanningAgent : ISpecializedAgent
             _chatCompletion = null;
         }
 
+        // Register shared configuration plugin (set_azure_subscription, get_azure_subscription, etc.)
+        _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(configurationPlugin, "ConfigurationPlugin"));
+        
         // Register code scanning plugin
         _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(codeScanningPlugin, "CodeScanningPlugin"));
 

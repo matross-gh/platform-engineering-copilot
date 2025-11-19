@@ -75,7 +75,7 @@ public static class GovernanceServiceCollectionExtensions
         // Logging enhancement
         services.AddLogging(builder =>
         {
-            builder.AddFilter("Platform.Engineering.Copilot.Governance", LogLevel.Information);
+            builder.AddFilter("Platform.Engineering.Copilot.Compliance", LogLevel.Information);
             builder.AddFilter("System.Net.Http.HttpClient.INistControlsService", LogLevel.Warning);
         });
 

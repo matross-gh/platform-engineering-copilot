@@ -1,13 +1,21 @@
 using System.Text;
 using System.Text.Json;
+using System.Security;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.SemanticKernel;
 using System.ComponentModel;
 using Platform.Engineering.Copilot.Core.Services.Azure;
+using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Plugins;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 using Platform.Engineering.Copilot.Core.Models.Compliance;
+using Platform.Engineering.Copilot.Core.Data.Context;
+using Platform.Engineering.Copilot.Compliance.Core.Data.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Platform.Engineering.Copilot.Compliance.Core.Configuration;
 
 namespace Platform.Engineering.Copilot.Compliance.Agent.Plugins;
 
@@ -21,20 +29,13 @@ public class CompliancePlugin : BaseSupervisorPlugin
     private readonly IAtoRemediationEngine _remediationEngine;
     private readonly IAzureResourceService _azureResourceService;
     private readonly AzureMcpClient _azureMcpClient;
+    private readonly IMemoryCache _cache;
+    private readonly ConfigService _configService;
+    private readonly PlatformEngineeringCopilotContext _dbContext;
+    private readonly ComplianceAgentOptions _options;
     
-    // Named subscription lookup (can be configured via appsettings.json)
-    // Used as fallback when Azure API is not available
-    private static readonly Dictionary<string, string> _namedSubscriptions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Format: { "friendly-name", "subscription-guid" }
-        // Real Azure Government subscriptions
-        { "primary", "0259b535-48b0-4b38-8a55-0e3dc4ea093f" },
-        { "production", "00000000-0000-0000-0000-000000000000" },
-        { "prod", "00000000-0000-0000-0000-000000000000" },
-        { "secondary", "00000000-0000-0000-0000-000000000000" },
-        { "default", "00000000-0000-0000-0000-000000000000" },
-        // Add more named subscriptions as needed
-    };
+    private const string LAST_SUBSCRIPTION_CACHE_KEY = "compliance_last_subscription";
+    private const int ASSESSMENT_CACHE_HOURS = 4; // Cache assessments for 4 hours
 
     public CompliancePlugin(
         ILogger<CompliancePlugin> logger,
@@ -42,30 +43,131 @@ public class CompliancePlugin : BaseSupervisorPlugin
         IAtoComplianceEngine complianceEngine,
         IAtoRemediationEngine remediationEngine,
         IAzureResourceService azureResourceService,
-        AzureMcpClient azureMcpClient) : base(logger, kernel)
+        AzureMcpClient azureMcpClient,
+        IMemoryCache cache,
+        ConfigService configService,
+        PlatformEngineeringCopilotContext dbContext,
+        IOptions<ComplianceAgentOptions> options) : base(logger, kernel)
     {
         _complianceEngine = complianceEngine ?? throw new ArgumentNullException(nameof(complianceEngine));
         _remediationEngine = remediationEngine ?? throw new ArgumentNullException(nameof(remediationEngine));
         _azureResourceService = azureResourceService ?? throw new ArgumentNullException(nameof(azureResourceService));
         _azureMcpClient = azureMcpClient ?? throw new ArgumentNullException(nameof(azureMcpClient));
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _configService = configService ?? throw new ArgumentNullException(nameof(configService));
+        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    }
+    
+    // ========== CONFIGURATION HELPERS ==========
+    
+    /// <summary>
+    /// Gets the effective compliance framework to use (parameter or configured default)
+    /// </summary>
+    private string GetEffectiveFramework(string? requestedFramework = null)
+    {
+        if (!string.IsNullOrWhiteSpace(requestedFramework))
+        {
+            _logger.LogDebug("Using requested framework: {Framework}", requestedFramework);
+            return requestedFramework;
+        }
+        
+        _logger.LogDebug("Using default framework from configuration: {Framework}", _options.DefaultFramework);
+        return _options.DefaultFramework;
+    }
+    
+    /// <summary>
+    /// Gets the effective compliance baseline to use (parameter or configured default)
+    /// </summary>
+    private string GetEffectiveBaseline(string? requestedBaseline = null)
+    {
+        if (!string.IsNullOrWhiteSpace(requestedBaseline))
+        {
+            _logger.LogDebug("Using requested baseline: {Baseline}", requestedBaseline);
+            return requestedBaseline;
+        }
+        
+        _logger.LogDebug("Using default baseline from configuration: {Baseline}", _options.DefaultBaseline);
+        return _options.DefaultBaseline;
     }
     
     // ========== SUBSCRIPTION LOOKUP HELPER ==========
     
     /// <summary>
+    /// Stores the last used subscription ID in cache AND persistent config file for session continuity
+    /// </summary>
+    private void SetLastUsedSubscription(string subscriptionId)
+    {
+        // Store in memory cache for current session
+        _cache.Set(LAST_SUBSCRIPTION_CACHE_KEY, subscriptionId, TimeSpan.FromHours(24));
+        
+        // ALSO store in persistent config file for cross-session persistence
+        try
+        {
+            _configService.SetDefaultSubscription(subscriptionId);
+            _logger.LogInformation("Stored subscription in persistent config: {SubscriptionId}", subscriptionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to persist subscription to config file, will only use cache");
+        }
+    }
+    
+    /// <summary>
+    /// Gets the last used subscription ID from cache, or persistent config file if cache is empty
+    /// </summary>
+    private string? GetLastUsedSubscription()
+    {
+        // Try cache first (fastest)
+        if (_cache.TryGetValue<string>(LAST_SUBSCRIPTION_CACHE_KEY, out var subscriptionId))
+        {
+            _logger.LogDebug("Retrieved last used subscription from cache: {SubscriptionId}", subscriptionId);
+            return subscriptionId;
+        }
+        
+        // Fall back to persistent config file (survives restarts)
+        try
+        {
+            subscriptionId = _configService.GetDefaultSubscription();
+            if (!string.IsNullOrWhiteSpace(subscriptionId))
+            {
+                _logger.LogInformation("Retrieved subscription from persistent config: {SubscriptionId}", subscriptionId);
+                // Populate cache for future requests in this session
+                _cache.Set(LAST_SUBSCRIPTION_CACHE_KEY, subscriptionId, TimeSpan.FromHours(24));
+                return subscriptionId;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read subscription from config file");
+        }
+        
+        return null;
+    }
+    
+    /// <summary>
     /// Resolves a subscription identifier to a GUID. Accepts either a GUID or a friendly name.
+    /// If null/empty, tries to use the last used subscription from session context.
     /// First queries Azure for subscription by name, then falls back to static dictionary.
     /// </summary>
-    private async Task<string> ResolveSubscriptionIdAsync(string subscriptionIdOrName)
+    private async Task<string> ResolveSubscriptionIdAsync(string? subscriptionIdOrName)
     {
+        // If no subscription provided, try to use last used subscription
         if (string.IsNullOrWhiteSpace(subscriptionIdOrName))
         {
-            throw new ArgumentException("Subscription ID or name is required", nameof(subscriptionIdOrName));
+            var lastUsed = GetLastUsedSubscription();
+            if (!string.IsNullOrWhiteSpace(lastUsed))
+            {
+                _logger.LogInformation("Using last used subscription from session: {SubscriptionId}", lastUsed);
+                return lastUsed;
+            }
+            throw new ArgumentException("Subscription ID or name is required. No previous subscription found in session.", nameof(subscriptionIdOrName));
         }
         
         // Check if it's already a valid GUID
         if (Guid.TryParse(subscriptionIdOrName, out _))
         {
+            SetLastUsedSubscription(subscriptionIdOrName);
             return subscriptionIdOrName;
         }
         
@@ -75,6 +177,7 @@ public class CompliancePlugin : BaseSupervisorPlugin
             var subscription = await _azureResourceService.GetSubscriptionByNameAsync(subscriptionIdOrName);
             _logger.LogInformation("Resolved subscription name '{Name}' to ID '{SubscriptionId}' via Azure API", 
                 subscriptionIdOrName, subscription.SubscriptionId);
+            SetLastUsedSubscription(subscription.SubscriptionId);
             return subscription.SubscriptionId;
         }
         catch (Exception ex)
@@ -82,20 +185,10 @@ public class CompliancePlugin : BaseSupervisorPlugin
             _logger.LogWarning(ex, "Could not resolve subscription '{Name}' via Azure API, trying static lookup", 
                 subscriptionIdOrName);
         }
-        
-        // Fall back to static dictionary lookup
-        if (_namedSubscriptions.TryGetValue(subscriptionIdOrName, out var subscriptionId))
-        {
-            _logger.LogInformation("Resolved subscription name '{Name}' to ID '{SubscriptionId}' via static lookup", 
-                subscriptionIdOrName, subscriptionId);
-            return subscriptionId;
-        }
-        
+               
         // If not found, throw with helpful message
-        var availableNames = string.Join(", ", _namedSubscriptions.Keys.Take(5));
         throw new ArgumentException(
             $"Subscription '{subscriptionIdOrName}' not found. " +
-            $"Available names: {availableNames}. " +
             $"Or provide a valid GUID.", 
             nameof(subscriptionIdOrName));
     }
@@ -106,14 +199,17 @@ public class CompliancePlugin : BaseSupervisorPlugin
     [Description("Run a comprehensive NIST 800-53 compliance assessment for an Azure subscription or resource group. " +
                  "Scans all resources and generates detailed findings with severity ratings. " +
                  "Essential for ATO compliance verification. Can scope to a specific resource group. " +
+                 "🔴 **DEFAULT BEHAVIOR**: When user says 'run assessment', 'run compliance assessment', or similar WITHOUT specifying a subscription, " +
+                 "IMMEDIATELY call this function with subscriptionIdOrName=null (it will automatically use the default subscription from config). " +
+                 "DO NOT ask the user which subscription - just execute with null parameter. " +
+                 "If user explicitly mentions a subscription (e.g., 'run assessment for production'), then pass that subscription name/ID. " +
                  "Accepts either a subscription GUID (like '453c2549-9efb-4d48-a4f6-6c6b42db39b5') or a friendly name (like 'production', 'dev', 'staging'). " +
-                 "Examples: 'Run assessment for production' or 'Run assessment for subscription dev' or " +
-                 "'Run assessment for resource group my-rg in production'. " +
+                 "Examples: User says 'Run assessment' → Call with subscriptionIdOrName=null | User says 'Run assessment for production' → Call with subscriptionIdOrName='production'. " +
                  "CRITICAL: If the conversation mentions 'newly provisioned' or 'newly created' resources, ALWAYS extract the resource group name from context and pass it to resourceGroupName parameter. " +
                  "Look for resource group names like 'newly-provisioned-aks', 'rg-dev-aks', 'newly-created-rg', etc. in the conversation history.")]
     public async Task<string> RunComplianceAssessmentAsync(
-        [Description("Azure subscription ID (GUID) or friendly name (e.g., 'production', 'dev', 'staging'). Example: 'production' or '453c2549-9efb-4d48-a4f6-6c6b42db39b5'")] 
-        string subscriptionIdOrName,
+        [Description("Azure subscription ID (GUID) or friendly name (e.g., 'production', 'dev', 'staging'). OPTIONAL - leave as null when user doesn't specify (will use default from configuration set via set_azure_subscription). Only provide a value if user explicitly mentions a subscription. Example: 'production' or '453c2549-9efb-4d48-a4f6-6c6b42db39b5'")] 
+        string? subscriptionIdOrName = null,
         [Description("CRITICAL: Resource group name to scan. If task mentions 'newly provisioned AKS cluster' or similar, extract the resource group name from conversation history (e.g., 'newly-provisioned-aks', 'rg-dev-aks'). ALWAYS provide this when assessing newly created resources. Leave empty ONLY when scanning entire subscription.")] 
         string? resourceGroupName = null,
         CancellationToken cancellationToken = default)
@@ -152,6 +248,23 @@ public class CompliancePlugin : BaseSupervisorPlugin
                     error = "Subscription ID is required"
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
+
+            // Check for cached assessment (4-hour TTL)
+            var cachedAssessment = await GetCachedAssessmentAsync(
+                subscriptionId, resourceGroupName, cancellationToken);
+            
+            if (cachedAssessment != null)
+            {
+                var cacheAge = DateTime.UtcNow - cachedAssessment.CompletedAt.GetValueOrDefault();
+                _logger.LogInformation(
+                    "✅ Using cached assessment from {CachedTime} (age: {Age} minutes)",
+                    cachedAssessment.CompletedAt,
+                    Math.Round(cacheAge.TotalMinutes, 1));
+                
+                return FormatCachedAssessment(cachedAssessment, scope, cacheAge);
+            }
+            
+            _logger.LogInformation("No valid cache found - running new compliance assessment against Azure APIs");
 
             // 🔥 CRITICAL: If resource group specified, verify it exists and has resources before scanning
             if (!string.IsNullOrWhiteSpace(resourceGroupName))
@@ -244,6 +357,18 @@ public class CompliancePlugin : BaseSupervisorPlugin
             var autoRemediableCount = allFindings.Count(f => f.IsAutoRemediable);
             var manualCount = allFindings.Count - autoRemediableCount;
             
+            // Group findings by source
+            var findingsBySource = allFindings
+                .GroupBy(f => f.Metadata?.ContainsKey("Source") == true ? f.Metadata["Source"]?.ToString() : "Unknown")
+                .Select(g => new
+                {
+                    source = g.Key ?? "Unknown",
+                    count = g.Count(),
+                    highestSeverity = g.Max(f => f.Severity)
+                })
+                .OrderByDescending(g => g.count)
+                .ToList();
+            
             // Severity emoji mapping
             var severityEmojis = new Dictionary<AtoFindingSeverity, string>
             {
@@ -311,6 +436,12 @@ public class CompliancePlugin : BaseSupervisorPlugin
 
 ---
 
+## 📍 FINDINGS BY SOURCE
+
+{string.Join("\n", findingsBySource.Select(g => $"- **{g.source}**: {g.count} finding{(g.count > 1 ? "s" : "")} {(g.highestSeverity == AtoFindingSeverity.Critical ? "🔴" : g.highestSeverity == AtoFindingSeverity.High ? "🟠" : g.highestSeverity == AtoFindingSeverity.Medium ? "🟡" : "🟢")}"))}
+
+---
+
 ## 🎯 CONTROL FAMILIES NEEDING ATTENTION
 *Showing families with <90% compliance*
 
@@ -332,7 +463,7 @@ public class CompliancePlugin : BaseSupervisorPlugin
 - `get control family details for AC` - Drill down into Access Control findings
 - `collect compliance evidence for this subscription` - Generate ATO evidence package
 ";
-            return JsonSerializer.Serialize(new
+            var assessmentResult = new
             {
                 success = true,
                 // Pre-formatted output for direct display (bypasses AI formatting)
@@ -731,7 +862,28 @@ public class CompliancePlugin : BaseSupervisorPlugin
                         description = "Get real-time compliance dashboard with alerts and recent changes"
                     }
                 }
-            }, new JsonSerializerOptions { WriteIndented = true });
+            };
+
+            // Save assessment to database for caching (fire and forget - don't block on DB operations)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await SaveAssessmentToDbAsync(
+                        assessmentResult,
+                        allFindings,
+                        subscriptionId,
+                        resourceGroupName,
+                        (decimal)assessment.OverallComplianceScore,
+                        cancellationToken);
+                }
+                catch (Exception dbEx)
+                {
+                    _logger.LogWarning(dbEx, "Failed to cache assessment to database (non-fatal)");
+                }
+            }, cancellationToken);
+
+            return JsonSerializer.Serialize(assessmentResult, new JsonSerializerOptions { WriteIndented = true });
         }
         catch (Exception ex)
         {
@@ -748,15 +900,15 @@ public class CompliancePlugin : BaseSupervisorPlugin
                  "SI (System Integrity), CM (Configuration Management), CP (Contingency Planning), " +
                  "IA (Identification/Authentication), IR (Incident Response), RA (Risk Assessment), CA (Security Assessment).")]
     public async Task<string> GetControlFamilyDetailsAsync(
-        [Description("Azure subscription ID or friendly name")] string subscriptionIdOrName,
         [Description("NIST control family code (e.g., 'AC', 'AU', 'SC', 'SI', 'CM', 'CP', 'IA', 'IR', 'RA', 'CA')")] string controlFamily,
+        [Description("Optional: Azure subscription ID or friendly name. If not provided, uses last assessed subscription.")] string? subscriptionIdOrName = null,
         [Description("Optional: Resource group name to scope the assessment")] string? resourceGroupName = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
             _logger.LogInformation("Getting control family details for {ControlFamily} in subscription {Subscription}", 
-                controlFamily, subscriptionIdOrName);
+                controlFamily, subscriptionIdOrName ?? "last used");
 
             // Validate control family
             var validFamilies = new[] { "AC", "AU", "SC", "SI", "CM", "CP", "IA", "IR", "RA", "CA", "MA", "MP", "PE", "PL", "PS", "SA", "AT", "PM" };
@@ -1056,6 +1208,10 @@ public class CompliancePlugin : BaseSupervisorPlugin
                             // Metadata
                             metadata = new
                             {
+                                source = f.Metadata?.ContainsKey("Source") == true ? f.Metadata["Source"]?.ToString() : "Unknown",
+                                stigId = f.Metadata?.ContainsKey("StigId") == true ? f.Metadata["StigId"]?.ToString() : null,
+                                vulnId = f.Metadata?.ContainsKey("VulnId") == true ? f.Metadata["VulnId"]?.ToString() : null,
+                                category = f.Metadata?.ContainsKey("Category") == true ? f.Metadata["Category"]?.ToString() : null,
                                 detectedAt = f.DetectedAt,
                                 ruleId = f.RuleId
                             }
@@ -1215,9 +1371,10 @@ public class CompliancePlugin : BaseSupervisorPlugin
     [Description("Get real-time compliance status with continuous monitoring data. " +
                  "Shows current score, active alerts, and recent changes. " +
                  "Use this for quick compliance health checks. Can scope to a specific resource group. " +
-                 "Accepts either a subscription GUID or friendly name (e.g., 'production', 'dev', 'staging').")]
+                 "Accepts either a subscription GUID or friendly name (e.g., 'production', 'dev', 'staging'). " +
+                 "If no subscription is provided, uses the default subscription from persistent configuration (set via set_azure_subscription).")]
     public async Task<string> GetComplianceStatusAsync(
-        [Description("Azure subscription ID (GUID) or friendly name (e.g., 'production', 'dev', 'staging')")] string subscriptionIdOrName,
+        [Description("Azure subscription ID (GUID) or friendly name (e.g., 'production', 'dev', 'staging'). OPTIONAL - if not provided, uses the default subscription from configuration.")] string? subscriptionIdOrName = null,
         [Description("Optional resource group name to limit scope")] string? resourceGroupName = null,
         CancellationToken cancellationToken = default)
     {
@@ -1329,11 +1486,10 @@ public class CompliancePlugin : BaseSupervisorPlugin
                 null,
                 cancellationToken);
 
-            // Generate working API download URLs
-            // Note: These URLs trigger re-collection of evidence on demand
-            var apiBaseUrl = "http://localhost:5100/api/compliance/evidence/download";
-            var emassApiUrl = "http://localhost:5100/api/compliance/emass/generate";
-            var poamApiUrl = "http://localhost:5100/api/compliance/poam/generate";
+            // Generate actual file content for download
+            var jsonContent = GenerateJsonEvidence(evidencePackage);
+            var csvContent = GenerateCsvEvidence(evidencePackage);
+            var emassXmlContent = GenerateEmassXml(evidencePackage);
 
             return JsonSerializer.Serialize(new
             {
@@ -1395,94 +1551,57 @@ public class CompliancePlugin : BaseSupervisorPlugin
                 attestation = evidencePackage.AttestationStatement,
                 error = evidencePackage.Error,
                 
-                // ========== DOWNLOAD & EXPORT OPTIONS (API Endpoints) ==========
-                downloads = new
+                // ========== DOWNLOADABLE FILES ==========
+                files = new
                 {
-                    title = "📥 DOWNLOAD OPTIONS",
-                    note = "💡 These API endpoints will re-collect evidence and provide downloads in your preferred format",
-                    packages = new object[]
+                    title = "📥 DOWNLOADABLE FILES",
+                    note = "💡 Copy and save these file contents to your local system",
+                    json = new
                     {
-                        new
-                        {
-                            format = "JSON",
-                            description = "Complete evidence package in JSON format",
-                            url = $"{apiBaseUrl}?subscriptionIdOrName={Uri.EscapeDataString(subscriptionId)}&controlFamily={evidencePackage.ControlFamily}&format=json",
-                            icon = "📄",
-                            method = "GET"
-                        },
-                        new
-                        {
-                            format = "CSV",
-                            description = "Evidence items in CSV spreadsheet",
-                            url = $"{apiBaseUrl}?subscriptionIdOrName={Uri.EscapeDataString(subscriptionId)}&controlFamily={evidencePackage.ControlFamily}&format=csv",
-                            icon = "📊",
-                            method = "GET"
-                        },
-                        new
-                        {
-                            format = "PDF",
-                            description = "Formatted evidence report with attestations",
-                            url = $"{apiBaseUrl}?subscriptionIdOrName={Uri.EscapeDataString(subscriptionId)}&controlFamily={evidencePackage.ControlFamily}&format=pdf",
-                            icon = "📑",
-                            method = "GET"
-                        },
-                        new
-                        {
-                            format = "eMASS Package",
-                            description = "DoD eMASS-compatible evidence package",
-                            url = $"{apiBaseUrl}?subscriptionIdOrName={Uri.EscapeDataString(subscriptionId)}&controlFamily={evidencePackage.ControlFamily}&format=emass",
-                            icon = "🏛️",
-                            method = "GET",
-                            priority = "HIGH"
-                        }
+                        format = "JSON",
+                        description = "Complete evidence package in JSON format",
+                        filename = $"evidence_{evidencePackage.ControlFamily}_{evidencePackage.PackageId}.json",
+                        icon = "📄",
+                        content = jsonContent,
+                        size = $"{jsonContent.Length / 1024} KB"
+                    },
+                    csv = new
+                    {
+                        format = "CSV",
+                        description = "Evidence items in CSV spreadsheet format",
+                        filename = $"evidence_{evidencePackage.ControlFamily}_{evidencePackage.PackageId}.csv",
+                        icon = "📊",
+                        content = csvContent,
+                        size = $"{csvContent.Length / 1024} KB"
+                    },
+                    emass = new
+                    {
+                        format = "eMASS XML",
+                        description = "DoD eMASS-compatible evidence package (XML)",
+                        filename = $"emass_{evidencePackage.ControlFamily}_{evidencePackage.PackageId}.xml",
+                        icon = "🏛️",
+                        content = emassXmlContent,
+                        size = $"{emassXmlContent.Length / 1024} KB",
+                        priority = "HIGH",
+                        instructions = "Upload this XML file to the DoD eMASS portal for ATO package submission"
                     }
                 },
                 
                 // ========== EMASS INTEGRATION ==========
                 emassIntegration = new
                 {
-                    title = "🏛️ eMASS INTEGRATION",
-                    status = "Ready for export",
-                    description = "Use these API endpoints or kernel functions to generate eMASS-compatible packages",
-                    actions = new object[]
+                    title = "🏛️ eMASS INTEGRATION INSTRUCTIONS",
+                    status = "✅ Ready for submission",
+                    steps = new[]
                     {
-                        new
-                        {
-                            action = "download_emass_xml",
-                            description = "Download DoD eMASS-compatible evidence package (XML format)",
-                            url = $"{apiBaseUrl}?subscriptionIdOrName={Uri.EscapeDataString(subscriptionId)}&controlFamily={evidencePackage.ControlFamily}&format=emass",
-                            method = "GET",
-                            icon = "📦",
-                            priority = "HIGH"
-                        },
-                        new
-                        {
-                            action = "generate_via_api",
-                            description = "Generate eMASS package via dedicated API endpoint",
-                            url = $"{emassApiUrl}?subscriptionIdOrName={Uri.EscapeDataString(subscriptionId)}&controlFamily={evidencePackage.ControlFamily}",
-                            method = "POST",
-                            icon = "�",
-                            priority = "HIGH"
-                        },
-                        new
-                        {
-                            action = "generate_via_chat",
-                            description = "Generate eMASS package via chat command",
-                            command = $"Generate eMASS package for control family {evidencePackage.ControlFamily} in subscription {subscriptionId}",
-                            icon = "💬",
-                            priority = "MEDIUM"
-                        },
-                        new
-                        {
-                            action = "generate_poam",
-                            description = "Generate Plan of Action & Milestones (POA&M) for findings",
-                            url = $"{poamApiUrl}?subscriptionIdOrName={Uri.EscapeDataString(subscriptionId)}&controlFamily={evidencePackage.ControlFamily}&format=pdf",
-                            method = "GET",
-                            command = $"Generate POA&M for control family {evidencePackage.ControlFamily}",
-                            icon = "📋",
-                            priority = "MEDIUM"
-                        }
-                    }
+                        "1. Copy the eMASS XML content from the 'files.emass.content' field above",
+                        "2. Save it as a .xml file on your local system",
+                        "3. Log into the DoD eMASS portal (https://emass.apps.mil)",
+                        "4. Navigate to your system's ATO package section",
+                        "5. Upload the XML file as evidence for the control family",
+                        "6. Review and submit for assessment"
+                    },
+                    note = "The eMASS XML package includes control implementation statements, test results, and configuration evidence"
                 },
                 
                 // ========== QUICK ACTIONS ==========
@@ -1490,29 +1609,11 @@ public class CompliancePlugin : BaseSupervisorPlugin
                 {
                     new
                     {
-                        action = "download_pdf",
-                        description = "Download formatted evidence report as PDF",
-                        url = $"{apiBaseUrl}?subscriptionIdOrName={Uri.EscapeDataString(subscriptionId)}&controlFamily={evidencePackage.ControlFamily}&format=pdf",
-                        method = "GET",
-                        icon = "📥",
+                        action = "generate_poam",
+                        command = $"Generate POA&M for control family {evidencePackage.ControlFamily}",
+                        description = "Generate Plan of Action & Milestones (POA&M) for findings",
+                        icon = "📋",
                         priority = "HIGH"
-                    },
-                    new
-                    {
-                        action = "download_emass",
-                        description = "Download eMASS-compatible XML package",
-                        url = $"{apiBaseUrl}?subscriptionIdOrName={Uri.EscapeDataString(subscriptionId)}&controlFamily={evidencePackage.ControlFamily}&format=emass",
-                        method = "GET",
-                        icon = "🏛️",
-                        priority = "HIGH"
-                    },
-                    new
-                    {
-                        action = "chat_emass_package",
-                        command = $"Generate eMASS package for control family {evidencePackage.ControlFamily} in subscription {subscriptionId}",
-                        description = "Generate eMASS package via chat (includes validation details)",
-                        icon = "💬",
-                        priority = "MEDIUM"
                     },
                     new
                     {
@@ -1569,20 +1670,144 @@ public class CompliancePlugin : BaseSupervisorPlugin
         }
     }
 
+    /// <summary>
+    /// Generates JSON file content for evidence package
+    /// </summary>
+    private string GenerateJsonEvidence(EvidencePackage evidencePackage)
+    {
+        var data = new
+        {
+            packageInfo = new
+            {
+                packageId = evidencePackage.PackageId,
+                subscriptionId = evidencePackage.SubscriptionId,
+                controlFamily = evidencePackage.ControlFamily,
+                collectionDate = evidencePackage.CollectionDate,
+                completenessScore = evidencePackage.CompletenessScore
+            },
+            evidence = evidencePackage.Evidence.Select(e => new
+            {
+                evidenceId = e.EvidenceId,
+                type = e.EvidenceType,
+                controlId = e.ControlId,
+                resourceId = e.ResourceId,
+                collectedAt = e.CollectedAt,
+                data = e.Data
+            }),
+            summary = evidencePackage.Summary,
+            attestation = evidencePackage.AttestationStatement
+        };
+
+        return JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// Generates CSV file content for evidence package
+    /// </summary>
+    private string GenerateCsvEvidence(EvidencePackage evidencePackage)
+    {
+        var csv = new StringBuilder();
+        csv.AppendLine("Evidence ID,Type,Control ID,Resource ID,Collected At,Data Summary");
+        
+        foreach (var item in evidencePackage.Evidence)
+        {
+            var dataSummary = item.Data != null ? 
+                JsonSerializer.Serialize(item.Data).Replace("\"", "\"\"").Substring(0, Math.Min(200, JsonSerializer.Serialize(item.Data).Length)) : 
+                "";
+            
+            csv.AppendLine($"\"{item.EvidenceId}\",\"{item.EvidenceType}\",\"{item.ControlId}\",\"{item.ResourceId}\",\"{item.CollectedAt:yyyy-MM-dd HH:mm:ss}\",\"{dataSummary}\"");
+        }
+
+        return csv.ToString();
+    }
+
+    /// <summary>
+    /// Generates eMASS-compatible XML package for DoD submission
+    /// </summary>
+    private string GenerateEmassXml(EvidencePackage evidencePackage)
+    {
+        var xml = new StringBuilder();
+        xml.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+        xml.AppendLine("<emass-evidence-package xmlns=\"https://emass.apps.mil/schema/evidence\" version=\"3.1\">");
+        xml.AppendLine("  <metadata>");
+        xml.AppendLine($"    <package-id>{evidencePackage.PackageId}</package-id>");
+        xml.AppendLine($"    <collection-date>{evidencePackage.CollectionDate:yyyy-MM-ddTHH:mm:ssZ}</collection-date>");
+        xml.AppendLine($"    <subscription-id>{evidencePackage.SubscriptionId}</subscription-id>");
+        xml.AppendLine($"    <control-family>{evidencePackage.ControlFamily}</control-family>");
+        xml.AppendLine($"    <completeness-score>{evidencePackage.CompletenessScore:F2}</completeness-score>");
+        xml.AppendLine("  </metadata>");
+        xml.AppendLine("  <evidence-items>");
+        
+        foreach (var item in evidencePackage.Evidence)
+        {
+            xml.AppendLine("    <evidence-item>");
+            xml.AppendLine($"      <id>{SecurityElement.Escape(item.EvidenceId)}</id>");
+            xml.AppendLine($"      <type>{SecurityElement.Escape(item.EvidenceType)}</type>");
+            xml.AppendLine($"      <control>{SecurityElement.Escape(item.ControlId)}</control>");
+            xml.AppendLine($"      <resource>{SecurityElement.Escape(item.ResourceId ?? "N/A")}</resource>");
+            xml.AppendLine($"      <collected-at>{item.CollectedAt:yyyy-MM-ddTHH:mm:ssZ}</collected-at>");
+            
+            if (item.Data != null)
+            {
+                xml.AppendLine("      <data>");
+                xml.AppendLine($"        <![CDATA[{JsonSerializer.Serialize(item.Data, new JsonSerializerOptions { WriteIndented = true })}]]>");
+                xml.AppendLine("      </data>");
+            }
+            
+            xml.AppendLine("    </evidence-item>");
+        }
+        
+        xml.AppendLine("  </evidence-items>");
+        xml.AppendLine("  <attestation>");
+        xml.AppendLine($"    <![CDATA[{evidencePackage.AttestationStatement}]]>");
+        xml.AppendLine("  </attestation>");
+        xml.AppendLine("  <summary>");
+        xml.AppendLine($"    <![CDATA[{evidencePackage.Summary}]]>");
+        xml.AppendLine("  </summary>");
+        xml.AppendLine("</emass-evidence-package>");
+        
+        return xml.ToString();
+    }
+
     // ========== REMEDIATION FUNCTIONS ==========
 
     [KernelFunction("generate_remediation_plan")]
     [Description("Generate a comprehensive remediation plan for compliance findings. " +
                  "Analyzes findings and creates a prioritized action plan. " +
                  "Essential for planning compliance improvements. Can scope to a specific resource group. " +
-                 "Accepts either a subscription GUID or friendly name (e.g., 'production', 'dev', 'staging').")]
+                 "Accepts either a subscription GUID or friendly name (e.g., 'production', 'dev', 'staging'). " +
+                 "If no subscription is specified, uses the most recent assessment from the last used subscription.")]
     public async Task<string> GenerateRemediationPlanAsync(
-        [Description("Azure subscription ID (GUID) or friendly name (e.g., 'production', 'dev', 'staging')")] string subscriptionIdOrName,
+        [Description("Azure subscription ID (GUID) or friendly name (e.g., 'production', 'dev', 'staging'). " +
+                     "Optional - if not provided, uses the last assessed subscription.")] string? subscriptionIdOrName = null,
         [Description("Optional resource group name to limit scope")] string? resourceGroupName = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            // If no subscription provided, try to get the last used subscription
+            if (string.IsNullOrWhiteSpace(subscriptionIdOrName))
+            {
+                subscriptionIdOrName = GetLastUsedSubscription();
+                if (string.IsNullOrWhiteSpace(subscriptionIdOrName))
+                {
+                    _logger.LogWarning("No subscription specified and no previous subscription found in cache");
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = "No subscription specified",
+                        message = "Please specify a subscription ID or run a compliance assessment first to establish context.",
+                        suggestedActions = new[]
+                        {
+                            "Run 'assess compliance for subscription <subscription-id>' first",
+                            "Or specify the subscription: 'generate remediation plan for subscription <subscription-id>'"
+                        }
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                }
+                
+                _logger.LogInformation("Using last assessed subscription from cache: {SubscriptionId}", subscriptionIdOrName);
+            }
+            
             // Resolve subscription name to GUID
             string subscriptionId = await ResolveSubscriptionIdAsync(subscriptionIdOrName);
             
@@ -1591,32 +1816,37 @@ public class CompliancePlugin : BaseSupervisorPlugin
                 : $"resource group '{resourceGroupName}' in subscription {subscriptionId}";
             
             _logger.LogInformation("Generating remediation plan for {Scope} (input: {Input})", 
-                scope, subscriptionIdOrName);
+                scope, subscriptionIdOrName ?? "last used");
 
             if (string.IsNullOrWhiteSpace(subscriptionId))
             {
                 return JsonSerializer.Serialize(new
                 {
                     success = false,
-                    error = "Subscription ID is required"
+                    error = "Could not resolve subscription ID"
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
 
-            // Try to get cached assessment first (< 5 minutes old)
+            // Get latest assessment from database (no time restriction - use most recent)
             var assessment = await _complianceEngine.GetLatestAssessmentAsync(
                 subscriptionId, cancellationToken);
 
-            if (assessment == null || (DateTime.UtcNow - assessment.EndTime.UtcDateTime).TotalMinutes > 5)
+            if (assessment == null)
             {
-                _logger.LogInformation("No recent assessment found, running new compliance scan...");
-                assessment = await _complianceEngine.RunComprehensiveAssessmentAsync(
-                    subscriptionId, null, cancellationToken);
+                _logger.LogWarning("⚠️ No assessment found in database for subscription {SubscriptionId}. Please run an assessment first.", subscriptionId);
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = $"No compliance assessment found for subscription {subscriptionId}",
+                    message = "Please run a compliance assessment first using 'run compliance assessment' before generating a remediation plan.",
+                    subscriptionId = subscriptionId
+                }, new JsonSerializerOptions { WriteIndented = true });
             }
-            else
-            {
-                _logger.LogInformation("✅ Using cached assessment from {Time} ({Minutes:F1} minutes ago)", 
-                    assessment.EndTime, (DateTime.UtcNow - assessment.EndTime.UtcDateTime).TotalMinutes);
-            }
+            
+            var assessmentAge = (DateTime.UtcNow - assessment.EndTime.UtcDateTime).TotalHours;
+            _logger.LogInformation("✅ Using assessment from {Time} ({Age:F1} hours ago, {FindingCount} findings)", 
+                assessment.EndTime, assessmentAge, 
+                assessment.ControlFamilyResults.Sum(cf => cf.Value.Findings.Count));
             
             var findings = assessment.ControlFamilyResults
                 .SelectMany(cf => cf.Value.Findings)
@@ -1632,7 +1862,7 @@ public class CompliancePlugin : BaseSupervisorPlugin
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
 
-            var plan = await _complianceEngine.GenerateRemediationPlanAsync(
+            var plan = await _remediationEngine.GenerateRemediationPlanAsync(
                 subscriptionId,
                 findings,
                 cancellationToken);
@@ -1812,6 +2042,22 @@ public class CompliancePlugin : BaseSupervisorPlugin
                     error = "This finding cannot be automatically remediated",
                     findingId = findingId,
                     recommendation = finding.Recommendation,
+                    manualGuidance = finding.RemediationGuidance
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Check if automated remediation is enabled in configuration
+            if (!_options.EnableAutomatedRemediation)
+            {
+                _logger.LogWarning("⚠️ Automated remediation is disabled in configuration (EnableAutomatedRemediation=false)");
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = "Automated remediation is disabled",
+                    findingId = findingId,
+                    configurationSetting = "ComplianceAgent.EnableAutomatedRemediation",
+                    currentValue = false,
+                    recommendation = "Set EnableAutomatedRemediation to true in ComplianceAgent configuration to enable automated remediation",
                     manualGuidance = finding.RemediationGuidance
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
@@ -2488,7 +2734,7 @@ public class CompliancePlugin : BaseSupervisorPlugin
             }
 
             // Generate remediation plan
-            var plan = await _complianceEngine.GenerateRemediationPlanAsync(
+            var plan = await _remediationEngine.GenerateRemediationPlanAsync(
                 subscriptionId,
                 findings,
                 cancellationToken);
@@ -2877,7 +3123,8 @@ Platform Engineering Copilot - Compliance Module
             
             foreach (var item in autoItems)
             {
-                sb.AppendLine($"### Finding: `{item.FindingId}`");
+                sb.AppendLine($"### {item.Title}");
+                sb.AppendLine($"- **Finding ID:** `{item.FindingId}`");
                 sb.AppendLine($"- **Resource:** `{item.ResourceId}`");
                 sb.AppendLine($"- **Priority:** {item.Priority}");
                 sb.AppendLine($"- **Effort:** {item.EstimatedEffort?.TotalMinutes ?? 0:F0} minutes");
@@ -2920,7 +3167,8 @@ Platform Engineering Copilot - Compliance Module
             
             foreach (var item in manualItems)
             {
-                sb.AppendLine($"### Finding: `{item.FindingId}`");
+                sb.AppendLine($"### {item.Title}");
+                sb.AppendLine($"- **Finding ID:** `{item.FindingId}`");
                 sb.AppendLine($"- **Resource:** `{item.ResourceId}`");
                 sb.AppendLine($"- **Priority:** {item.Priority}");
                 sb.AppendLine($"- **Effort:** {item.EstimatedEffort?.TotalHours ?? 0:F1} hours");
@@ -3558,13 +3806,13 @@ Platform Engineering Copilot - Compliance Module
                  "Provides actionable guidance for NIST 800-53, FedRAMP, and Azure Policy compliance.")]
     public async Task<string> GetComplianceRecommendationsAsync(
         [Description("Target resource group for compliance recommendations")] 
-        string resourceGroup,
+        string? resourceGroup = null,
         
         [Description("Optional subscription ID or name (uses default if not provided)")] 
         string? subscriptionId = null,
         
-        [Description("Compliance framework: 'nist-800-53', 'fedramp-moderate', 'fedramp-high', 'azure-policy' (default: nist-800-53)")] 
-        string framework = "nist-800-53",
+        [Description("Compliance framework: 'nist-800-53', 'fedramp-moderate', 'fedramp-high', 'azure-policy' (optional - uses configured DefaultFramework if not specified)")] 
+        string? framework = null,
         
         [Description("Include remediation scripts in recommendations (default: true)")] 
         bool includeRemediation = true,
@@ -3578,12 +3826,16 @@ Platform Engineering Copilot - Compliance Module
                 ? await ResolveSubscriptionIdAsync(subscriptionId)
                 : await ResolveSubscriptionIdAsync("default");
 
+            // Get effective framework (use provided or fall back to configuration default)
+            var effectiveFramework = GetEffectiveFramework(framework ?? "nist-800-53");
+            _logger.LogInformation("Using compliance framework: {Framework}", effectiveFramework);
+
             // 1. Get compliance assessment from existing engine
             var assessment = await _complianceEngine.RunComprehensiveAssessmentAsync(
                 resolvedSubscriptionId, resourceGroup, null, cancellationToken);
 
             // 2. Get framework-specific recommendations from MCP
-            var frameworkQuery = framework.ToLowerInvariant() switch
+            var frameworkQuery = effectiveFramework.ToLowerInvariant() switch
             {
                 "fedramp-moderate" => "FedRAMP Moderate compliance recommendations for Azure infrastructure",
                 "fedramp-high" => "FedRAMP High compliance recommendations for Azure infrastructure",
@@ -3617,7 +3869,7 @@ Platform Engineering Copilot - Compliance Module
             if (includeRemediation && allFindings.Any())
             {
                 var remediationPlan = await _remediationEngine.GenerateRemediationPlanAsync(
-                    resolvedSubscriptionId, allFindings, null, cancellationToken);
+                    resolvedSubscriptionId, allFindings, cancellationToken);
 
                 remediationSteps = new
                 {
@@ -3644,7 +3896,7 @@ Platform Engineering Copilot - Compliance Module
                 success = true,
                 resourceGroup = resourceGroup,
                 subscriptionId = resolvedSubscriptionId,
-                framework = framework.ToUpperInvariant(),
+                framework = effectiveFramework.ToUpperInvariant(),
                 complianceStatus = new
                 {
                     overallScore = assessment.OverallComplianceScore,
@@ -3659,7 +3911,7 @@ Platform Engineering Copilot - Compliance Module
                 {
                     frameworkGuidance = new
                     {
-                        source = $"Azure MCP - {framework.ToUpperInvariant()}",
+                        source = $"Azure MCP - {effectiveFramework.ToUpperInvariant()}",
                         guidance = recommendations
                     },
                     azurePolicy = new
@@ -3683,7 +3935,7 @@ Platform Engineering Copilot - Compliance Module
                     }).ToList(),
                 nextSteps = new[]
                 {
-                    $"Review {framework.ToUpperInvariant()} compliance guidance above",
+                    $"Review {effectiveFramework.ToUpperInvariant()} compliance guidance above",
                     "Check Azure Policy recommendations for quick wins",
                     includeRemediation ? "Execute remediation plan to fix failing controls" : "Say 'get compliance recommendations with remediation' to see fix steps",
                     "Say 'remediate compliance issues' to auto-fix violations",
@@ -3701,6 +3953,778 @@ Platform Engineering Copilot - Compliance Module
             }, new JsonSerializerOptions { WriteIndented = true });
         }
     }
+
+    #region Compliance Analytics & Reporting
+
+    [KernelFunction("get_compliance_history")]
+    [Description("View historical compliance scores and how they've changed over time. " +
+                 "Shows trend analysis to identify if compliance is improving or declining. " +
+                 "Useful for tracking compliance posture over weeks/months and preparing for audits. " +
+                 "Example: 'Show me compliance history for the last 30 days' or 'How has compliance changed over time?'")]
+    public async Task<string> GetComplianceHistoryAsync(
+        [Description("Azure subscription ID or friendly name. If not provided, uses default subscription.")] 
+        string? subscriptionIdOrName = null,
+        [Description("Number of days of history to retrieve (default: 30, max: 365)")] 
+        int days = 30,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Resolve subscription
+            var subscriptionId = await ResolveSubscriptionIdAsync(subscriptionIdOrName);
+            
+            // Limit days to reasonable range
+            days = Math.Min(Math.Max(days, 1), 365);
+            
+            var cutoffDate = DateTime.UtcNow.AddDays(-days);
+            
+            // Query historical assessments
+            var assessments = await _dbContext.ComplianceAssessments
+                .Where(a => a.SubscriptionId == subscriptionId &&
+                            a.CompletedAt >= cutoffDate &&
+                            a.Status == "Completed")
+                .OrderBy(a => a.CompletedAt)
+                .Select(a => new
+                {
+                    a.Id,
+                    a.CompletedAt,
+                    a.ComplianceScore,
+                    a.TotalFindings,
+                    a.CriticalFindings,
+                    a.HighFindings,
+                    a.MediumFindings,
+                    a.LowFindings,
+                    a.InitiatedBy
+                })
+                .ToListAsync(cancellationToken);
+
+            if (!assessments.Any())
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = $"No compliance assessments found in the last {days} days",
+                    subscriptionId,
+                    hint = "Run a compliance assessment to start building historical data"
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Calculate trend
+            var trend = CalculateTrend(assessments.Select(a => (double)a.ComplianceScore).ToList());
+            var latestScore = assessments.Last().ComplianceScore;
+            var oldestScore = assessments.First().ComplianceScore;
+            var scoreChange = latestScore - oldestScore;
+
+            // Find best and worst scores
+            var bestAssessment = assessments.OrderByDescending(a => a.ComplianceScore).First();
+            var worstAssessment = assessments.OrderBy(a => a.ComplianceScore).First();
+
+            // Format output
+            var trendEmoji = trend.Direction switch
+            {
+                "improving" => "📈",
+                "declining" => "📉",
+                _ => "➡️"
+            };
+
+            var output = $@"
+# 📊 COMPLIANCE HISTORY
+
+**Subscription:** `{subscriptionId}`
+**Period:** Last {days} days
+**Assessments:** {assessments.Count} compliance checks
+
+---
+
+## 🎯 CURRENT STATUS
+
+**Latest Score:** {Math.Round(latestScore, 1)}% ({GetComplianceGrade(Convert.ToDouble(latestScore))})
+**Date:** {assessments.Last().CompletedAt:yyyy-MM-dd HH:mm} UTC
+**Total Findings:** {assessments.Last().TotalFindings} ({assessments.Last().CriticalFindings} critical, {assessments.Last().HighFindings} high)
+
+---
+
+## {trendEmoji} TREND ANALYSIS
+
+**Trend:** {trend.Direction.ToUpper()} {(trend.Direction != "stable" ? $"({Math.Abs(Math.Round(trend.ChangeRate, 1))}% per assessment)" : "")}
+**Score Change:** {(scoreChange >= 0 ? "+" : "")}{Math.Round(scoreChange, 1)}% (from {Math.Round(oldestScore, 1)}% to {Math.Round(latestScore, 1)}%)
+
+{(trend.Direction == "improving" ? "✅ **Great progress!** Your compliance posture is getting better." : 
+  trend.Direction == "declining" ? "⚠️ **Attention needed!** Compliance is declining - review recent changes." :
+  "ℹ️ Compliance has remained relatively stable.")}
+
+---
+
+## 📈 HISTORICAL SCORES
+
+{string.Join("\n", assessments.Select(a => 
+    $"- **{a.CompletedAt:MMM dd, yyyy}**: {Math.Round(a.ComplianceScore, 1)}% {GenerateScoreBar(Convert.ToDouble(a.ComplianceScore))} ({a.TotalFindings} findings)"))}
+
+---
+
+## 🏆 BEST & WORST
+
+**Best Score:** {Math.Round(bestAssessment.ComplianceScore, 1)}% on {bestAssessment.CompletedAt:yyyy-MM-dd}
+**Worst Score:** {Math.Round(worstAssessment.ComplianceScore, 1)}% on {worstAssessment.CompletedAt:yyyy-MM-dd}
+**Range:** {Math.Round(bestAssessment.ComplianceScore - worstAssessment.ComplianceScore, 1)}% variance
+
+---
+
+## 💡 INSIGHTS
+
+{(assessments.Count < 3 ? "📌 Run more assessments to build a better trend analysis (3+ recommended)." : "")}
+{(trend.Direction == "improving" && latestScore < 90 ? $"📌 You're on track! Keep improving to reach 90% (currently {Math.Round(90 - latestScore, 1)}% away)." : "")}
+{(trend.Direction == "declining" ? "📌 Review recent infrastructure changes that may have introduced compliance issues." : "")}
+{(latestScore >= 90 ? "📌 Excellent! Maintain your current score with regular monitoring." : "")}
+
+**Next Steps:**
+- Run 'get compliance trends' for detailed analysis
+- Run 'get assessment audit log' to see who ran assessments
+- Run 'check NIST 800-53 compliance' for latest findings
+";
+
+            return JsonSerializer.Serialize(new
+            {
+                success = true,
+                formatted_output = output,
+                subscriptionId,
+                period = new
+                {
+                    days,
+                    startDate = cutoffDate,
+                    endDate = DateTime.UtcNow,
+                    assessmentCount = assessments.Count
+                },
+                trend = new
+                {
+                    direction = trend.Direction,
+                    changeRate = Math.Round(trend.ChangeRate, 2),
+                    scoreChange = Math.Round(scoreChange, 1),
+                    interpretation = trend.Direction == "improving" ? "Compliance is improving over time" :
+                                   trend.Direction == "declining" ? "Compliance is declining - needs attention" :
+                                   "Compliance remains stable"
+                },
+                currentStatus = new
+                {
+                    score = Math.Round(latestScore, 1),
+                    grade = GetComplianceGrade(Convert.ToDouble(latestScore)),
+                    date = assessments.Last().CompletedAt,
+                    findings = assessments.Last().TotalFindings
+                },
+                bestScore = Math.Round(bestAssessment.ComplianceScore, 1),
+                worstScore = Math.Round(worstAssessment.ComplianceScore, 1),
+                history = assessments.Select(a => new
+                {
+                    date = a.CompletedAt,
+                    score = Math.Round(a.ComplianceScore, 1),
+                    findings = a.TotalFindings,
+                    critical = a.CriticalFindings,
+                    high = a.HighFindings
+                })
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving compliance history");
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = $"Failed to retrieve compliance history: {ex.Message}"
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    [KernelFunction("get_assessment_audit_log")]
+    [Description("View audit trail of compliance assessments showing who ran them and when. " +
+                 "Useful for audit compliance, accountability, and tracking assessment frequency. " +
+                 "Example: 'Who ran compliance assessments this week?' or 'Show me audit log'")]
+    public async Task<string> GetAssessmentAuditLogAsync(
+        [Description("Azure subscription ID or friendly name. If not provided, uses default subscription.")] 
+        string? subscriptionIdOrName = null,
+        [Description("Number of days of audit history to retrieve (default: 7, max: 90)")] 
+        int days = 7,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Resolve subscription
+            var subscriptionId = await ResolveSubscriptionIdAsync(subscriptionIdOrName);
+            
+            // Limit days to reasonable range
+            days = Math.Min(Math.Max(days, 1), 90);
+            
+            var cutoffDate = DateTime.UtcNow.AddDays(-days);
+            
+            // Query audit log
+            var auditLog = await _dbContext.ComplianceAssessments
+                .Where(a => a.SubscriptionId == subscriptionId &&
+                            a.CompletedAt >= cutoffDate)
+                .OrderByDescending(a => a.CompletedAt)
+                .Select(a => new
+                {
+                    a.Id,
+                    a.StartedAt,
+                    a.CompletedAt,
+                    a.Duration,
+                    a.Status,
+                    a.InitiatedBy,
+                    a.ComplianceScore,
+                    a.TotalFindings,
+                    a.CriticalFindings,
+                    a.HighFindings,
+                    a.ResourceGroupName,
+                    a.AssessmentType
+                })
+                .ToListAsync(cancellationToken);
+
+            if (!auditLog.Any())
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = $"No assessments found in the last {days} days",
+                    subscriptionId,
+                    hint = "Run a compliance assessment to start building audit history"
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Group by user
+            var byUser = auditLog.GroupBy(a => a.InitiatedBy ?? "Unknown")
+                .Select(g => new
+                {
+                    user = g.Key,
+                    count = g.Count(),
+                    lastRun = g.Max(a => a.CompletedAt)
+                })
+                .OrderByDescending(u => u.count)
+                .ToList();
+
+            // Calculate statistics
+            var totalAssessments = auditLog.Count;
+            var avgDuration = auditLog.Where(a => a.Duration.HasValue)
+                .Select(a => TimeSpan.FromTicks(a.Duration!.Value).TotalSeconds)
+                .DefaultIfEmpty(0)
+                .Average();
+            var completedCount = auditLog.Count(a => a.Status == "Completed");
+            var failedCount = auditLog.Count(a => a.Status != "Completed");
+
+            var output = $@"
+# 📋 COMPLIANCE ASSESSMENT AUDIT LOG
+
+**Subscription:** `{subscriptionId}`
+**Period:** Last {days} days
+**Total Assessments:** {totalAssessments}
+
+---
+
+## 📊 SUMMARY
+
+| Metric | Value |
+|--------|-------|
+| ✅ **Completed** | {completedCount} |
+| ❌ **Failed** | {failedCount} |
+| ⏱️ **Avg Duration** | {Math.Round(avgDuration, 1)}s |
+| 👥 **Unique Users** | {byUser.Count} |
+
+---
+
+## 👥 ASSESSMENTS BY USER
+
+{string.Join("\n", byUser.Select(u => 
+    $"- **{u.user}**: {u.count} assessment{(u.count > 1 ? "s" : "")} (last: {u.lastRun:MMM dd, HH:mm})"))}
+
+---
+
+## 📝 RECENT ASSESSMENTS
+
+{string.Join("\n", auditLog.Take(10).Select(a => 
+    $@"### {a.CompletedAt:yyyy-MM-dd HH:mm} UTC
+- **ID:** `{a.Id}`
+- **User:** {a.InitiatedBy ?? "Unknown"}
+- **Status:** {(a.Status == "Completed" ? "✅" : "❌")} {a.Status}
+- **Score:** {Math.Round(a.ComplianceScore, 1)}% ({a.TotalFindings} findings: {a.CriticalFindings} critical, {a.HighFindings} high)
+- **Scope:** {(string.IsNullOrEmpty(a.ResourceGroupName) ? "Full subscription" : $"Resource group: {a.ResourceGroupName}")}
+- **Duration:** {(a.Duration.HasValue ? $"{Math.Round(TimeSpan.FromTicks(a.Duration.Value).TotalSeconds, 1)}s" : "N/A")}
+"))}
+
+{(auditLog.Count > 10 ? $"\n*Showing 10 of {auditLog.Count} assessments*" : "")}
+
+---
+
+## 💡 INSIGHTS
+
+{(totalAssessments < 5 ? "📌 Low assessment frequency - consider running weekly checks to track compliance drift." : "")}
+{(failedCount > 0 ? $"⚠️ {failedCount} assessment{(failedCount > 1 ? "s" : "")} failed - review logs for errors." : "")}
+{(avgDuration > 30 ? "⏱️ Assessments taking longer than expected - consider scoping to resource groups." : "")}
+{(byUser.Count == 1 ? "👤 Single user running assessments - consider sharing responsibility across team." : "")}
+
+**Next Steps:**
+- Run 'get compliance history' to see score trends
+- Run 'get compliance trends' for detailed analytics
+";
+
+            return JsonSerializer.Serialize(new
+            {
+                success = true,
+                formatted_output = output,
+                subscriptionId,
+                period = new { days, startDate = cutoffDate, endDate = DateTime.UtcNow },
+                statistics = new
+                {
+                    totalAssessments,
+                    completed = completedCount,
+                    failed = failedCount,
+                    averageDuration = Math.Round(avgDuration, 1),
+                    uniqueUsers = byUser.Count
+                },
+                byUser = byUser.Select(u => new
+                {
+                    user = u.user,
+                    assessmentCount = u.count,
+                    lastRun = u.lastRun
+                }),
+                recentAssessments = auditLog.Take(20).Select(a => new
+                {
+                    id = a.Id,
+                    date = a.CompletedAt,
+                    user = a.InitiatedBy,
+                    status = a.Status,
+                    score = Math.Round(a.ComplianceScore, 1),
+                    findings = a.TotalFindings,
+                    duration = a.Duration.HasValue ? TimeSpan.FromTicks(a.Duration.Value).TotalSeconds : (double?)null,
+                    scope = string.IsNullOrEmpty(a.ResourceGroupName) ? "subscription" : a.ResourceGroupName
+                })
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving audit log");
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = $"Failed to retrieve audit log: {ex.Message}"
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    [KernelFunction("get_compliance_trends")]
+    [Description("Analyze compliance trends with detailed metrics and comparison reports. " +
+                 "Shows which findings are increasing/decreasing, control family performance, and predictive insights. " +
+                 "Example: 'Analyze compliance trends for the last quarter' or 'What are my persistent compliance issues?'")]
+    public async Task<string> GetComplianceTrendsAsync(
+        [Description("Azure subscription ID or friendly name. If not provided, uses default subscription.")] 
+        string? subscriptionIdOrName = null,
+        [Description("Number of days to analyze (default: 90, max: 365)")] 
+        int days = 90,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Resolve subscription
+            var subscriptionId = await ResolveSubscriptionIdAsync(subscriptionIdOrName);
+            
+            // Limit days to reasonable range
+            days = Math.Min(Math.Max(days, 7), 365);
+            
+            var cutoffDate = DateTime.UtcNow.AddDays(-days);
+            
+            // Query assessments with findings
+            var assessments = await _dbContext.ComplianceAssessments
+                .Include(a => a.Findings)
+                .Where(a => a.SubscriptionId == subscriptionId &&
+                            a.CompletedAt >= cutoffDate &&
+                            a.Status == "Completed")
+                .OrderBy(a => a.CompletedAt)
+                .ToListAsync(cancellationToken);
+
+            if (assessments.Count < 2)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = $"Need at least 2 assessments for trend analysis (found: {assessments.Count})",
+                    subscriptionId,
+                    hint = "Run more compliance assessments over time to build trend data"
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Calculate overall trend
+            var scoreTrend = CalculateTrend(assessments.Select(a => (double)a.ComplianceScore).ToList());
+            
+            // Analyze findings trends
+            var firstAssessment = assessments.First();
+            var latestAssessment = assessments.Last();
+            
+            var findingChange = new
+            {
+                total = latestAssessment.TotalFindings - firstAssessment.TotalFindings,
+                critical = latestAssessment.CriticalFindings - firstAssessment.CriticalFindings,
+                high = latestAssessment.HighFindings - firstAssessment.HighFindings,
+                medium = latestAssessment.MediumFindings - firstAssessment.MediumFindings,
+                low = latestAssessment.LowFindings - firstAssessment.LowFindings
+            };
+
+            // Find persistent issues (findings in multiple assessments)
+            var allFindingIds = assessments
+                .SelectMany(a => a.Findings.Select(f => f.RuleId))
+                .GroupBy(id => id)
+                .Where(g => g.Count() >= Math.Max(2, assessments.Count / 2))
+                .Select(g => new { ruleId = g.Key, occurrences = g.Count() })
+                .OrderByDescending(f => f.occurrences)
+                .Take(10)
+                .ToList();
+
+            // Severity distribution over time
+            var severityTrends = new
+            {
+                critical = CalculateTrend(assessments.Select(a => (double)a.CriticalFindings).ToList()),
+                high = CalculateTrend(assessments.Select(a => (double)a.HighFindings).ToList()),
+                medium = CalculateTrend(assessments.Select(a => (double)a.MediumFindings).ToList()),
+                low = CalculateTrend(assessments.Select(a => (double)a.LowFindings).ToList())
+            };
+
+            var output = $@"
+# 📊 COMPLIANCE TRENDS ANALYSIS
+
+**Subscription:** `{subscriptionId}`
+**Analysis Period:** {days} days ({assessments.First().CompletedAt:MMM dd, yyyy} - {assessments.Last().CompletedAt:MMM dd, yyyy})
+**Assessments Analyzed:** {assessments.Count}
+
+---
+
+## 🎯 OVERALL TREND
+
+**Direction:** {scoreTrend.Direction.ToUpper()} {(scoreTrend.Direction != "stable" ? $"({Math.Abs(Math.Round(scoreTrend.ChangeRate, 1))}% change per assessment)" : "")}
+**Score Change:** {(latestAssessment.ComplianceScore >= firstAssessment.ComplianceScore ? "+" : "")}{Math.Round(latestAssessment.ComplianceScore - firstAssessment.ComplianceScore, 1)}%
+**Current:** {Math.Round(latestAssessment.ComplianceScore, 1)}% (was {Math.Round(firstAssessment.ComplianceScore, 1)}%)
+
+{(scoreTrend.Direction == "improving" ? "✅ **Excellent!** Compliance is trending upward." :
+  scoreTrend.Direction == "declining" ? "⚠️ **Alert!** Compliance is trending downward - immediate attention needed." :
+  "ℹ️ Compliance remains relatively stable.")}
+
+---
+
+## 📈 FINDINGS TRENDS
+
+| Severity | Change | Trend | Current |
+|----------|--------|-------|---------|
+| 🔴 **Critical** | {(findingChange.critical >= 0 ? "+" : "")}{findingChange.critical} | {severityTrends.critical.Direction} | {latestAssessment.CriticalFindings} |
+| 🟠 **High** | {(findingChange.high >= 0 ? "+" : "")}{findingChange.high} | {severityTrends.high.Direction} | {latestAssessment.HighFindings} |
+| 🟡 **Medium** | {(findingChange.medium >= 0 ? "+" : "")}{findingChange.medium} | {severityTrends.medium.Direction} | {latestAssessment.MediumFindings} |
+| 🟢 **Low** | {(findingChange.low >= 0 ? "+" : "")}{findingChange.low} | {severityTrends.low.Direction} | {latestAssessment.LowFindings} |
+| **Total** | {(findingChange.total >= 0 ? "+" : "")}{findingChange.total} | | {latestAssessment.TotalFindings} |
+
+---
+
+## 🔁 PERSISTENT ISSUES
+
+{(allFindingIds.Any() ? 
+    $"*Issues appearing in {Math.Max(2, assessments.Count / 2)}+ assessments:*\n\n" +
+    string.Join("\n", allFindingIds.Select(f => 
+        $"- **{f.ruleId}**: Appeared in {f.occurrences}/{assessments.Count} assessments")) :
+    "*No persistent issues found - findings are being resolved!*")}
+
+---
+
+## 📊 SCORE TIMELINE
+
+{string.Join("\n", assessments.Select(a => 
+    $"- **{a.CompletedAt:MMM dd}**: {Math.Round(a.ComplianceScore, 1)}% {GenerateScoreBar(Convert.ToDouble(a.ComplianceScore))}"))}
+
+---
+
+## 💡 INSIGHTS & RECOMMENDATIONS
+
+{(scoreTrend.Direction == "improving" && latestAssessment.ComplianceScore < 90 ? 
+    $"📈 You're making progress! At current rate, you could reach 90% in approximately {Math.Ceiling((90 - (double)latestAssessment.ComplianceScore) / Math.Abs(scoreTrend.ChangeRate))} assessments." : "")}
+
+{(scoreTrend.Direction == "declining" ? 
+    "⚠️ **Action Required:** Investigate recent infrastructure changes. Review the persistent issues above." : "")}
+
+{(findingChange.critical > 0 ? 
+    $"🔴 **Critical Alert:** {findingChange.critical} new critical finding{(Math.Abs(findingChange.critical) > 1 ? "s" : "")} since {firstAssessment.CompletedAt:MMM dd}. Immediate remediation needed!" : "")}
+
+{(allFindingIds.Any() ? 
+    $"🔁 {allFindingIds.Count} persistent issue{(allFindingIds.Count > 1 ? "s" : "")} detected. These require strategic remediation or policy changes." : "")}
+
+{(scoreTrend.Direction == "stable" && latestAssessment.ComplianceScore >= 90 ? 
+    "✅ **Excellent!** Maintaining high compliance. Continue regular monitoring." : "")}
+
+**Recommended Actions:**
+{(findingChange.critical > 0 ? "1. Generate remediation plan for critical findings\n" : "")}
+{(allFindingIds.Any() ? $"{(findingChange.critical > 0 ? "2" : "1")}. Address persistent issues with policy/process changes\n" : "")}
+{(scoreTrend.Direction == "declining" ? $"{(findingChange.critical > 0 || allFindingIds.Any() ? "3" : "1")}. Review recent deployments for compliance drift\n" : "")}
+- Run 'get control family details' for specific issue breakdown
+- Set up automated weekly assessments to catch drift early
+";
+
+            return JsonSerializer.Serialize(new
+            {
+                success = true,
+                formatted_output = output,
+                subscriptionId,
+                analysisperiod = new
+                {
+                    days,
+                    startDate = firstAssessment.CompletedAt,
+                    endDate = latestAssessment.CompletedAt,
+                    assessmentCount = assessments.Count
+                },
+                overallTrend = new
+                {
+                    direction = scoreTrend.Direction,
+                    changeRate = Math.Round(scoreTrend.ChangeRate, 2),
+                    scoreChange = Math.Round((double)(latestAssessment.ComplianceScore - firstAssessment.ComplianceScore), 1),
+                    currentScore = Math.Round(latestAssessment.ComplianceScore, 1),
+                    previousScore = Math.Round(firstAssessment.ComplianceScore, 1)
+                },
+                findingsTrends = new
+                {
+                    total = findingChange.total,
+                    critical = new { change = findingChange.critical, trend = severityTrends.critical.Direction },
+                    high = new { change = findingChange.high, trend = severityTrends.high.Direction },
+                    medium = new { change = findingChange.medium, trend = severityTrends.medium.Direction },
+                    low = new { change = findingChange.low, trend = severityTrends.low.Direction }
+                },
+                persistentIssues = allFindingIds.Select(f => new
+                {
+                    ruleId = f.ruleId,
+                    occurrences = f.occurrences,
+                    percentage = Math.Round((double)f.occurrences / assessments.Count * 100, 0)
+                }),
+                recommendations = new[]
+                {
+                    findingChange.critical > 0 ? "Immediately address new critical findings" : null,
+                    allFindingIds.Any() ? "Create strategic plan for persistent issues" : null,
+                    scoreTrend.Direction == "declining" ? "Review recent infrastructure changes" : null,
+                    scoreTrend.Direction == "improving" ? "Continue current compliance practices" : null
+                }.Where(r => r != null)
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error analyzing compliance trends");
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = $"Failed to analyze trends: {ex.Message}"
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+    }
+
+    #endregion
+
+    #region Database Caching Helpers
+
+    /// <summary>
+    /// Retrieves a cached compliance assessment from the database if available and not expired.
+    /// </summary>
+    private async Task<ComplianceAssessment?> GetCachedAssessmentAsync(
+        string subscriptionId, 
+        string? resourceGroupName, 
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var cutoff = DateTime.UtcNow.AddHours(-ASSESSMENT_CACHE_HOURS);
+            
+            var query = _dbContext.ComplianceAssessments
+                .Include(a => a.Findings)
+                .Where(a => a.SubscriptionId == subscriptionId &&
+                            a.ResourceGroupName == resourceGroupName &&
+                            a.CompletedAt >= cutoff &&
+                            a.Status == "Completed");
+            
+            var cached = await query
+                .OrderByDescending(a => a.CompletedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+            
+            return cached;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to retrieve cached assessment from database");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Saves a compliance assessment and its findings to the database for future caching.
+    /// </summary>
+    private async Task<string?> SaveAssessmentToDbAsync(
+        object assessmentData,
+        List<AtoFinding> allFindings,
+        string subscriptionId,
+        string? resourceGroupName,
+        decimal complianceScore,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var assessmentId = Guid.NewGuid().ToString();
+            var now = DateTime.UtcNow;
+            
+            var dbAssessment = new ComplianceAssessment
+            {
+                Id = assessmentId,
+                SubscriptionId = subscriptionId,
+                ResourceGroupName = resourceGroupName,
+                AssessmentType = "NIST-800-53",
+                Status = "Completed",
+                ComplianceScore = complianceScore,
+                TotalFindings = allFindings.Count,
+                CriticalFindings = allFindings.Count(f => f.Severity == AtoFindingSeverity.Critical),
+                HighFindings = allFindings.Count(f => f.Severity == AtoFindingSeverity.High),
+                MediumFindings = allFindings.Count(f => f.Severity == AtoFindingSeverity.Medium),
+                LowFindings = allFindings.Count(f => f.Severity == AtoFindingSeverity.Low),
+                InformationalFindings = allFindings.Count(f => f.Severity == AtoFindingSeverity.Informational),
+                Results = JsonSerializer.Serialize(assessmentData),
+                StartedAt = now,
+                CompletedAt = now,
+                Duration = 0, // Store as ticks (long)
+                InitiatedBy = "Platform-Copilot",
+                Findings = new List<ComplianceFinding>()
+            };
+
+            // Map findings to database entities
+            foreach (var finding in allFindings.Take(1000)) // Limit to 1000 findings to avoid DB bloat
+            {
+                dbAssessment.Findings.Add(new ComplianceFinding
+                {
+                    Id = Guid.NewGuid(),
+                    AssessmentId = assessmentId,
+                    FindingId = finding.Id,
+                    RuleId = finding.RuleId,
+                    Title = finding.Title,
+                    Description = finding.Description,
+                    Severity = finding.Severity.ToString(),
+                    ComplianceStatus = finding.ComplianceStatus.ToString(),
+                    FindingType = finding.FindingType.ToString(),
+                    ResourceId = finding.ResourceId,
+                    ResourceType = finding.ResourceType,
+                    ResourceName = finding.ResourceName,
+                    ControlId = finding.AffectedNistControls.FirstOrDefault(),
+                    ComplianceFrameworks = finding.ComplianceFrameworks.Any() 
+                        ? JsonSerializer.Serialize(finding.ComplianceFrameworks) 
+                        : null,
+                    AffectedNistControls = finding.AffectedNistControls.Any() 
+                        ? JsonSerializer.Serialize(finding.AffectedNistControls) 
+                        : null,
+                    Evidence = finding.Evidence,
+                    Remediation = finding.RemediationGuidance,
+                    Metadata = finding.Metadata.Any() 
+                        ? JsonSerializer.Serialize(finding.Metadata) 
+                        : null,
+                    IsRemediable = finding.IsRemediable,
+                    IsAutomaticallyFixable = finding.IsAutoRemediable,
+                    DetectedAt = finding.DetectedAt
+                });
+            }
+
+            _dbContext.ComplianceAssessments.Add(dbAssessment);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            
+            _logger.LogInformation(
+                "✅ Saved assessment {AssessmentId} to database with {FindingCount} findings for future caching",
+                assessmentId, dbAssessment.Findings.Count);
+            
+            return assessmentId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save assessment to database - continuing without cache");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Formats a cached assessment into the same JSON structure as a fresh assessment.
+    /// </summary>
+    private string FormatCachedAssessment(ComplianceAssessment cached, string scope, TimeSpan cacheAge)
+    {
+        try
+        {
+            // Deserialize the stored assessment data
+            var assessmentData = JsonSerializer.Deserialize<JsonElement>(cached.Results ?? "{}");
+            
+            // Add cache metadata to the response
+            var response = new Dictionary<string, object?>
+            {
+                ["success"] = true,
+                ["cached"] = true,
+                ["cacheAge"] = $"{Math.Round(cacheAge.TotalMinutes, 1)} minutes",
+                ["cachedAt"] = cached.CompletedAt,
+                ["assessmentId"] = cached.Id,
+                ["subscriptionId"] = cached.SubscriptionId,
+                ["resourceGroupName"] = cached.ResourceGroupName,
+                ["scope"] = scope,
+                ["timestamp"] = cached.CompletedAt,
+                ["duration"] = cached.Duration
+            };
+
+            // Merge the original assessment data
+            if (assessmentData.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in assessmentData.EnumerateObject())
+                {
+                    if (!response.ContainsKey(property.Name))
+                    {
+                        response[property.Name] = property.Value;
+                    }
+                }
+            }
+
+            // Add cache notice to formatted_output if it exists
+            if (response.TryGetValue("formatted_output", out var formattedOutput) && formattedOutput is JsonElement elem)
+            {
+                var output = elem.GetString() ?? "";
+                var cacheNotice = $"\n\n---\n\n🔄 **CACHED RESULTS** (Age: {Math.Round(cacheAge.TotalMinutes, 1)} minutes, expires in {Math.Round((ASSESSMENT_CACHE_HOURS * 60) - cacheAge.TotalMinutes, 1)} minutes)\n";
+                response["formatted_output"] = output.Replace("# 📊 NIST 800-53 COMPLIANCE ASSESSMENT", 
+                    $"# 📊 NIST 800-53 COMPLIANCE ASSESSMENT{cacheNotice}");
+            }
+
+            return JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to format cached assessment - will run fresh assessment");
+            throw; // This will cause the caller to run a fresh assessment
+        }
+    }
+
+    /// <summary>
+    /// Calculates trend direction and rate of change from a list of values over time.
+    /// </summary>
+    /// <param name="values">List of values in chronological order</param>
+    /// <returns>Trend analysis with direction and change rate</returns>
+    private (string Direction, double ChangeRate) CalculateTrend(List<double> values)
+    {
+        if (values.Count < 2)
+        {
+            return ("stable", 0);
+        }
+
+        // Calculate simple linear regression slope
+        var n = values.Count;
+        var xValues = Enumerable.Range(0, n).Select(i => (double)i).ToList();
+        
+        var xMean = xValues.Average();
+        var yMean = values.Average();
+        
+        var numerator = xValues.Zip(values, (x, y) => (x - xMean) * (y - yMean)).Sum();
+        var denominator = xValues.Sum(x => Math.Pow(x - xMean, 2));
+        
+        var slope = denominator != 0 ? numerator / denominator : 0;
+        
+        // Determine direction based on slope
+        // Threshold: 0.5% change per assessment is considered "stable"
+        var direction = Math.Abs(slope) < 0.5 ? "stable" :
+                       slope > 0 ? "improving" : "declining";
+        
+        return (direction, slope);
+    }
+
+    #endregion
 
     #endregion
 }

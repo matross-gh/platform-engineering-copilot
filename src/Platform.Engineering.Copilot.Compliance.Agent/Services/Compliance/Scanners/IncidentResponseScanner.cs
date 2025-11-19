@@ -66,8 +66,8 @@ public class IncidentResponseScanner : IComplianceScanner
                 break;
         }
 
-        // Enrich all findings with auto-remediation information
-        return findings.WithAutoRemediationInfo();
+        // Enrich all findings with auto-remediation information and source
+        return findings.WithAutoRemediationInfo().WithSource("NIST Scanner");
     }
 
 

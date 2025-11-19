@@ -9,7 +9,6 @@ using Platform.Engineering.Copilot.Core.Interfaces.KnowledgeBase;
 using Platform.Engineering.Copilot.Core.Interfaces.Cache;
 using Platform.Engineering.Copilot.Core.Services.Cache;
 using Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
-using Platform.Engineering.Copilot.Compliance.Agent.Services.KnowledgeBase;
 using Platform.Engineering.Copilot.Compliance.Agent.Services.PullRequest;
 using Platform.Engineering.Copilot.Core.Services.Compliance;
 using Platform.Engineering.Copilot.Core.Services.Jobs;
@@ -26,6 +25,7 @@ using Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 using Platform.Engineering.Copilot.Core.Services.Notifications;
 using Platform.Engineering.Copilot.Core.Interfaces.Jobs;
 using Platform.Engineering.Copilot.Core.Configuration;
+using Platform.Engineering.Copilot.Compliance.Agent.Extensions; // For AddEnhancedAtoCompliance
 
 namespace Platform.Engineering.Copilot.Compliance.Core.Extensions;
 
@@ -37,11 +37,17 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Add Compliance domain services (ComplianceAgent, CompliancePlugin) to the dependency injection container
     /// </summary>
-    public static IServiceCollection AddComplianceAgent(this IServiceCollection services)
+    public static IServiceCollection AddComplianceAgent(this IServiceCollection services, IConfiguration configuration)
     {
+        // Note: Configuration is registered in Program.cs from AgentConfiguration:ComplianceAgent section
+        
         // Register caching services
         services.AddMemoryCache(); // Required for IMemoryCache
         services.AddSingleton<IIntelligentChatCacheService, IntelligentChatCacheService>();
+        
+        // Register Knowledge Base Services (RMF, STIG, DoD Instructions, etc.) - required by AtoComplianceEngine
+        // This must be called before registering AtoComplianceEngine
+        ComplianceAgentCollectionExtensions.AddEnhancedAtoCompliance(services, configuration);
         
         // Register Semantic Kernel with Plugins (required by IntelligentChatService)
         // CHANGED TO TRANSIENT to avoid circular dependency deadlock
@@ -121,13 +127,6 @@ public static class ServiceCollectionExtensions
         // Register NIST Controls Service - Singleton (no DbContext dependency)
         services.AddSingleton<INistControlsService, NistControlsService>();
         
-        // Register Knowledge Base Services - Singleton (no DbContext dependency)
-        services.AddSingleton<IStigKnowledgeService, StigKnowledgeService>();
-        services.AddSingleton<IDoDInstructionService, DoDInstructionService>();
-        services.AddSingleton<IRmfKnowledgeService, RmfKnowledgeService>();
-        services.AddSingleton<IDoDWorkflowService, DoDWorkflowService>();
-        // TODO: Add IImpactLevelService implementation
-        
         // Register Compliance Metrics Service - Singleton (no DbContext dependency)
         services.AddSingleton<ComplianceMetricsService>();
         
@@ -139,6 +138,9 @@ public static class ServiceCollectionExtensions
         
         // Register ATO Remediation Engine - Scoped (indirectly depends on AtoComplianceEngine)
         services.AddScoped<IAtoRemediationEngine, AtoRemediationEngine>();
+
+        // Register Evidence Storage Service - Scoped (stores compliance evidence to Azure Blob Storage)
+        services.AddScoped<EvidenceStorageService>();
 
         // Register Code Scanning Engine - Scoped (orchestrates security analysis tools)
         services.AddScoped<ICodeScanningEngine, CodeScanningEngine>();
@@ -245,9 +247,9 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Add semantic processing services with custom configuration
     /// </summary>
-    public static IServiceCollection AddSemanticProcessing(this IServiceCollection services)
+    public static IServiceCollection AddSemanticProcessing(this IServiceCollection services, IConfiguration configuration)
     {
-        return services.AddComplianceAgent();
+        return services.AddComplianceAgent(configuration);
     }
 
     /// <summary>

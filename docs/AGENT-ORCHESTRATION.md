@@ -37,19 +37,47 @@ The Platform Engineering Copilot supports selective agent loading through config
 
 ### Location
 
-Agent configuration is stored in `appsettings.json` under the `AgentConfiguration` section.
+Agent configuration is stored in `appsettings.json` under the `AgentConfiguration` section, with each agent having its own `Enabled` property.
 
 ### Format
 
 ```json
 {
   "AgentConfiguration": {
-    "EnabledAgents": {
-      "Infrastructure": true,
-      "CostManagement": true,
-      "Environment": true,
-      "Discovery": true,
-      "Compliance": true
+    "InfrastructureAgent": {
+      "Enabled": true,
+      "Temperature": 0.4,
+      "MaxTokens": 8000,
+      "DefaultRegion": "usgovvirginia",
+      "EnableComplianceEnhancement": true
+    },
+    "ComplianceAgent": {
+      "Enabled": true,
+      "Temperature": 0.2,
+      "MaxTokens": 6000,
+      "EnableAutomatedRemediation": true,
+      "DefaultFramework": "NIST80053"
+    },
+    "CostManagementAgent": {
+      "Enabled": true,
+      "Temperature": 0.3,
+      "MaxTokens": 4000,
+      "DefaultCurrency": "USD"
+    },
+    "DiscoveryAgent": {
+      "Enabled": true,
+      "Temperature": 0.3,
+      "MaxTokens": 4000,
+      "EnableHealthMonitoring": true
+    },
+    "EnvironmentAgent": {
+      "Enabled": true
+    },
+    "SecurityAgent": {
+      "Enabled": true
+    },
+    "KnowledgeBaseAgent": {
+      "Enabled": true
     }
   }
 }
@@ -69,12 +97,14 @@ Agent configuration is stored in `appsettings.json` under the `AgentConfiguratio
 
 ### Environment Variables
 
-Override configuration via environment variables:
+Override configuration via environment variables (use double underscores for nesting):
 
 ```bash
-export AgentConfiguration__EnabledAgents__Infrastructure=true
-export AgentConfiguration__EnabledAgents__CostManagement=false
-export AgentConfiguration__EnabledAgents__Discovery=true
+export AgentConfiguration__InfrastructureAgent__Enabled=true
+export AgentConfiguration__CostManagementAgent__Enabled=false
+export AgentConfiguration__InfrastructureAgent__Temperature=0.5
+export AgentConfiguration__ComplianceAgent__DefaultFramework=FedRAMPHigh
+export AgentConfiguration__DiscoveryAgent__EnableHealthMonitoring=false
 ```
 
 ---
@@ -88,11 +118,21 @@ export AgentConfiguration__EnabledAgents__Discovery=true
 ```json
 {
   "AgentConfiguration": {
-    "EnabledAgents": {
-      "Infrastructure": true,
-      "CostManagement": true,
-      "Environment": false,
-      "Discovery": true
+    "InfrastructureAgent": {
+      "Enabled": true,
+      "Temperature": 0.4,
+      "MaxTokens": 8000
+    },
+    "CostManagementAgent": {
+      "Enabled": true
+    },
+    "EnvironmentAgent": {
+      "Enabled": false
+    },
+    "DiscoveryAgent": {
+      "Enabled": true,
+      "Temperature": 0.3,
+      "EnableHealthMonitoring": true
     }
   }
 }
@@ -103,6 +143,12 @@ export AgentConfiguration__EnabledAgents__Discovery=true
 At startup, `Program.cs` reads the configuration and conditionally registers agents:
 
 ```csharp
+// Configure agent options from nested sections
+builder.Services.Configure<InfrastructureAgentOptions>(
+    builder.Configuration.GetSection("AgentConfiguration:InfrastructureAgent"));
+builder.Services.Configure<DiscoveryAgentOptions>(
+    builder.Configuration.GetSection("AgentConfiguration:DiscoveryAgent"));
+
 // Load configuration
 var agentConfig = builder.Configuration
     .GetSection(AgentConfiguration.SectionName)
@@ -190,18 +236,18 @@ public class OrchestratorAgent
 appsettings.json              Program.cs                    OrchestratorAgent
 ===============              ==========                    =================
 {                            
-  "EnabledAgents": {         if (IsEnabled("Infrastructure"))
-    "Infrastructure": true     ├─> AddInfrastructureAgent()  
-    "CostManagement": true     │   ├─> Register InfrastructureAgent
-    "Environment": false   ────┼───│   └─> as ISpecializedAgent    ──┐
-    "Discovery": true          │   │                                 │
-  }                            │   └─> Register services             │
-}                              │                                     │
-                               if (IsEnabled("CostManagement"))     │
-                                 ├─> AddCostManagementAgent()        │
-                                 │   └─> Register as ISpecializedAgent ──> IEnumerable<ISpecializedAgent>
-                                 │                                  │    (Auto-injected into constructor)
-                               if (IsEnabled("Environment"))        │    
+  "AgentConfiguration": {    if (IsEnabled("Infrastructure"))
+    "InfrastructureAgent": {   ├─> AddInfrastructureAgent()  
+      "Enabled": true          │   ├─> Register InfrastructureAgent
+    },                         │   └─> as ISpecializedAgent    ──┐
+    "CostManagementAgent": {   │                                 │
+      "Enabled": true  ────┼───└─> Register services             │
+    },                         │                                     │
+    "EnvironmentAgent": {      if (IsEnabled("CostManagement"))     │
+      "Enabled": false         │ ├─> AddCostManagementAgent()        │
+    }                          │ └─> Register as ISpecializedAgent ──> IEnumerable<ISpecializedAgent>
+  }                            │                                  │    (Auto-injected into constructor)
+}                              if (IsEnabled("Environment"))        │    
                                  └─> [SKIPPED - disabled]           │    Only contains:
                                                                      │    • InfrastructureAgent
                                if (IsEnabled("Discovery"))          │    • CostManagementAgent  
@@ -222,15 +268,29 @@ For basic infrastructure operations:
 ```json
 {
   "AgentConfiguration": {
-    "EnabledAgents": {
-      "Infrastructure": true,
-      "CostManagement": false,
-      "Environment": false,
-      "Discovery": true,
-      "ServiceCreation": false,
-      "Compliance": false,
-      "Security": false,
-      "Document": false
+    "InfrastructureAgent": {
+      "Enabled": true
+    },
+    "CostManagementAgent": {
+      "Enabled": false
+    },
+    "EnvironmentAgent": {
+      "Enabled": false
+    },
+    "DiscoveryAgent": {
+      "Enabled": true
+    },
+    "ServiceCreationAgent": {
+      "Enabled": false
+    },
+    "ComplianceAgent": {
+      "Enabled": false
+    },
+    "SecurityAgent": {
+      "Enabled": false
+    },
+    "DocumentAgent": {
+      "Enabled": false
     }
   }
 }
@@ -245,15 +305,29 @@ For local development with all features:
 ```json
 {
   "AgentConfiguration": {
-    "EnabledAgents": {
-      "Infrastructure": true,
-      "CostManagement": true,
-      "Environment": true,
-      "Discovery": true,
-      "ServiceCreation": true,
-      "Compliance": true,
-      "Security": true,
-      "Document": true
+    "InfrastructureAgent": {
+      "Enabled": true
+    },
+    "CostManagementAgent": {
+      "Enabled": true
+    },
+    "EnvironmentAgent": {
+      "Enabled": true
+    },
+    "DiscoveryAgent": {
+      "Enabled": true
+    },
+    "ServiceCreationAgent": {
+      "Enabled": true
+    },
+    "ComplianceAgent": {
+      "Enabled": true
+    },
+    "SecurityAgent": {
+      "Enabled": true
+    },
+    "DocumentAgent": {
+      "Enabled": true
     }
   }
 }
@@ -268,15 +342,29 @@ For production DoD environments with compliance requirements:
 ```json
 {
   "AgentConfiguration": {
-    "EnabledAgents": {
-      "Infrastructure": true,
-      "CostManagement": true,
-      "Environment": true,
-      "Discovery": true,
-      "ServiceCreation": true,
-      "Compliance": true,  // ← Required for IL5/IL6
-      "Security": true,     // ← Required for IL5/IL6
-      "Document": false
+    "InfrastructureAgent": {
+      "Enabled": true
+    },
+    "CostManagementAgent": {
+      "Enabled": true
+    },
+    "EnvironmentAgent": {
+      "Enabled": true
+    },
+    "DiscoveryAgent": {
+      "Enabled": true
+    },
+    "ServiceCreationAgent": {
+      "Enabled": true
+    },
+    "ComplianceAgent": {
+      "Enabled": true  // ← Required for IL5/IL6
+    },
+    "SecurityAgent": {
+      "Enabled": true   // ← Required for IL5/IL6
+    },
+    "DocumentAgent": {
+      "Enabled": false
     }
   }
 }
@@ -291,15 +379,29 @@ For cost management and analysis only:
 ```json
 {
   "AgentConfiguration": {
-    "EnabledAgents": {
-      "Infrastructure": false,
-      "CostManagement": true,
-      "Environment": false,
-      "Discovery": true,
-      "ServiceCreation": false,
-      "Compliance": false,
-      "Security": false,
-      "Document": false
+    "InfrastructureAgent": {
+      "Enabled": false
+    },
+    "CostManagementAgent": {
+      "Enabled": true
+    },
+    "EnvironmentAgent": {
+      "Enabled": false
+    },
+    "DiscoveryAgent": {
+      "Enabled": true
+    },
+    "ServiceCreationAgent": {
+      "Enabled": false
+    },
+    "ComplianceAgent": {
+      "Enabled": false
+    },
+    "SecurityAgent": {
+      "Enabled": false
+    },
+    "DocumentAgent": {
+      "Enabled": false
     }
   }
 }
@@ -314,15 +416,29 @@ For compliance scanning and reporting:
 ```json
 {
   "AgentConfiguration": {
-    "EnabledAgents": {
-      "Infrastructure": false,
-      "CostManagement": false,
-      "Environment": false,
-      "Discovery": true,
-      "ServiceCreation": false,
-      "Compliance": true,
-      "Security": true,
-      "Document": false
+    "InfrastructureAgent": {
+      "Enabled": false
+    },
+    "CostManagementAgent": {
+      "Enabled": false
+    },
+    "EnvironmentAgent": {
+      "Enabled": false
+    },
+    "DiscoveryAgent": {
+      "Enabled": true
+    },
+    "ServiceCreationAgent": {
+      "Enabled": false
+    },
+    "ComplianceAgent": {
+      "Enabled": true
+    },
+    "SecurityAgent": {
+      "Enabled": true
+    },
+    "DocumentAgent": {
+      "Enabled": false
     }
   }
 }

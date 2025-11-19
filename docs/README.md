@@ -1,7 +1,7 @@
 # Platform Engineering Copilot - Documentation
 
 > **Comprehensive documentation for the Platform Engineering Copilot system**  
-> **Total Documents:** 15 (consolidated from 27 on Nov 2025)
+> **Total Documents:** 15 
 
 ---
 

@@ -32,7 +32,8 @@ public class OrchestratorAgent
         SharedMemory sharedMemory,
         ExecutionPlanValidator planValidator,
         ExecutionPlanCache planCache,
-        ILogger<OrchestratorAgent> logger)
+        ILogger<OrchestratorAgent> logger,
+        Platform.Engineering.Copilot.Core.Plugins.ConfigurationPlugin configurationPlugin)
     {
         _logger = logger;
         _sharedMemory = sharedMemory;
@@ -41,6 +42,9 @@ public class OrchestratorAgent
 
         // Create orchestrator's own kernel
         _kernel = semanticKernelService.CreateSpecializedKernel(AgentType.Orchestrator);
+        
+        // Register shared configuration plugin (set_azure_subscription, get_azure_subscription, etc.)
+        _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(configurationPlugin, "ConfigurationPlugin"));
         
         // Try to get chat completion service - make it optional
         try
@@ -275,7 +279,7 @@ User: ""{userMessage}""
 
 Create JSON execution plan:
 {{
-  ""primaryIntent"": ""infrastructure|compliance|cost|environment|discovery|ServiceCreation|mixed"",
+  ""primaryIntent"": ""infrastructure|compliance|cost|environment|discovery|ServiceCreation|knowledge|mixed"",
   ""tasks"": [{{ ""agentType"": ""Infrastructure"", ""description"": ""task"", ""priority"": 1, ""isCritical"": true }}],
   ""executionPattern"": ""Sequential|Parallel|Collaborative"",
   ""estimatedTimeSeconds"": 30
@@ -286,12 +290,14 @@ CRITICAL Rules (apply in order):
 2. **Azure context configuration** (""use subscription""/""set tenant""/""set authentication""/""what subscription""/""azure context"") → Infrastructure agent with task description EXACTLY matching user message (prefix with ""Azure config: ""), primaryIntent: ""infrastructure""
    - CRITICAL: For context config, DO NOT add ""create"", ""deploy"", or ""template"" - just pass the user message
    - Example: User says ""Use subscription 123"" → task description: ""Azure config: Use subscription 123"" (NOT ""Create infrastructure using subscription 123"")
-3. **Compliance scanning** (""check""/""scan""/""assess"" + compliance) → Compliance agent, primaryIntent: ""compliance""
-4. **Template generation** (""create""/""deploy""/""I need"" infra) → Infrastructure agent, primaryIntent: ""infrastructure""
-5. **Cost analysis** (""cost""/""price""/""estimate"") → Cost Management agent, primaryIntent: ""cost""
-6. **Discovery and inventory** (""list""/""find""/""discover""/""inventory"") → Discovery agent, primaryIntent: ""discovery""
-7. **Actual provisioning** (""actually provision""/""make it live"") → All 5 agents Sequential
-8. **Informational** (""What are...""/""How do..."") → Single relevant agent
+3. **Informational questions about compliance/NIST/STIGs** (""what is""/""explain""/""show me""/""what controls""/""what nist""/""map nist to stig"") → KnowledgeBase agent ONLY, primaryIntent: ""knowledge""
+   - Examples: ""what is CM family"", ""explain RMF"", ""what nist controls map to stigs"", ""show me IL5 requirements""
+   - DO NOT route to Compliance agent unless explicitly requesting assessment/scan
+4. **Compliance scanning/assessment** (""check""/""scan""/""assess"" + subscription/resource) → Compliance agent, primaryIntent: ""compliance""
+5. **Template generation** (""create""/""deploy""/""I need"" infra) → Infrastructure agent, primaryIntent: ""infrastructure""
+6. **Cost analysis** (""cost""/""price""/""estimate"") → Cost Management agent, primaryIntent: ""cost""
+7. **Discovery and inventory** (""list""/""find""/""discover""/""inventory"") → Discovery agent, primaryIntent: ""discovery""
+8. **Actual provisioning** (""actually provision""/""make it live"") → All agents Sequential
 
 Default: Template generation (Infrastructure only) - safe, no real Azure resources.
 
@@ -598,6 +604,7 @@ Synthesized response:";
         AgentType.Environment => "Manage environment lifecycle, clone environments, track deployments",
         AgentType.Discovery => "Discover and inventory existing resources, monitor health status, scan subscriptions",
         AgentType.ServiceCreation => "Onboard new missions and teams, gather requirements for new projects",
+        AgentType.KnowledgeBase => "Answer INFORMATIONAL questions about NIST 800-53 controls, STIGs, DoD frameworks, RMF processes, Impact Levels, and compliance mappings. Use for: explaining controls, describing frameworks, mapping NIST to STIGs/CCIs, understanding DoD policies. Does NOT perform assessments.",
         AgentType.Orchestrator => "Coordinate and plan execution across specialized agents for complex multi-step operations",
         _ => "General platform engineering tasks"
     };
@@ -696,6 +703,7 @@ Synthesized response:";
             "environment" => AgentType.Environment,
             "discovery" => AgentType.Discovery,
             "servicecreation" => AgentType.ServiceCreation,
+            "knowledgebase" => AgentType.KnowledgeBase,
             "orchestrator" => AgentType.Orchestrator,
             _ => AgentType.Infrastructure
         };

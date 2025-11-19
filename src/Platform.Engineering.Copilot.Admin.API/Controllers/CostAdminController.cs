@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Platform.Engineering.Copilot.Core.Interfaces;
+using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Models;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;

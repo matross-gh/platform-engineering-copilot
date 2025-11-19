@@ -10,6 +10,7 @@ using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 using Platform.Engineering.Copilot.Core.Configuration;
 using Platform.Engineering.Copilot.Discovery.Agent;
+using Platform.Engineering.Copilot.Discovery.Core.Configuration;
 
 namespace Platform.Engineering.Copilot.Discovery.Core;
 
@@ -26,26 +27,34 @@ public class DiscoveryAgent : ISpecializedAgent
     private readonly ILogger<DiscoveryAgent> _logger;
     private readonly AzureMcpClient _azureMcpClient;
     private readonly string? _defaultSubscriptionId;
+    private readonly DiscoveryAgentOptions _options;
 
     public DiscoveryAgent(
         ISemanticKernelService semanticKernelService,
         ILogger<DiscoveryAgent> logger,
         AzureResourceDiscoveryPlugin AzureResourceDiscoveryPlugin,
         AzureMcpClient azureMcpClient,
-        IOptions<AzureGatewayOptions> azureOptions)
+        IOptions<AzureGatewayOptions> azureOptions,
+        Platform.Engineering.Copilot.Core.Plugins.ConfigurationPlugin configurationPlugin,
+        IOptions<DiscoveryAgentOptions> options)
     {
         _logger = logger;
         _azureMcpClient = azureMcpClient;
         _defaultSubscriptionId = azureOptions.Value.SubscriptionId;
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         
         // Create specialized kernel for discovery operations
         _kernel = semanticKernelService.CreateSpecializedKernel(AgentType.Discovery);
         _chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
 
+        // Register shared configuration plugin (set_azure_subscription, get_azure_subscription, etc.)
+        _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(configurationPlugin, "ConfigurationPlugin"));
+        
         // Register resource discovery plugin
         _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(AzureResourceDiscoveryPlugin, "AzureResourceDiscoveryPlugin"));
 
-        _logger.LogInformation("✅ Discovery Agent initialized with specialized kernel + Azure MCP integration");
+        _logger.LogInformation("✅ Discovery Agent initialized (Temperature: {Temperature}, MaxTokens: {MaxTokens}, HealthMonitoring: {HealthMonitoring}, DependencyMapping: {DependencyMapping})",
+            _options.Temperature, _options.MaxTokens, _options.EnableHealthMonitoring, _options.EnableDependencyMapping);
     }
 
     public async Task<AgentResponse> ProcessAsync(AgentTask task, SharedMemory memory)
@@ -77,11 +86,11 @@ public class DiscoveryAgent : ISpecializedAgent
             chatHistory.AddSystemMessage(systemPrompt);
             chatHistory.AddUserMessage(userMessage);
 
-            // Execute with moderate temperature for discovery operations
+            // Execute with configured temperature for discovery operations
             var executionSettings = new OpenAIPromptExecutionSettings
             {
-                Temperature = 0.3, // Moderate temperature for analytical discovery
-                MaxTokens = 4000,
+                Temperature = _options.Temperature,
+                MaxTokens = _options.MaxTokens,
                 ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions
             };
 

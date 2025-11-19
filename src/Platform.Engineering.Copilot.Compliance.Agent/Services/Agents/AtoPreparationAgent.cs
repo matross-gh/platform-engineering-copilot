@@ -25,7 +25,8 @@ public class AtoPreparationAgent : ISpecializedAgent
     public AtoPreparationAgent(
         ISemanticKernelService semanticKernelService,
         ILogger<AtoPreparationAgent> logger,
-        AtoPreparationPlugin atoPreparationPlugin)
+        AtoPreparationPlugin atoPreparationPlugin,
+        Platform.Engineering.Copilot.Core.Plugins.ConfigurationPlugin configurationPlugin)
     {
         _logger = logger;
         
@@ -44,6 +45,9 @@ public class AtoPreparationAgent : ISpecializedAgent
             _chatCompletion = null;
         }
 
+        // Register shared configuration plugin (set_azure_subscription, get_azure_subscription, etc.)
+        _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(configurationPlugin, "ConfigurationPlugin"));
+        
         // Register ATO preparation plugin
         _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(atoPreparationPlugin, "AtoPreparationPlugin"));
         

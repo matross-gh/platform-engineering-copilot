@@ -15,11 +15,13 @@ public class RiskAssessmentScanner : IComplianceScanner
 {
     private readonly ILogger _logger;
     private readonly IAzureResourceService _azureService;
+    private readonly IDefenderForCloudService _defenderService;
 
-    public RiskAssessmentScanner(ILogger logger, IAzureResourceService azureService)
+    public RiskAssessmentScanner(ILogger logger, IAzureResourceService azureService, IDefenderForCloudService defenderService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _azureService = azureService ?? throw new ArgumentNullException(nameof(azureService));
+        _defenderService = defenderService ?? throw new ArgumentNullException(nameof(defenderService));
     }
 
     public async Task<List<AtoFinding>> ScanControlAsync(
@@ -64,8 +66,8 @@ public class RiskAssessmentScanner : IComplianceScanner
                 break;
         }
 
-        // Enrich all findings with auto-remediation information
-        return findings.WithAutoRemediationInfo();
+        // Enrich all findings with auto-remediation information and source
+        return findings.WithAutoRemediationInfo().WithSource("NIST Scanner");
     }
 
 
@@ -82,6 +84,41 @@ public class RiskAssessmentScanner : IComplianceScanner
             var scope = string.IsNullOrEmpty(resourceGroupName) ? "subscription" : $"resource group '{resourceGroupName}'";
             _logger.LogInformation("Scanning risk assessment (RA-3) for {Scope} in subscription {SubscriptionId}", 
                 scope, subscriptionId);
+            
+            // ENHANCED: Query Defender for Cloud security assessments for detailed, actionable findings
+            try
+            {
+                _logger.LogInformation("Querying Defender for Cloud security assessments for subscription {SubscriptionId}", subscriptionId);
+                var defenderFindings = await _defenderService.GetSecurityAssessmentsAsync(subscriptionId, resourceGroupName, cancellationToken);
+                
+                if (defenderFindings != null && defenderFindings.Any())
+                {
+                    _logger.LogInformation("Retrieved {Count} Defender for Cloud findings, mapping to NIST RA controls", defenderFindings.Count);
+                    
+                    // Map Defender findings to NIST controls - filter for RA-related findings
+                    var mappedFindings = _defenderService.MapDefenderFindingsToNistControls(defenderFindings, subscriptionId);
+                    var raFindings = mappedFindings.Where(f => 
+                        f.AffectedNistControls.Any(c => c.StartsWith("RA", StringComparison.OrdinalIgnoreCase))).ToList();
+                    
+                    if (raFindings.Any())
+                    {
+                        _logger.LogInformation("Found {Count} Defender findings mapped to RA controls with detailed remediation steps", raFindings.Count);
+                        findings.AddRange(raFindings);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("No Defender findings mapped to RA controls, continuing with manual scan");
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("No Defender for Cloud assessments found, falling back to manual risk assessment scan");
+                }
+            }
+            catch (Exception defenderEx)
+            {
+                _logger.LogWarning(defenderEx, "Failed to retrieve Defender for Cloud assessments, falling back to manual scan");
+            }
             
             var resources = string.IsNullOrEmpty(resourceGroupName)
                 ? await _azureService.ListAllResourcesAsync(subscriptionId, cancellationToken)

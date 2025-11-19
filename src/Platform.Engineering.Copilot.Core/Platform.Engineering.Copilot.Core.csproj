@@ -48,6 +48,7 @@
     <PackageReference Include="KubernetesClient" Version="17.0.14" />
     <PackageReference Include="Octokit" Version="13.0.1" />
     <PackageReference Include="Aspose.Words" Version="24.9.0" />
+    <PackageReference Include="SharpToken" Version="2.0.3" />
     <!-- Data layer dependencies (moved from Platform.Engineering.Copilot.Data) -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0" />
@@ -56,6 +57,10 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
+    <PackageReference Include="iTextSharp.LGPLv2.Core" Version="3.4.22" />
+    <PackageReference Include="Aspose.Words" Version="24.9.0" />
+    <PackageReference Include="PuppeteerSharp" Version="19.0.0" />
   </ItemGroup>
 
 </Project>

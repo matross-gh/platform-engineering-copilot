@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Admin.Models;
+using Platform.Engineering.Copilot.Core.Interfaces.Azure;
+using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;
 
@@ -132,9 +134,9 @@ public class InfrastructureAdminController : ControllerBase
         try
         {
             // Use the new InfrastructureProvisioningService
-            var resourceGroups = await _infrastructureProvisioning.ListResourceGroupsAsync(cancellationToken);
+            var resourceGroups = await _azureResourceService.ListResourceGroupsAsync(subscription,cancellationToken);
 
-            return Ok(new { count = resourceGroups.Count, resourceGroups });
+            return Ok(new { count = resourceGroups.Count(), resourceGroups });
         }
         catch (Exception ex)
         {

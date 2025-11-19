@@ -38,5 +38,10 @@ public enum AgentType
     /// <summary>
     /// Service creation, mission ServiceCreation and requirement gathering
     /// </summary>
-    ServiceCreation
+    ServiceCreation,
+    
+    /// <summary>
+    /// Knowledge base search, document retrieval, and RAG-powered information synthesis
+    /// </summary>
+    KnowledgeBase
 }

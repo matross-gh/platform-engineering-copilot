@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Models.Compliance;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
+using Microsoft.Extensions.Options;
+using Platform.Engineering.Copilot.Compliance.Core.Configuration;
 
 namespace Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
 /// <summary>
@@ -13,90 +15,99 @@ namespace Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
 /// </summary>
 public class AtoRemediationEngine : IAtoRemediationEngine
 {
-    private readonly IAtoComplianceEngine _complianceEngine;
-    private readonly INistControlsService _nistService;
     private readonly IAzureResourceService _resourceService;
     private readonly IInfrastructureRemediationService _infrastructureService;
     private readonly ILogger<AtoRemediationEngine> _logger;
+    private readonly ComplianceAgentOptions _options;
     
     // In-memory tracking (in production, use persistent storage)
     private readonly Dictionary<string, RemediationExecution> _activeRemediations = new();
     private readonly List<RemediationExecution> _remediationHistory = new();
 
-    public AtoRemediationEngine(
-        IAtoComplianceEngine complianceEngine,
-        INistControlsService nistService,
+    public AtoRemediationEngine(        
         IAzureResourceService resourceService,
         IInfrastructureRemediationService infrastructureService,
-        ILogger<AtoRemediationEngine> logger)
-    {
-        _complianceEngine = complianceEngine;
-        _nistService = nistService;
+        ILogger<AtoRemediationEngine> logger,
+        IOptions<ComplianceAgentOptions> options)
+    {        
         _resourceService = resourceService;
         _infrastructureService = infrastructureService;
         _logger = logger;
+        _options = options.Value;
     }
 
+    /// <summary>
+    /// Generates a comprehensive remediation plan based on findings with default options
+    /// </summary>
     public async Task<RemediationPlan> GenerateRemediationPlanAsync(
         string subscriptionId,
         List<AtoFinding> findings,
-        RemediationPlanOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Generating remediation plan for {Count} findings in subscription {SubscriptionId}", 
-            findings.Count, subscriptionId);
+        // Call overload with default options
+        var defaultOptions = new RemediationPlanOptions
+        {
+            MinimumSeverity = AtoFindingSeverity.Low,
+            IncludeOnlyAutomatable = false,
+            GroupByResource = false
+        };
 
-        options ??= new RemediationPlanOptions();
+        return await GenerateRemediationPlanAsync(subscriptionId, findings, defaultOptions, cancellationToken);
+    }
+
+    /// <summary>
+    /// Generates a comprehensive remediation plan based on findings with custom options
+    /// </summary>
+    public async Task<RemediationPlan> GenerateRemediationPlanAsync(
+        string subscriptionId,
+        List<AtoFinding> findings,
+        RemediationPlanOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Generating remediation plan for {Count} findings with options (MinSeverity: {MinSeverity}, AutoOnly: {AutoOnly})",
+            findings.Count, options.MinimumSeverity, options.IncludeOnlyAutomatable);
 
         var plan = new RemediationPlan
         {
             PlanId = Guid.NewGuid().ToString(),
             SubscriptionId = subscriptionId,
             CreatedAt = DateTimeOffset.UtcNow,
-            RemediationItems = new List<RemediationItem>()
+            RemediationItems = new List<RemediationItem>(),
+            EstimatedEffort = TimeSpan.Zero
         };
 
-        try
+        // Filter findings based on options
+        var filteredFindings = FilterFindings(findings, options);
+        _logger.LogInformation("Filtered to {Count} findings (from {Original})", filteredFindings.Count, findings.Count);
+
+        // Prioritize findings based on options
+        var prioritizedFindings = PrioritizeFindings(filteredFindings, options);
+
+        // Generate remediation items for each finding
+        foreach (var finding in prioritizedFindings)
         {
-            // Filter findings based on options
-            var filteredFindings = FilterFindings(findings, options);
+            var remediationItem = await GenerateRemediationItemAsync(finding, cancellationToken);
 
-            // Prioritize findings
-            var prioritizedFindings = PrioritizeFindings(filteredFindings, options);
+            // Check for dependencies
+            remediationItem.Dependencies = await IdentifyRemediationDependenciesAsync(finding, findings, cancellationToken);
 
-            // Generate remediation items
-            var totalEffort = TimeSpan.Zero;
-            foreach (var finding in prioritizedFindings)
-            {
-                var item = await GenerateRemediationItemAsync(finding, cancellationToken);
-                plan.RemediationItems.Add(item);
-                totalEffort = totalEffort.Add(item.EstimatedEffort ?? TimeSpan.Zero);
-            }
-
-            plan.EstimatedEffort = totalEffort;
-
-            // Optimize remediation order
-            plan.RemediationItems = OptimizeRemediationOrder(plan.RemediationItems, options);
-
-            // Generate timeline
-            plan.Timeline = GenerateImplementationTimeline(plan.RemediationItems, options);
-
-            // Calculate projected risk reduction
-            plan.ProjectedRiskReduction = CalculateRiskReduction(findings);
-
-            // Generate executive summary
-            plan.ExecutiveSummary = GenerateExecutiveSummary(plan);
-
-            _logger.LogInformation("Generated remediation plan with {Count} items, estimated effort: {Effort}", 
-                plan.RemediationItems.Count, plan.EstimatedEffort);
-
-            return plan;
+            plan.RemediationItems.Add(remediationItem);
+            plan.EstimatedEffort = plan.EstimatedEffort.Add(remediationItem.EstimatedEffort ?? TimeSpan.Zero);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error generating remediation plan for subscription {SubscriptionId}", subscriptionId);
-            throw;
-        }
+
+        // Optimize remediation order based on options
+        plan.RemediationItems = OptimizeRemediationOrder(plan.RemediationItems, options);
+
+        // Generate implementation timeline
+        plan.Timeline = GenerateImplementationTimeline(plan);
+
+        // Calculate risk reduction
+        plan.ProjectedRiskReduction = CalculateProjectedRiskReduction(findings, plan);
+
+        // Generate executive summary
+        plan.ExecutiveSummary = GenerateExecutiveSummary(plan);
+
+        return plan;
     }
 
     public async Task<RemediationExecution> ExecuteRemediationAsync(
@@ -121,6 +132,21 @@ public class AtoRemediationEngine : IAtoRemediationEngine
         {
             _logger.LogInformation("Starting remediation execution {ExecutionId} for finding {FindingId}", 
                 execution.ExecutionId, finding.Id);
+
+            // Check if automated remediation is enabled
+            if (!_options.EnableAutomatedRemediation)
+            {
+                _logger.LogWarning("⚠️ Automated remediation is disabled in configuration (EnableAutomatedRemediation=false)");
+                execution.Status = RemediationExecutionStatus.Failed;
+                execution.Success = false;
+                execution.ErrorMessage = "Automated remediation is disabled in agent configuration";
+                execution.Error = "EnableAutomatedRemediation is set to false in ComplianceAgent configuration. Set to true to enable automated remediation.";
+                execution.Message = "Remediation blocked by configuration - EnableAutomatedRemediation is disabled";
+                execution.CompletedAt = DateTimeOffset.UtcNow;
+                execution.Duration = execution.CompletedAt.Value - execution.StartedAt;
+                _remediationHistory.Add(execution);
+                return execution;
+            }
 
             // Check if approval is required
             if (options.RequireApproval)
@@ -727,6 +753,124 @@ public class AtoRemediationEngine : IAtoRemediationEngine
         }
     }
 
+    private async Task<List<RemediationStep>> GenerateRemediationStepsAsync(
+        AtoFinding finding,
+        CancellationToken cancellationToken)
+    {
+        var steps = new List<RemediationStep>();
+
+        // Use the finding's RemediationActions if available (populated by FindingAutoRemediationService)
+        if (finding.RemediationActions != null && finding.RemediationActions.Any())
+        {
+            _logger.LogInformation("Using {Count} RemediationActions for finding {FindingId} - IsAutoRemediable: {IsAuto}",
+                finding.RemediationActions.Count, finding.Id, finding.IsAutoRemediable);
+
+            var order = 1;
+            foreach (var action in finding.RemediationActions)
+            {
+                steps.Add(new RemediationStep
+                {
+                    Order = order++,
+                    Description = action.Description,
+                    // For auto-remediable findings, Command/Script are internal - used only by AtoRemediationEngine
+                    Command = finding.IsAutoRemediable ? null : (action.ToolCommand ?? GetRemediationCommand(finding)),
+                    AutomationScript = finding.IsAutoRemediable ? null : action.ScriptPath
+                });
+            }
+        }
+        else
+        {
+            // Fallback to generic steps if RemediationActions not populated
+            if (finding.IsAutoRemediable)
+            {
+                _logger.LogWarning("Finding {FindingId} is marked auto-remediable but has no RemediationActions! Title: {Title}, ResourceType: {ResourceType}",
+                    finding.Id, finding.Title, finding.ResourceType);
+            }
+
+            steps.Add(new RemediationStep
+            {
+                Order = 1,
+                Description = $"Remediate {finding.FindingType} issue for {finding.ResourceType}",
+                Command = GetRemediationCommand(finding),
+                AutomationScript = GetAutomationScript(finding)
+            });
+        }
+
+        // Add validation step for auto-remediable findings
+        if (finding.IsAutoRemediable)
+        {
+            steps.Add(new RemediationStep
+            {
+                Order = steps.Count + 1,
+                Description = "Verify automated remediation",
+                Command = "Run compliance validation scan",
+                AutomationScript = null
+            });
+        }
+
+        return await Task.FromResult(steps);
+    }
+
+    private string GetRemediationCommand(AtoFinding finding)
+    {
+        return finding.FindingType switch
+        {
+            AtoFindingType.Encryption => "az resource update --set properties.encryption.enabled=true",
+            AtoFindingType.NetworkSecurity => "az network nsg rule update --access Deny",
+            AtoFindingType.AccessControl => "az role assignment create --role Reader",
+            AtoFindingType.Configuration => "az resource update --set properties.configuration",
+            _ => "Review and apply manual remediation"
+        };
+    }
+
+    /// <summary>
+    /// Legacy method - returns automation script paths that were never implemented.
+    /// Actual remediation uses IInfrastructureRemediationService via Azure ARM APIs.
+    /// This is only used for display purposes when RemediationActions are not populated.
+    /// </summary>
+    private string? GetAutomationScript(AtoFinding finding)
+    {
+        // NOTE: These PowerShell scripts do not exist and are never executed.
+        // Actual auto-remediation flows through:
+        // 1. IInfrastructureRemediationService.ExecuteRemediationAsync() - Primary path
+        // 2. finding.RemediationActions - Populated by FindingAutoRemediationService
+        // This method exists only for backward compatibility in fallback scenarios.
+        
+        if (!finding.IsAutoRemediable)
+            return null;
+
+        // Return null since actual remediation doesn't use PowerShell scripts
+        // The Infrastructure Remediation Service handles remediation via Azure ARM APIs
+        return null;
+    }
+
+    private List<string> GenerateValidationSteps(AtoFinding finding)
+    {
+        return new List<string>
+        {
+            "Verify remediation has been applied successfully",
+            "Run compliance scan to confirm finding is resolved",
+            "Document remediation in change management system",
+            "Update compliance tracking dashboard"
+        };
+    }
+
+    private RollbackPlan GenerateRollbackPlan(AtoFinding finding)
+    {
+        return new RollbackPlan
+        {
+            Description = $"Rollback plan for {finding.FindingType}",
+            Steps = new List<string>
+            {
+                "Take snapshot/backup before applying remediation",
+                "Document current configuration",
+                "If issues occur, restore from backup",
+                "Notify compliance team of rollback"
+            },
+            EstimatedRollbackTime = TimeSpan.FromMinutes(30)
+        };
+    }
+
     /// <summary>
     /// Enable HTTPS Only on App Service
     /// DEPRECATED: This method is replaced by Infrastructure Remediation Service.
@@ -1170,6 +1314,76 @@ public class AtoRemediationEngine : IAtoRemediationEngine
 
     // Helper methods
 
+    private async Task<List<string>> IdentifyRemediationDependenciesAsync(
+        AtoFinding finding,
+        List<AtoFinding> allFindings,
+        CancellationToken cancellationToken)
+    {
+        var dependencies = new List<string>();
+
+        // Check for related findings that should be remediated first
+        var relatedFindings = allFindings
+            .Where(f => f.ResourceId == finding.ResourceId && f.Id != finding.Id)
+            .OrderBy(f => GetSeverityPriority(f.Severity))
+            .ToList();
+
+        dependencies.AddRange(relatedFindings.Select(f => f.Id));
+
+        return dependencies;
+    }
+
+    private double CalculateProjectedRiskReduction(List<AtoFinding> findings, RemediationPlan plan)
+    {
+        // Calculate risk reduction based on findings that will be remediated
+        var totalRisk = findings.Sum(f => GetRiskScore(f));
+        var remediatedRisk = findings
+            .Where(f => plan.RemediationItems.Any(r => r.FindingId == f.Id))
+            .Sum(f => GetRiskScore(f));
+
+        return totalRisk > 0 ? (remediatedRisk / totalRisk) * 100 : 0;
+    }
+
+    private double GetRiskScore(AtoFinding finding)
+    {
+        return finding.Severity switch
+        {
+            AtoFindingSeverity.Critical => 10.0,
+            AtoFindingSeverity.High => 7.5,
+            AtoFindingSeverity.Medium => 5.0,
+            AtoFindingSeverity.Low => 2.5,
+            _ => 1.0
+        };
+    }
+
+    private string GenerateRemediationSummary(RemediationPlan plan)
+    {
+        return $"Remediation plan addresses {plan.RemediationItems.Count} findings with " +
+               $"estimated effort of {plan.EstimatedEffort.TotalHours:F1} hours. " +
+               $"Projected risk reduction: {plan.ProjectedRiskReduction:F1}%. " +
+               $"{plan.RemediationItems.Count(i => i.AutomationAvailable)} items can be automated.";
+    }
+
+    private List<RemediationItem> OptimizeRemediationOrder(List<RemediationItem> items)
+    {
+        // Optimize based on dependencies and resource impact
+        return items
+            .OrderBy(i => i.Dependencies?.Count ?? 0)
+            .ThenBy(i => GetPriorityOrder(i.Priority ?? "Unknown"))
+            .ToList();
+    }
+
+    private int GetPriorityOrder(string priority)
+    {
+        return priority switch
+        {
+            "P0 - Immediate" => 0,
+            "P1 - Within 24 hours" => 1,
+            "P2 - Within 7 days" => 2,
+            "P3 - Within 30 days" => 3,
+            _ => 4
+        };
+    }
+
     private List<AtoFinding> FilterFindings(List<AtoFinding> findings, RemediationPlanOptions options)
     {
         var filtered = findings.Where(f => f.Severity >= options.MinimumSeverity);
@@ -1205,30 +1419,21 @@ public class AtoRemediationEngine : IAtoRemediationEngine
 
     private async Task<RemediationItem> GenerateRemediationItemAsync(AtoFinding finding, CancellationToken cancellationToken)
     {
-        return await Task.FromResult(new RemediationItem
+        var remediationItem = new RemediationItem
         {
             FindingId = finding.Id,
             ControlId = finding.AffectedControls.FirstOrDefault() ?? "Unknown",
             ResourceId = finding.ResourceId,
             Priority = GetRemediationPriority(finding),
-            AutomationAvailable = finding.IsAutoRemediable,
+            AutomationAvailable = await CheckAutomationAvailabilityAsync(finding, cancellationToken),
             EstimatedEffort = EstimateRemediationDuration(finding),
-            Steps = GenerateRemediationSteps(finding),
-            ValidationSteps = GenerateManualValidationSteps(finding),
+            Steps = await GenerateRemediationStepsAsync(finding, cancellationToken),
+            ValidationSteps = GenerateValidationSteps(finding),
+            RollbackPlan = GenerateRollbackPlan(finding),
             Dependencies = new List<string>()
-        });
-    }
-
-    private string GetRemediationPriority(AtoFinding finding)
-    {
-        return finding.Severity switch
-        {
-            AtoFindingSeverity.Critical => "P0-Critical",
-            AtoFindingSeverity.High => "P1-High",
-            AtoFindingSeverity.Medium => "P2-Medium",
-            AtoFindingSeverity.Low => "P3-Low",
-            _ => "P4-Informational"
         };
+
+        return remediationItem;
     }
 
     private TimeSpan EstimateRemediationDuration(AtoFinding finding)
@@ -1272,14 +1477,133 @@ public class AtoRemediationEngine : IAtoRemediationEngine
         }
         else
         {
-            steps.Add(new RemediationStep
+            // Use Recommendation field if available (more detailed than RemediationGuidance)
+            var guidance = !string.IsNullOrWhiteSpace(finding.Recommendation) 
+                ? finding.Recommendation 
+                : finding.RemediationGuidance;
+            
+            if (!string.IsNullOrWhiteSpace(guidance))
             {
-                Order = 1,
-                Description = finding.RemediationGuidance
-            });
+                // Enhanced parsing: Extract numbered action items and substeps
+                var lines = guidance.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(l => l.Trim())
+                    .Where(l => !string.IsNullOrWhiteSpace(l))
+                    .ToList();
+                
+                var order = 1;
+                var inActionSection = false;
+                
+                foreach (var line in lines)
+                {
+                    // Identify action sections (numbered lists)
+                    var numberMatch = System.Text.RegularExpressions.Regex.Match(line, @"^\s*(\d+)\.\s+(.+)$");
+                    if (numberMatch.Success)
+                    {
+                        inActionSection = true;
+                        var actionText = numberMatch.Groups[2].Value.Trim();
+                        
+                        // Remove markdown bold markers
+                        actionText = actionText.Replace("**", "").Trim();
+                        
+                        // Skip section headers
+                        if (actionText.EndsWith(":") || actionText.ToUpper() == actionText)
+                        {
+                            continue;
+                        }
+                        
+                        steps.Add(new RemediationStep
+                        {
+                            Order = order++,
+                            Description = actionText
+                        });
+                        continue;
+                    }
+                    
+                    // Include bulleted substeps if we're in an action section
+                    if (inActionSection && (line.StartsWith("-") || line.StartsWith("*") || line.StartsWith("•")))
+                    {
+                        var substep = line.TrimStart('-', '*', '•', ' ').Trim();
+                        
+                        // Skip metadata lines
+                        if (substep.StartsWith("**") || substep.StartsWith("##") || 
+                            substep.StartsWith("IMMEDIATE") || substep.StartsWith("---") ||
+                            substep.Contains("NIST") || substep.Contains("REFERENCES"))
+                        {
+                            continue;
+                        }
+                        
+                        steps.Add(new RemediationStep
+                        {
+                            Order = order++,
+                            Description = $"  └─ {substep.Replace("**", "").Trim()}"
+                        });
+                    }
+                }
+                
+                // If no numbered steps found, try to extract key action phrases
+                if (!steps.Any())
+                {
+                    foreach (var line in lines)
+                    {
+                        // Skip headers, references, and metadata
+                        if (line.StartsWith("**") || line.StartsWith("##") || line.StartsWith("---") ||
+                            line.StartsWith("IMMEDIATE") || line.StartsWith("REFERENCES") ||
+                            line.StartsWith("NIST") || line.Contains("800-53") || 
+                            line.StartsWith("DoD") || line.StartsWith("FedRAMP"))
+                        {
+                            continue;
+                        }
+                        
+                        // Include actionable lines (imperative verbs)
+                        var actionVerbs = new[] { "Enable", "Configure", "Implement", "Review", "Create", 
+                            "Navigate", "Set", "Verify", "Ensure", "Deploy", "Install", "Update" };
+                        
+                        if (actionVerbs.Any(verb => line.StartsWith(verb, StringComparison.OrdinalIgnoreCase)) ||
+                            line.StartsWith("-") || line.StartsWith("*"))
+                        {
+                            var actionText = line.TrimStart('-', '*', '•', ' ').Replace("**", "").Trim();
+                            if (!string.IsNullOrWhiteSpace(actionText) && actionText.Length > 10)
+                            {
+                                steps.Add(new RemediationStep
+                                {
+                                    Order = order++,
+                                    Description = actionText
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Fallback to single generic step if no detailed steps found
+            if (!steps.Any())
+            {
+                steps.Add(new RemediationStep
+                {
+                    Order = 1,
+                    Description = !string.IsNullOrWhiteSpace(finding.RemediationGuidance)
+                        ? finding.RemediationGuidance
+                        : $"Review and remediate {finding.Title}"
+                });
+            }
         }
 
         return steps;
+    }
+
+    private async Task<bool> CheckAutomationAvailabilityAsync(AtoFinding finding, CancellationToken cancellationToken)
+    {
+        // Check if automated remediation is available for this finding type
+        var automatedRemediations = new HashSet<string>
+        {
+            "storage-encryption-disabled",
+            "vm-disk-unencrypted",
+            "nsg-port-open",
+            "keyvault-soft-delete-disabled",
+            "sql-tde-disabled"
+        };
+
+        return await Task.FromResult(automatedRemediations.Contains(finding.FindingType.ToString()));
     }
 
     private List<RemediationStep> GenerateManualRemediationSteps(AtoFinding finding)
@@ -1354,6 +1678,44 @@ public class AtoRemediationEngine : IAtoRemediationEngine
         return references;
     }
 
+    private int GetSeverityPriority(AtoFindingSeverity severity)
+    {
+        return severity switch
+        {
+            AtoFindingSeverity.Critical => 0,
+            AtoFindingSeverity.High => 1,
+            AtoFindingSeverity.Medium => 2,
+            AtoFindingSeverity.Low => 3,
+            _ => 4
+        };
+    }
+
+    private string GetRemediationPriority(AtoFinding finding)
+    {
+        return finding.Severity switch
+        {
+            AtoFindingSeverity.Critical => "P0 - Immediate",
+            AtoFindingSeverity.High => "P1 - Within 24 hours",
+            AtoFindingSeverity.Medium => "P2 - Within 7 days",
+            AtoFindingSeverity.Low => "P3 - Within 30 days",
+            _ => "P4 - Best effort"
+        };
+    }
+
+    private TimeSpan EstimateRemediationEffort(AtoFinding finding)
+    {
+        // Base effort on finding type and complexity
+        return finding.ResourceType switch
+        {
+            "Microsoft.Storage/storageAccounts" => TimeSpan.FromHours(2),
+            "Microsoft.Compute/virtualMachines" => TimeSpan.FromHours(4),
+            "Microsoft.Network/networkSecurityGroups" => TimeSpan.FromHours(3),
+            "Microsoft.KeyVault/vaults" => TimeSpan.FromHours(2),
+            _ => TimeSpan.FromHours(1)
+        };
+    }
+
+
     private List<RemediationItem> OptimizeRemediationOrder(List<RemediationItem> items, RemediationPlanOptions options)
     {
         if (options.GroupByResource)
@@ -1364,7 +1726,7 @@ public class AtoRemediationEngine : IAtoRemediationEngine
         return items.OrderBy(i => i.Priority).ToList();
     }
 
-    private ImplementationTimeline GenerateImplementationTimeline(List<RemediationItem> items, RemediationPlanOptions options)
+    private ImplementationTimeline GenerateImplementationTimeline(RemediationPlan plan)
     {
         var timeline = new ImplementationTimeline
         {
@@ -1372,42 +1734,27 @@ public class AtoRemediationEngine : IAtoRemediationEngine
             Phases = new List<TimelinePhase>()
         };
 
-        var criticalItems = items.Where(i => i.Priority?.StartsWith("P0") == true).ToList();
-        var highItems = items.Where(i => i.Priority?.StartsWith("P1") == true).ToList();
-        var mediumItems = items.Where(i => i.Priority?.StartsWith("P2") == true).ToList();
-        var lowItems = items.Where(i => i.Priority?.StartsWith("P3") == true).ToList();
+        // Group items by priority
+        var priorityGroups = plan.RemediationItems.GroupBy(i => i.Priority);
 
-        var currentStart = timeline.StartDate;
-
-        if (criticalItems.Any())
+        var currentDate = timeline.StartDate;
+        foreach (var group in priorityGroups.OrderBy(g => GetPriorityOrder(g.Key ?? "Unknown")))
         {
-            var duration = TimeSpan.FromTicks(criticalItems.Sum(i => i.EstimatedEffort?.Ticks ?? 0));
-            timeline.Phases.Add(new TimelinePhase
+            var phase = new TimelinePhase
             {
-                Name = "Critical Findings",
-                StartDate = currentStart,
-                EndDate = currentStart.Add(duration),
-                EstimatedDuration = duration,
-                Items = criticalItems
-            });
-            currentStart = currentStart.Add(duration);
+                Name = $"{group.Key ?? "Unknown"} Remediations",
+                StartDate = currentDate,
+                Items = group.ToList(),
+                EstimatedDuration = TimeSpan.FromHours(group.Sum(i => i.EstimatedEffort?.TotalHours ?? 0))
+            };
+
+            phase.EndDate = phase.StartDate.Add(phase.EstimatedDuration);
+            timeline.Phases.Add(phase);
+
+            currentDate = phase.EndDate;
         }
 
-        if (highItems.Any())
-        {
-            var duration = TimeSpan.FromTicks(highItems.Sum(i => i.EstimatedEffort?.Ticks ?? 0));
-            timeline.Phases.Add(new TimelinePhase
-            {
-                Name = "High Priority Findings",
-                StartDate = currentStart,
-                EndDate = currentStart.Add(duration),
-                EstimatedDuration = duration,
-                Items = highItems
-            });
-            currentStart = currentStart.Add(duration);
-        }
-
-        timeline.EndDate = currentStart;
+        timeline.EndDate = currentDate;
         timeline.TotalDuration = timeline.EndDate - timeline.StartDate;
 
         return timeline;
@@ -1580,9 +1927,3 @@ public class AtoRemediationEngine : IAtoRemediationEngine
         return recommendations;
     }
 }
-
-// Remediation strategy interfaces and implementations
-
-// Note: Remediation strategies are simplified to avoid circular dependencies
-// In production, integrate with existing AtoRemediationTool which already handles
-// Azure resource remediation through proper service layers

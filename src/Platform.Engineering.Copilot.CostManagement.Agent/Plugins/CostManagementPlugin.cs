@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Models.CostOptimization;
@@ -11,6 +12,7 @@ using Platform.Engineering.Copilot.Core.Plugins;
 using DetailedCostOptimizationRecommendation = Platform.Engineering.Copilot.Core.Models.CostOptimization.CostOptimizationRecommendation;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Cost;
+using Platform.Engineering.Copilot.CostManagement.Core.Configuration;
 
 namespace Platform.Engineering.Copilot.CostManagement.Agent.Plugins;
 
@@ -22,17 +24,20 @@ public class CostManagementPlugin : BaseSupervisorPlugin
     private readonly ICostOptimizationEngine _costOptimizationEngine;
     private readonly IAzureCostManagementService _costService;
     private readonly AzureMcpClient _azureMcpClient;
+    private readonly CostManagementAgentOptions _options;
 
     public CostManagementPlugin(
         ILogger<CostManagementPlugin> logger,
         Kernel kernel,
         ICostOptimizationEngine costOptimizationEngine,
         IAzureCostManagementService costService,
-        AzureMcpClient azureMcpClient) : base(logger, kernel)
+        AzureMcpClient azureMcpClient,
+        IOptions<CostManagementAgentOptions> options) : base(logger, kernel)
     {
         _costOptimizationEngine = costOptimizationEngine ?? throw new ArgumentNullException(nameof(costOptimizationEngine));
         _costService = costService ?? throw new ArgumentNullException(nameof(costService));
         _azureMcpClient = azureMcpClient ?? throw new ArgumentNullException(nameof(azureMcpClient));
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     [KernelFunction("process_cost_management_query")]
@@ -155,24 +160,33 @@ public class CostManagementPlugin : BaseSupervisorPlugin
             sb.AppendLine();
         }
 
-        // Cost Anomalies
-        var anomalies = dashboard.Anomalies.Take(5).ToList();
-        if (anomalies.Any())
+        // Cost Anomalies (if enabled in configuration)
+        if (_options.EnableAnomalyDetection)
         {
-            sb.AppendLine("## 🔍 Cost Anomalies Detected");
-            sb.AppendLine();
-            foreach (var anomaly in anomalies)
+            var anomalies = dashboard.Anomalies
+                .Where(a => Math.Abs(a.PercentageDeviation) >= _options.CostManagement.AnomalyThresholdPercentage)
+                .Take(5)
+                .ToList();
+                
+            if (anomalies.Any())
             {
-                var severityIcon = anomaly.Severity switch
+                sb.AppendLine("## 🔍 Cost Anomalies Detected");
+                sb.AppendLine();
+                sb.AppendLine($"_Threshold: {_options.CostManagement.AnomalyThresholdPercentage}% deviation_");
+                sb.AppendLine();
+                foreach (var anomaly in anomalies)
                 {
-                    AnomalySeverity.High => "🔴",
-                    AnomalySeverity.Medium => "🟡",
-                    _ => "🔵"
-                };
-                sb.AppendLine($"{severityIcon} **{anomaly.AnomalyDate:MMM dd}**: {anomaly.Description}");
-                sb.AppendLine($"   - Deviation: {FormatCurrency(anomaly.CostDifference)} ({FormatPercentage(anomaly.PercentageDeviation)})");
+                    var severityIcon = anomaly.Severity switch
+                    {
+                        AnomalySeverity.High => "🔴",
+                        AnomalySeverity.Medium => "🟡",
+                        _ => "🔵"
+                    };
+                    sb.AppendLine($"{severityIcon} **{anomaly.AnomalyDate:MMM dd}**: {anomaly.Description}");
+                    sb.AppendLine($"   - Deviation: {FormatCurrency(anomaly.CostDifference)} ({FormatPercentage(anomaly.PercentageDeviation)})");
+                }
+                sb.AppendLine();
             }
-            sb.AppendLine();
         }
 
         // Top Recommendations
@@ -305,8 +319,23 @@ public class CostManagementPlugin : BaseSupervisorPlugin
 
     private async Task<string> HandleOptimizationAsync(string subscriptionId, CancellationToken cancellationToken)
     {
+        // Check if optimization recommendations are enabled
+        if (!_options.EnableOptimizationRecommendations)
+        {
+            return "⚠️ Cost optimization recommendations are currently disabled in configuration. " +
+                   "Enable 'EnableOptimizationRecommendations' in CostManagementAgent settings to use this feature.";
+        }
+
         var analysis = await _costOptimizationEngine.AnalyzeSubscriptionAsync(subscriptionId);
         var recommendations = analysis.Recommendations ?? new List<DetailedCostOptimizationRecommendation>();
+
+        // Filter recommendations by minimum savings threshold
+        recommendations = recommendations
+            .Where(r => r.EstimatedMonthlySavings >= (decimal)_options.CostManagement.MinimumSavingsThreshold)
+            .ToList();
+
+        _logger.LogInformation("Found {Count} optimization recommendations (filtered by minimum savings threshold: {Threshold})",
+            recommendations.Count, _options.CostManagement.MinimumSavingsThreshold);
 
         // Get Azure best practices for cost optimization via MCP
         object? mcpBestPractices = null;
@@ -458,8 +487,12 @@ public class CostManagementPlugin : BaseSupervisorPlugin
             sb.AppendLine();
             sb.AppendLine("### 💡 Recommendations");
             sb.AppendLine("- Create budgets to monitor and control spending");
-            sb.AppendLine("- Set up alert notifications at 50%, 80%, and 100% thresholds");
+            sb.AppendLine($"- Set up alert notifications at {string.Join("%, ", _options.Budgets.DefaultAlertThresholds)}% thresholds");
             sb.AppendLine("- Use Azure Cost Management to configure budgets");
+            if (_options.Budgets.EmailNotifications && _options.Budgets.NotificationEmails.Any())
+            {
+                sb.AppendLine($"- Email notifications will be sent to: {string.Join(", ", _options.Budgets.NotificationEmails)}");
+            }
             sb.AppendLine();
             sb.AppendLine("```bash");
             sb.AppendLine($"az consumption budget create --subscription {subscriptionId} \\");
@@ -518,7 +551,13 @@ public class CostManagementPlugin : BaseSupervisorPlugin
 
     private async Task<string> HandleForecastAsync(string subscriptionId, string query, CancellationToken cancellationToken)
     {
+        // Use configured forecast days or parse from query
         var forecastDays = DetermineForecastWindow(query);
+        if (forecastDays == 30) // If default, use configured value
+        {
+            forecastDays = _options.CostManagement.ForecastDays;
+        }
+
         var forecast = await _costService.GetCostForecastAsync(subscriptionId, forecastDays, cancellationToken);
 
         var sb = new StringBuilder();
@@ -663,9 +702,21 @@ public class CostManagementPlugin : BaseSupervisorPlugin
         return 30;
     }
 
-    private static string FormatCurrency(decimal amount)
+    private string FormatCurrency(decimal amount)
     {
-        return string.Format(CultureInfo.InvariantCulture, "${0:N2}", amount);
+        // Use configured currency
+        var currencySymbol = _options.DefaultCurrency switch
+        {
+            "USD" => "$",
+            "EUR" => "€",
+            "GBP" => "£",
+            "JPY" => "¥",
+            "CAD" => "C$",
+            "AUD" => "A$",
+            _ => _options.DefaultCurrency + " "
+        };
+        
+        return string.Format(CultureInfo.InvariantCulture, "{0}{1:N2}", currencySymbol, amount);
     }
 
     private enum CostIntent

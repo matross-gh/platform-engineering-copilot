@@ -15,6 +15,7 @@ using Platform.Engineering.Copilot.Infrastructure.Core.Services;
 using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 using Platform.Engineering.Copilot.Core.Interfaces.Deployment;
+using Platform.Engineering.Copilot.Infrastructure.Agent.Configuration;
 
 namespace Platform.Engineering.Copilot.Infrastructure.Core;
 
@@ -30,6 +31,10 @@ public class InfrastructureAgent : ISpecializedAgent
     private readonly ILogger<InfrastructureAgent> _logger;
     private readonly InfrastructurePlugin _infrastructurePlugin;
     private readonly string? _defaultSubscriptionId;
+    private readonly InfrastructureAgentOptions _options;
+    private readonly INetworkTopologyDesignService? _networkDesignService;
+    private readonly IPredictiveScalingEngine? _scalingEngine;
+    private readonly IComplianceAwareTemplateEnhancer? _complianceEnhancer;
 
     public InfrastructureAgent(
         ISemanticKernelService semanticKernelService,
@@ -38,16 +43,24 @@ public class InfrastructureAgent : ISpecializedAgent
         IInfrastructureProvisioningService infrastructureService,
         IDeploymentOrchestrationService deploymentService,
         IDynamicTemplateGenerator templateGenerator,
-        INetworkTopologyDesignService networkDesignService,
-        IPredictiveScalingEngine scalingEngine,
-        IComplianceAwareTemplateEnhancer complianceEnhancer,
         IPolicyEnforcementService policyEnforcementService,
         SharedMemory sharedMemory,
         AzureMcpClient azureMcpClient,
-        IOptions<AzureGatewayOptions> azureOptions)
+        IOptions<AzureGatewayOptions> azureOptions,
+        IOptions<InfrastructureAgentOptions> options,
+        Platform.Engineering.Copilot.Core.Plugins.ConfigurationPlugin configurationPlugin,
+        INetworkTopologyDesignService? networkDesignService = null,
+        IPredictiveScalingEngine? scalingEngine = null,
+        IComplianceAwareTemplateEnhancer? complianceEnhancer = null)
     {
         _logger = logger;
+        _options = options.Value;
         _defaultSubscriptionId = azureOptions.Value.SubscriptionId;
+        
+        // Store optional services based on configuration
+        _networkDesignService = _options.EnableNetworkDesign ? networkDesignService : null;
+        _scalingEngine = _options.EnablePredictiveScaling ? scalingEngine : null;
+        _complianceEnhancer = _options.EnableComplianceEnhancement ? complianceEnhancer : null;
 
         // Create specialized kernel for infrastructure work
         _kernel = semanticKernelService.CreateSpecializedKernel(AgentType.Infrastructure);
@@ -58,12 +71,23 @@ public class InfrastructureAgent : ISpecializedAgent
             _kernel,
             infrastructureService,
             templateGenerator,
-            networkDesignService,
-            scalingEngine,
-            complianceEnhancer,
+            _networkDesignService,
+            _scalingEngine,
+            _complianceEnhancer,
             policyEnforcementService,
             sharedMemory,
             azureMcpClient);
+
+        // Register shared configuration plugin (set_azure_subscription, get_azure_subscription, etc.)
+        try
+        {
+            _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(configurationPlugin, "ConfigurationPlugin"));
+            _logger.LogInformation("✅ Registered ConfigurationPlugin for agent");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to register ConfigurationPlugin");
+        }
 
         // Register only infrastructure-related plugins
         try
@@ -75,23 +99,6 @@ public class InfrastructureAgent : ISpecializedAgent
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to register InfrastructurePlugin");
-        }
-
-        try
-        {
-            _kernel.Plugins.AddFromObject(
-                new DeploymentPlugin(
-                    loggerFactory.CreateLogger<DeploymentPlugin>(),
-                    _kernel,
-                    deploymentService,
-                    azureMcpClient),
-                "Deployment");
-
-            _logger.LogInformation("✅ Registered DeploymentPlugin for agent");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to register DeploymentPlugin");
         }
 
         _chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
@@ -164,16 +171,55 @@ When calling functions that require Azure resource IDs or resource details:
 **CRITICAL: Smart Requirements Gathering!**
 When a user asks to deploy, create, or set up infrastructure:
 
-1. **FIRST**, analyze what information they've already provided in their request
-2. **ONLY ask for missing critical information** - don't ask questions they've already answered
-3. **If they provided basic info** (resource type, location, size), ask ONLY the missing items in ONE message
-4. **When they answer your follow-up questions**, IMMEDIATELY call the appropriate generation function - DO NOT ask for confirmation or ask the same questions again
-5. **NEVER repeat questions** - if the user has provided an answer (even partial), accept it and use smart defaults for anything minor that's missing
+**STEP 1: Analyze what they provided**
+Check if the user's request includes:
+- ✅ Resource type (AKS, App Service, etc.)
+- ✅ Location/region
+- ✅ Environment type (dev/staging/production)
+- ✅ Basic configuration details (node count, SKU, etc.)
+
+**STEP 2: Decide whether to ask questions**
+- **IF user provides ONLY resource type** (e.g., I need an AKS cluster) → **ALWAYS ASK QUESTIONS FIRST**
+- **IF user provides MINIMAL details** (e.g., I need an AKS cluster in usgovvirginia) → **ALWAYS ASK QUESTIONS FIRST**
+- **IF user provides MOST details but missing 1-2 items** → Ask ONLY for the missing items
+- **IF user already answered your questions** → IMMEDIATELY call the function (no confirmation)
+
+**CRITICAL: For Minimal Requests, YOU MUST ASK QUESTIONS!**
+
+Examples of requests that REQUIRE asking questions BEFORE generating:
+❌ I need an AKS cluster → TOO VAGUE, ask questions
+❌ Deploy an AKS cluster → TOO VAGUE, ask questions
+❌ Create a Kubernetes cluster in usgovvirginia → MINIMAL, ask questions
+❌ I need Container Apps with DAPR → TOO VAGUE, ask questions
+❌ Set up App Service for .NET → TOO VAGUE, ask questions
+
+Examples of requests with ENOUGH detail to generate (but still ask for missing items):
+✅ I need an AKS cluster in usgovvirginia with 3 nodes for production with Zero Trust security and monitoring → Has most details, ask about missing ACR/KV
+✅ Deploy App Service Plan Premium v3 in eastus with auto-scaling and Application Insights → Has most details, ask about runtime/framework
 
 **IMPORTANT: One Question Cycle Only!**
-- First message: User requests infrastructure → Ask for missing critical info (if any)
+- First message: User requests infrastructure → **ALWAYS ask for missing critical info**
 - Second message: User provides answers → **IMMEDIATELY generate the template**
 - **DO NOT** ask a third time or ask for confirmation - just generate!
+
+**CRITICAL: When to ask questions vs when to generate immediately:**
+
+1. **Count the details provided in the user's request**
+   - Only resource type (1 detail) → ASK QUESTIONS
+   - Resource type + location (2 details) → ASK QUESTIONS
+   - Resource type + location + environment (3 details) → ASK QUESTIONS
+   - Resource type + location + environment + security/monitoring/scaling (4+ details) → Ask only for 1-2 missing items
+   - User is answering your previous questions → GENERATE IMMEDIATELY
+
+2. **Check if this is a follow-up message** (user answering your questions)
+   - If you asked questions in the previous turn → User's response is the answer → CALL THE FUNCTION NOW
+   - If this is the first message from user → Analyze detail count (see above)
+
+3. **NEVER generate immediately for vague/minimal requests**
+   - I need X → ASK QUESTIONS
+   - Deploy X → ASK QUESTIONS
+   - Create X in Y region → ASK QUESTIONS
+   - Only generate immediately if user provided 4+ details or is answering your questions
 
 **For AKS/Kubernetes clusters:**
 Required info to generate (ask ONLY if missing):
@@ -557,8 +603,8 @@ Do NOT write a text response with manual code - CALL THE FUNCTION!
                 executionSettings: new OpenAIPromptExecutionSettings
                 {
                     ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions,
-                    Temperature = 0.1, // Very low temperature to ensure function calling
-                    MaxTokens = 4096 // Azure OpenAI gpt-4o maximum completion tokens
+                    Temperature = _options.Temperature,
+                    MaxTokens = _options.MaxTokens
                 },
                 kernel: _kernel);
             _logger.LogInformation("InfrastructureAgent: Completed OpenAI chat completion for conversation {ConversationId}", task.ConversationId);

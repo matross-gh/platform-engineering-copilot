@@ -62,4 +62,34 @@ public static class AtoFindingExtensions
         
         return findings;
     }
+    
+    /// <summary>
+    /// Sets the Source metadata field for a finding
+    /// </summary>
+    public static AtoFinding WithSource(this AtoFinding finding, string source)
+    {
+        if (finding == null)
+            return finding;
+            
+        finding.Metadata ??= new Dictionary<string, object>();
+        finding.Metadata["Source"] = source;
+        
+        return finding;
+    }
+    
+    /// <summary>
+    /// Sets the Source metadata field for a list of findings
+    /// </summary>
+    public static List<AtoFinding> WithSource(this List<AtoFinding> findings, string source)
+    {
+        if (findings == null)
+            return findings;
+            
+        foreach (var finding in findings)
+        {
+            finding.WithSource(source);
+        }
+        
+        return findings;
+    }
 }

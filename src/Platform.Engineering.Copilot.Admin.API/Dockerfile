@@ -12,7 +12,7 @@ COPY src/Platform.Engineering.Copilot.CostManagement.Agent/*.csproj ./src/Platfo
 COPY src/Platform.Engineering.Copilot.Environment.Agent/*.csproj ./src/Platform.Engineering.Copilot.Environment.Agent/
 COPY src/Platform.Engineering.Copilot.Discovery.Agent/*.csproj ./src/Platform.Engineering.Copilot.Discovery.Agent/
 COPY src/Platform.Engineering.Copilot.Security.Agent/*.csproj ./src/Platform.Engineering.Copilot.Security.Agent/
-COPY src/Platform.Engineering.Copilot.Document.Agent/*.csproj ./src/Platform.Engineering.Copilot.Document.Agent/
+COPY src/Platform.Engineering.Copilot.KnowledgeBase.Agent/*.csproj ./src/Platform.Engineering.Copilot.KnowledgeBase.Agent/
 
 # Restore dependencies
 RUN dotnet restore ./src/Platform.Engineering.Copilot.Admin.API/Platform.Engineering.Copilot.Admin.API.csproj
@@ -26,7 +26,7 @@ COPY src/Platform.Engineering.Copilot.CostManagement.Agent/. ./src/Platform.Engi
 COPY src/Platform.Engineering.Copilot.Environment.Agent/. ./src/Platform.Engineering.Copilot.Environment.Agent/
 COPY src/Platform.Engineering.Copilot.Discovery.Agent/. ./src/Platform.Engineering.Copilot.Discovery.Agent/
 COPY src/Platform.Engineering.Copilot.Security.Agent/. ./src/Platform.Engineering.Copilot.Security.Agent/
-COPY src/Platform.Engineering.Copilot.Document.Agent/. ./src/Platform.Engineering.Copilot.Document.Agent/
+COPY src/Platform.Engineering.Copilot.KnowledgeBase.Agent/. ./src/Platform.Engineering.Copilot.KnowledgeBase.Agent/
 
 # Build and publish
 WORKDIR /src/src/Platform.Engineering.Copilot.Admin.API
@@ -38,6 +38,12 @@ RUN dotnet publish Platform.Engineering.Copilot.Admin.API.csproj \
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
+
+# Install curl for healthcheck
+RUN apt-get update && \
+    apt-get install -y curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy published files
 COPY --from=build /app/publish .

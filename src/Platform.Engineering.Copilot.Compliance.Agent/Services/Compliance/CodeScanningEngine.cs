@@ -23,6 +23,8 @@ public class CodeScanningEngine : ICodeScanningEngine
     private readonly INistControlsService _nistControlsService;
     private readonly IMemoryCache _cache;
     private readonly ComplianceAgentOptions _options;
+    private readonly CodeScanningOptions _codeScanningOptions;
+    private readonly EvidenceStorageService? _evidenceStorage;
 
     // Security tool configurations
     private readonly Dictionary<string, string> _securityTools = new()
@@ -53,7 +55,8 @@ public class CodeScanningEngine : ICodeScanningEngine
         IAtoRemediationEngine remediationEngine,
         INistControlsService nistControlsService,
         IMemoryCache cache,
-        IOptions<ComplianceAgentOptions> options)
+        IOptions<ComplianceAgentOptions> options,
+        EvidenceStorageService? evidenceStorage = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _gitHubService = gitHubService ?? throw new ArgumentNullException(nameof(gitHubService));
@@ -62,6 +65,8 @@ public class CodeScanningEngine : ICodeScanningEngine
         _nistControlsService = nistControlsService ?? throw new ArgumentNullException(nameof(nistControlsService));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _codeScanningOptions = _options.CodeScanning;
+        _evidenceStorage = evidenceStorage;
     }
 
     /// <summary>
@@ -121,46 +126,60 @@ public class CodeScanningEngine : ICodeScanningEngine
             completedPhases++;
 
             // Phase 2: Dependency Analysis
-            progress?.Report(new SecurityScanProgress
+            if (_codeScanningOptions.EnableDependencyScanning)
             {
-                TotalPhases = phases.Length,
-                CompletedPhases = completedPhases,
-                CurrentPhase = "Dependency Analysis",
-                Message = "Analyzing dependencies for vulnerabilities"
-            });
+                progress?.Report(new SecurityScanProgress
+                {
+                    TotalPhases = phases.Length,
+                    CompletedPhases = completedPhases,
+                    CurrentPhase = "Dependency Analysis",
+                    Message = "Analyzing dependencies for vulnerabilities"
+                });
 
-            var depResult = await AnalyzeDependenciesAsync(workspacePath, null, true, cancellationToken);
-            assessment.SecurityDomains["Dependencies"] = new SecurityDomainResult
+                var depResult = await AnalyzeDependenciesAsync(workspacePath, null, true, cancellationToken);
+                assessment.SecurityDomains["Dependencies"] = new SecurityDomainResult
+                {
+                    Domain = "Dependencies",
+                    SecurityScore = depResult.SecurityScore,
+                    Findings = ConvertDependencyFindings(depResult.Vulnerabilities),
+                    PassedChecks = depResult.TotalDependencies - depResult.VulnerableDependencies,
+                    TotalChecks = depResult.TotalDependencies,
+                    Status = depResult.VulnerableDependencies == 0 ? "Pass" : "Vulnerabilities Found"
+                };
+                completedPhases++;
+            }
+            else
             {
-                Domain = "Dependencies",
-                SecurityScore = depResult.SecurityScore,
-                Findings = ConvertDependencyFindings(depResult.Vulnerabilities),
-                PassedChecks = depResult.TotalDependencies - depResult.VulnerableDependencies,
-                TotalChecks = depResult.TotalDependencies,
-                Status = depResult.VulnerableDependencies == 0 ? "Pass" : "Vulnerabilities Found"
-            };
-            completedPhases++;
+                _logger.LogInformation("Dependency scanning is disabled in configuration");
+            }
 
             // Phase 3: Secret Detection
-            progress?.Report(new SecurityScanProgress
+            if (_codeScanningOptions.EnableSecretsDetection)
             {
-                TotalPhases = phases.Length,
-                CompletedPhases = completedPhases,
-                CurrentPhase = "Secret Detection",
-                Message = "Scanning for exposed secrets and credentials"
-            });
+                progress?.Report(new SecurityScanProgress
+                {
+                    TotalPhases = phases.Length,
+                    CompletedPhases = completedPhases,
+                    CurrentPhase = "Secret Detection",
+                    Message = "Scanning for exposed secrets and credentials"
+                });
 
-            var secretResult = await DetectSecretsAsync(workspacePath, null, false, cancellationToken);
-            assessment.SecurityDomains["Secrets"] = new SecurityDomainResult
+                var secretResult = await DetectSecretsAsync(workspacePath, null, false, cancellationToken);
+                assessment.SecurityDomains["Secrets"] = new SecurityDomainResult
+                {
+                    Domain = "Secrets",
+                    SecurityScore = secretResult.SecurityScore,
+                    Findings = ConvertSecretFindings(secretResult.Secrets),
+                    PassedChecks = secretResult.TotalSecretsFound == 0 ? 100 : 0,
+                    TotalChecks = 100,
+                    Status = secretResult.TotalSecretsFound == 0 ? "Pass" : "Secrets Detected"
+                };
+                completedPhases++;
+            }
+            else
             {
-                Domain = "Secrets",
-                SecurityScore = secretResult.SecurityScore,
-                Findings = ConvertSecretFindings(secretResult.Secrets),
-                PassedChecks = secretResult.TotalSecretsFound == 0 ? 100 : 0,
-                TotalChecks = 100,
-                Status = secretResult.TotalSecretsFound == 0 ? "Pass" : "Secrets Detected"
-            };
-            completedPhases++;
+                _logger.LogInformation("Secrets detection is disabled in configuration");
+            }
 
             // Phase 4: Infrastructure as Code
             progress?.Report(new SecurityScanProgress
@@ -325,25 +344,43 @@ public class CodeScanningEngine : ICodeScanningEngine
         bool includeHistoricalScanning = false,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Detecting secrets in workspace: {WorkspacePath}", workspacePath);
+        _logger.LogInformation("Detecting secrets in workspace: {WorkspacePath} using patterns: {Patterns}", 
+            workspacePath, string.Join(", ", _codeScanningOptions.SecretPatterns));
 
         await Task.Delay(100, cancellationToken); // Simulate detection
+
+        // Use configured secret patterns
+        var detectedSecrets = GenerateMockDetectedSecrets(_codeScanningOptions.SecretPatterns);
 
         var result = new SecretDetectionResult
         {
             ScanId = Guid.NewGuid().ToString(),
             WorkspacePath = workspacePath,
             ScanTime = DateTimeOffset.UtcNow,
-            TotalSecretsFound = 3,
-            SecurityScore = 75.0,
-            SecretsByType = new Dictionary<string, int>
-            {
-                { "API Keys", 2 },
-                { "Database Passwords", 1 }
-            },
-            Secrets = GenerateMockDetectedSecrets(),
-            ScannedPaths = new List<string> { "src/", "config/", ".env" }
+            TotalSecretsFound = detectedSecrets.Count,
+            SecurityScore = detectedSecrets.Count == 0 ? 100.0 : Math.Max(0, 100 - (detectedSecrets.Count * 25)),
+            SecretsByType = detectedSecrets.GroupBy(s => s.Type).ToDictionary(g => g.Key, g => g.Count()),
+            Secrets = detectedSecrets,
+            ScannedPaths = new List<string> { "src/", "config/", ".env" },
+            PatternsUsed = _codeScanningOptions.SecretPatterns.ToList()
         };
+
+        _logger.LogInformation("Secret detection complete: {Count} secrets found using {PatternCount} patterns", 
+            result.TotalSecretsFound, _codeScanningOptions.SecretPatterns.Count);
+
+        // Store scan results to blob storage if evidence storage is configured
+        if (_evidenceStorage != null)
+        {
+            try
+            {
+                var storageUri = await _evidenceStorage.StoreScanResultsAsync("secrets", result, workspacePath, cancellationToken);
+                _logger.LogDebug("Secret scan results stored: {StorageUri}", storageUri);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to store secret scan results to blob storage");
+            }
+        }
 
         return result;
     }
@@ -357,9 +394,20 @@ public class CodeScanningEngine : ICodeScanningEngine
         string? complianceFrameworks = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Scanning IaC templates in project: {ProjectPath}", projectPath);
+        _logger.LogInformation("Scanning IaC templates in project: {ProjectPath}, STIG checks enabled: {StigEnabled}", 
+            projectPath, _codeScanningOptions.EnableStigChecks);
 
         await Task.Delay(100, cancellationToken); // Simulate scanning
+
+        var findings = GenerateMockIacFindings();
+        
+        // Add STIG-specific findings if enabled
+        if (_codeScanningOptions.EnableStigChecks)
+        {
+            findings.AddRange(GenerateStigFindings());
+            _logger.LogInformation("STIG checks enabled: Added {Count} STIG compliance findings", 
+                GenerateStigFindings().Count);
+        }
 
         var assessment = new IacSecurityAssessment
         {
@@ -368,17 +416,26 @@ public class CodeScanningEngine : ICodeScanningEngine
             ScanTime = DateTimeOffset.UtcNow,
             TemplateTypes = new List<string> { "ARM", "Terraform", "CloudFormation", "Bicep" },
             TotalTemplates = 12,
-            TemplatesWithIssues = 4,
-            SecurityScore = 78.5,
-            FindingsByCategory = new Dictionary<string, int>
-            {
-                { "Access Control", 3 },
-                { "Encryption", 2 },
-                { "Network Security", 4 },
-                { "Logging", 1 }
-            },
-            Findings = GenerateMockIacFindings()
+            TemplatesWithIssues = findings.Count > 0 ? 4 : 0,
+            SecurityScore = _codeScanningOptions.EnableStigChecks ? 75.0 : 78.5,
+            FindingsByCategory = findings.GroupBy(f => f.Category ?? "Other").ToDictionary(g => g.Key, g => g.Count()),
+            Findings = findings,
+            StigChecksEnabled = _codeScanningOptions.EnableStigChecks
         };
+
+        // Store IaC scan results to blob storage if evidence storage is configured
+        if (_evidenceStorage != null)
+        {
+            try
+            {
+                var storageUri = await _evidenceStorage.StoreScanResultsAsync("iac", assessment, projectPath, cancellationToken);
+                _logger.LogDebug("IaC scan results stored: {StorageUri}", storageUri);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to store IaC scan results to blob storage");
+            }
+        }
 
         return assessment;
     }
@@ -529,6 +586,25 @@ public class CodeScanningEngine : ICodeScanningEngine
             ComplianceMappings = GenerateMockComplianceMappings(),
             ExecutiveSummary = "Security evidence package contains comprehensive artifacts for compliance validation including scan results, configuration data, and remediation records."
         };
+
+        // Store evidence package to blob storage if configured
+        if (_evidenceStorage != null)
+        {
+            try
+            {
+                var blobUri = await _evidenceStorage.StoreEvidencePackageAsync(package, cancellationToken);
+                _logger.LogInformation("Evidence package stored to blob storage: {BlobUri}", blobUri);
+                package.StorageUri = blobUri;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to store evidence package to blob storage, continuing without storage");
+            }
+        }
+        else
+        {
+            _logger.LogDebug("Evidence storage not configured, package will not be persisted");
+        }
 
         return package;
     }
@@ -847,18 +923,101 @@ public class CodeScanningEngine : ICodeScanningEngine
             }
         };
 
-    private List<DetectedSecret> GenerateMockDetectedSecrets() =>
-        new List<DetectedSecret>
+    private List<DetectedSecret> GenerateMockDetectedSecrets(List<string> secretPatterns)
+    {
+        var secrets = new List<DetectedSecret>();
+        
+        // Generate mock secrets based on configured patterns
+        foreach (var pattern in secretPatterns)
         {
-            new DetectedSecret
+            if (pattern.Contains("API", StringComparison.OrdinalIgnoreCase))
             {
-                SecretId = "SECRET-001",
-                Type = "API Key",
-                FilePath = "config/settings.js",
-                LineNumber = 15,
-                Severity = SecurityFindingSeverity.Critical,
-                RemediationAdvice = "Remove secret and use environment variables",
-                FirstDetected = DateTimeOffset.UtcNow.AddDays(-2)
+                secrets.Add(new DetectedSecret
+                {
+                    SecretId = $"SECRET-API-{Guid.NewGuid().ToString().Substring(0, 8)}",
+                    Type = "API Key",
+                    FilePath = "config/settings.js",
+                    LineNumber = 15,
+                    Severity = SecurityFindingSeverity.Critical,
+                    RemediationAdvice = "Remove API key and use environment variables or Azure Key Vault",
+                    FirstDetected = DateTimeOffset.UtcNow.AddDays(-2),
+                    Pattern = pattern
+                });
+            }
+            else if (pattern.Contains("PASSWORD", StringComparison.OrdinalIgnoreCase))
+            {
+                secrets.Add(new DetectedSecret
+                {
+                    SecretId = $"SECRET-PWD-{Guid.NewGuid().ToString().Substring(0, 8)}",
+                    Type = "Password",
+                    FilePath = "src/config/database.json",
+                    LineNumber = 8,
+                    Severity = SecurityFindingSeverity.High,
+                    RemediationAdvice = "Remove hardcoded password and use Azure Key Vault or managed identity",
+                    FirstDetected = DateTimeOffset.UtcNow.AddDays(-5),
+                    Pattern = pattern
+                });
+            }
+            else if (pattern.Contains("TOKEN", StringComparison.OrdinalIgnoreCase))
+            {
+                secrets.Add(new DetectedSecret
+                {
+                    SecretId = $"SECRET-TKN-{Guid.NewGuid().ToString().Substring(0, 8)}",
+                    Type = "Access Token",
+                    FilePath = ".env",
+                    LineNumber = 3,
+                    Severity = SecurityFindingSeverity.Critical,
+                    RemediationAdvice = "Remove token from .env file and use secure configuration",
+                    FirstDetected = DateTimeOffset.UtcNow.AddDays(-1),
+                    Pattern = pattern
+                });
+            }
+        }
+        
+        return secrets;
+    }
+
+    private List<IacSecurityFinding> GenerateStigFindings() =>
+        new List<IacSecurityFinding>
+        {
+            new IacSecurityFinding
+            {
+                FindingId = "STIG-V-001",
+                RuleName = "STIG V-230221: Storage encryption at rest",
+                TemplateFile = "storage.bicep",
+                ResourceType = "Microsoft.Storage/storageAccounts",
+                Severity = SecurityFindingSeverity.High,
+                Description = "Storage account must use encryption at rest (STIG requirement)",
+                Category = "STIG Compliance",
+                RemediationAdvice = "Enable encryption at rest for all storage accounts",
+                IsAutoRemediable = true,
+                StigId = "V-230221"
+            },
+            new IacSecurityFinding
+            {
+                FindingId = "STIG-V-002",
+                RuleName = "STIG V-230225: Network security groups required",
+                TemplateFile = "network.bicep",
+                ResourceType = "Microsoft.Network/virtualNetworks",
+                Severity = SecurityFindingSeverity.Medium,
+                Description = "Virtual network must have associated network security group (STIG requirement)",
+                Category = "STIG Compliance",
+                RemediationAdvice = "Associate NSG with all subnets",
+                IsAutoRemediable = true,
+                StigId = "V-230225"
+            },
+            new IacSecurityFinding
+            {
+                FindingId = "STIG-V-003",
+                RuleName = "STIG V-230230: TLS 1.2 minimum",
+                TemplateFile = "webapp.bicep",
+                ResourceType = "Microsoft.Web/sites",
+                Severity = SecurityFindingSeverity.High,
+                Description = "Web app must enforce TLS 1.2 as minimum version (STIG requirement)",
+                Category = "STIG Compliance",
+                RemediationAdvice = "Set minTlsVersion to 1.2 or higher",
+                IsAutoRemediable = true,
+                StigId = "V-230230"
             }
         };
 

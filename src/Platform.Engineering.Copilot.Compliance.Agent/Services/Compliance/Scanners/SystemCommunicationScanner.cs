@@ -76,7 +76,7 @@ public class SystemCommunicationScanner : IComplianceScanner
                 break;
         }
 
-        return findings.WithAutoRemediationInfo();
+        return findings.WithAutoRemediationInfo().WithSource("NIST Scanner");
     }
 
 

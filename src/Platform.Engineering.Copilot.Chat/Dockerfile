@@ -1,12 +1,17 @@
 # Build stage
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 
-# Install Node.js 20.x
+# Install Node.js and npm using official binary distribution
 RUN apt-get update && \
-    apt-get install -y curl && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
+    apt-get install -y curl xz-utils && \
+    curl -fsSL https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-arm64.tar.xz -o node.tar.xz && \
+    tar -xf node.tar.xz -C /usr/local --strip-components=1 && \
+    rm node.tar.xz && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Verify installation
+RUN node --version && npm --version
 
 WORKDIR /src
 
@@ -20,7 +25,7 @@ COPY src/Platform.Engineering.Copilot.CostManagement.Agent/*.csproj ./src/Platfo
 COPY src/Platform.Engineering.Copilot.Environment.Agent/*.csproj ./src/Platform.Engineering.Copilot.Environment.Agent/
 COPY src/Platform.Engineering.Copilot.Discovery.Agent/*.csproj ./src/Platform.Engineering.Copilot.Discovery.Agent/
 COPY src/Platform.Engineering.Copilot.Security.Agent/*.csproj ./src/Platform.Engineering.Copilot.Security.Agent/
-COPY src/Platform.Engineering.Copilot.Document.Agent/*.csproj ./src/Platform.Engineering.Copilot.Document.Agent/
+COPY src/Platform.Engineering.Copilot.KnowledgeBase.Agent/*.csproj ./src/Platform.Engineering.Copilot.KnowledgeBase.Agent/
 
 # Restore dependencies
 RUN dotnet restore ./src/Platform.Engineering.Copilot.Chat/Platform.Engineering.Copilot.Chat.csproj
@@ -34,7 +39,7 @@ COPY src/Platform.Engineering.Copilot.CostManagement.Agent/. ./src/Platform.Engi
 COPY src/Platform.Engineering.Copilot.Environment.Agent/. ./src/Platform.Engineering.Copilot.Environment.Agent/
 COPY src/Platform.Engineering.Copilot.Discovery.Agent/. ./src/Platform.Engineering.Copilot.Discovery.Agent/
 COPY src/Platform.Engineering.Copilot.Security.Agent/. ./src/Platform.Engineering.Copilot.Security.Agent/
-COPY src/Platform.Engineering.Copilot.Document.Agent/. ./src/Platform.Engineering.Copilot.Document.Agent/
+COPY src/Platform.Engineering.Copilot.KnowledgeBase.Agent/. ./src/Platform.Engineering.Copilot.KnowledgeBase.Agent/
 
 # Build and publish
 WORKDIR /src/src/Platform.Engineering.Copilot.Chat
@@ -57,4 +62,4 @@ USER appuser
 
 EXPOSE 5001
 
-ENTRYPOINT ["dotnet", "Platform.Engineering.Copilot.Chat.App.dll"]
+ENTRYPOINT ["dotnet", "Platform.Engineering.Copilot.Chat.dll"]

@@ -11,7 +11,7 @@ using System.Text.Json;
 using Platform.Engineering.Copilot.Infrastructure.Core.Services;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 
-namespace Platform.Engineering.Copilot.Environment.Core;
+namespace Platform.Engineering.Copilot.Environment.Agent.Plugins;
 
 /// <summary>
 /// Semantic Kernel plugin for Azure environment lifecycle management.

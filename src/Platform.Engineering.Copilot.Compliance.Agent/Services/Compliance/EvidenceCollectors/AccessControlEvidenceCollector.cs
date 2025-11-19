@@ -31,7 +31,12 @@ public class AccessControlEvidenceCollector : IEvidenceCollector
         string controlFamily, 
         CancellationToken cancellationToken = default)
     {
-        return new List<ComplianceEvidence>(); // Delegate to specific AC evidence
+        // Collect all AC evidence and filter for configuration-type evidence
+        var allEvidence = await CollectAccessControlEvidenceAsync(subscriptionId, controlFamily, cancellationToken);
+        return allEvidence.Where(e => 
+            e.EvidenceType == "NetworkSecurityGroups" || 
+            e.EvidenceType == "KeyVaultConfiguration" ||
+            e.EvidenceType == "VirtualMachines").ToList();
     }
 
     public async Task<List<ComplianceEvidence>> CollectLogEvidenceAsync(
@@ -39,7 +44,9 @@ public class AccessControlEvidenceCollector : IEvidenceCollector
         string controlFamily, 
         CancellationToken cancellationToken = default)
     {
-        return new List<ComplianceEvidence>(); // Delegate to specific AC evidence
+        // Collect all AC evidence and filter for log-type evidence (Log Analytics)
+        var allEvidence = await CollectAccessControlEvidenceAsync(subscriptionId, controlFamily, cancellationToken);
+        return allEvidence.Where(e => e.EvidenceType == "LogAnalyticsWorkspaces").ToList();
     }
 
     public async Task<List<ComplianceEvidence>> CollectMetricEvidenceAsync(
@@ -47,7 +54,10 @@ public class AccessControlEvidenceCollector : IEvidenceCollector
         string controlFamily, 
         CancellationToken cancellationToken = default)
     {
-        return new List<ComplianceEvidence>(); // Delegate to specific AC evidence
+        // Access Control family doesn't typically have metric-based evidence
+        // Return empty list as this is expected for AC family
+        _logger.LogDebug("No metric evidence collected for Access Control family (expected behavior)");
+        return new List<ComplianceEvidence>();
     }
 
     public async Task<List<ComplianceEvidence>> CollectPolicyEvidenceAsync(
@@ -55,7 +65,10 @@ public class AccessControlEvidenceCollector : IEvidenceCollector
         string controlFamily, 
         CancellationToken cancellationToken = default)
     {
-        return new List<ComplianceEvidence>(); // Delegate to specific AC evidence
+        // TODO: Implement Azure Policy evidence collection for Access Control
+        // Should collect: RBAC policies, Azure Policy assignments, conditional access policies
+        _logger.LogWarning("Azure Policy evidence collection not yet implemented for Access Control family");
+        return new List<ComplianceEvidence>();
     }
 
     public async Task<List<ComplianceEvidence>> CollectAccessControlEvidenceAsync(

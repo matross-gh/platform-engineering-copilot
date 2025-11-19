@@ -603,9 +603,12 @@ public class AtoComplianceAssessment
     public int HighFindings { get; set; }
     public int MediumFindings { get; set; }
     public int LowFindings { get; set; }
+    public int InformationalFindings { get; set; }
     public string? ExecutiveSummary { get; set; }
     public RiskProfile? RiskProfile { get; set; }
+    public List<string>? Recommendations { get; set; }
     public string? Error { get; set; }
+    public Dictionary<string, object> Metadata { get; set; } = new();
 }
 
 /// <summary>

@@ -1,13 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
-using Platform.Engineering.Copilot.Core.Interfaces;
-using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Models.EnvironmentManagement;
-using Platform.Engineering.Copilot.Core.Data.Entities;
-using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Admin.Models;
-using Platform.Engineering.Copilot.Core.Services.Infrastructure;
-using Platform.Engineering.Copilot.Compliance.Core.Interfaces;
 using Platform.Engineering.Copilot.Infrastructure.Core.Services;
+using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
+using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
+using Platform.Engineering.Copilot.Core.Interfaces.Deployment;
+using Platform.Engineering.Copilot.Core.Models.Compliance;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;
 
@@ -61,16 +59,16 @@ public class EnvironmentAdminController : ControllerBase
         try
         {
             // Parse status if provided
-            Data.Entities.DeploymentStatus? deploymentStatus = null;
-            if (!string.IsNullOrEmpty(status) && Enum.TryParse<Data.Entities.DeploymentStatus>(status, true, out var parsedStatus))
+            DeploymentStatus? deploymentStatus = null;
+            if (!string.IsNullOrEmpty(status) && Enum.TryParse<DeploymentStatus>(status, true, out var parsedStatus))
             {
                 deploymentStatus = parsedStatus;
             }
 
             var environments = await _environmentStorage.ListEnvironmentsAsync(
                 environmentType, 
-                resourceGroup, 
-                deploymentStatus, 
+                resourceGroup,
+                (Core.Data.Entities.DeploymentStatus?)deploymentStatus, 
                 cancellationToken);
 
             var response = new EnvironmentListResponse
@@ -210,12 +208,12 @@ public class EnvironmentAdminController : ControllerBase
                     {
                         result.DeploymentId = deploymentIdString; // Preserve deployment ID
                         var finalStatus = result.Success 
-                            ? Platform.Engineering.Copilot.Data.Entities.DeploymentStatus.Succeeded 
-                            : Platform.Engineering.Copilot.Data.Entities.DeploymentStatus.Failed;
+                            ? DeploymentStatus.Succeeded 
+                            : DeploymentStatus.Failed;
                         
                         await scopedEnvironmentStorage.UpdateEnvironmentStatusAsync(
                             deploymentId,
-                            finalStatus,
+                            (Core.Data.Entities.DeploymentStatus)finalStatus,
                             result.Success ? null : result.ErrorMessage,
                             CancellationToken.None);
                         
@@ -248,7 +246,7 @@ public class EnvironmentAdminController : ControllerBase
                     {
                         await scopedEnvironmentStorage.UpdateEnvironmentStatusAsync(
                             deploymentId,
-                            Platform.Engineering.Copilot.Data.Entities.DeploymentStatus.Failed,
+                            (Core.Data.Entities.DeploymentStatus)DeploymentStatus.Failed,
                             ex.Message,
                             CancellationToken.None);
                     }

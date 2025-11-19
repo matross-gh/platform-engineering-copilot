@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+
 namespace Platform.Engineering.Copilot.Core.Configuration;
 
 /// <summary>
@@ -10,26 +12,28 @@ public class AgentConfiguration
     /// </summary>
     public const string SectionName = "AgentConfiguration";
 
-    /// <summary>
-    /// Dictionary of agent names and their enabled status
-    /// </summary>
-    public Dictionary<string, bool> EnabledAgents { get; set; } = new()
-    {
-        { "Infrastructure", true },
-        { "CostManagement", true },
-        { "Environment", true },
-        { "Discovery", true },
-        { "ServiceCreation", true },
-        { "Compliance", true },
-        { "Security", true },
-        { "Document", true }
-    };
+    private IConfiguration? _configuration;
 
     /// <summary>
-    /// Check if a specific agent is enabled
+    /// Sets the configuration to read agent enabled status from nested sections
+    /// </summary>
+    public void SetConfiguration(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
+    /// <summary>
+    /// Check if a specific agent is enabled by reading from nested agent configuration
     /// </summary>
     public bool IsAgentEnabled(string agentName)
     {
-        return EnabledAgents.TryGetValue(agentName, out var enabled) && enabled;
+        if (_configuration == null)
+        {
+            return false;
+        }
+
+        var agentSection = _configuration.GetSection($"{agentName}Agent");
+        var enabled = agentSection.GetValue<bool?>("Enabled");
+        return enabled ?? false;
     }
 }

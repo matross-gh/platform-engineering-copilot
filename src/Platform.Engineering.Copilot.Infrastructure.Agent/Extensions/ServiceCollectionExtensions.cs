@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Platform.Engineering.Copilot.Core.Interfaces.Agents;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
@@ -5,6 +6,7 @@ using Platform.Engineering.Copilot.Infrastructure.Core.Services;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Services.ServiceCreation;
 using Platform.Engineering.Copilot.Core.Services.Generators.Documentation;
+using Platform.Engineering.Copilot.Infrastructure.Agent.Configuration;
 using Platform.Engineering.Copilot.Infrastructure.Agent.Plugins;
 
 namespace Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
@@ -13,6 +15,8 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddInfrastructureAgent(this IServiceCollection services)
     {
+        // Note: Configuration is registered in Program.cs from AgentConfiguration:InfrastructureAgent section
+        
         // Register Infrastructure Agent and Plugin
         services.AddScoped<InfrastructureAgent>();
         services.AddScoped<ISpecializedAgent, InfrastructureAgent>(sp => sp.GetRequiredService<InfrastructureAgent>());

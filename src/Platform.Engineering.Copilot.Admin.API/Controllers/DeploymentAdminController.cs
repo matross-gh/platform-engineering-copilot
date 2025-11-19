@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Platform.Engineering.Copilot.Core.Data.Context;
 using Microsoft.EntityFrameworkCore;
+using Platform.Engineering.Copilot.Core.Data.Entities;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;
 
@@ -54,11 +55,11 @@ public class DeploymentAdminController : ControllerBase
                 DeploymentId = deployment.Id.ToString(),
                 DeploymentName = deployment.Name,
                 State = deployment.Status.ToString(),
-                ProgressPercentage = deployment.Status == Data.Entities.DeploymentStatus.Succeeded ? 100 : 0,
+                ProgressPercentage = deployment.Status == DeploymentStatus.Succeeded ? 100 : 0,
                 CurrentOperation = deployment.Status.ToString(),
                 StartTime = deployment.CreatedAt.ToString("o"),
                 EndTime = deployment.UpdatedAt.ToString("o"),
-                ErrorMessage = deployment.Status == Data.Entities.DeploymentStatus.Failed 
+                ErrorMessage = deployment.Status == DeploymentStatus.Failed 
                     ? "Deployment failed - check logs for details" 
                     : null
             });
@@ -84,7 +85,7 @@ public class DeploymentAdminController : ControllerBase
             // Get deployments that are in progress from database
             var activeDeployments = await _dbContext.EnvironmentDeployments
                 .Where(d => !d.IsDeleted && 
-                            d.Status == Data.Entities.DeploymentStatus.InProgress)
+                            d.Status == DeploymentStatus.InProgress)
                 .ToListAsync(cancellationToken);
 
             var response = activeDeployments
@@ -129,7 +130,7 @@ public class DeploymentAdminController : ControllerBase
                 return NotFound(new { error = $"Deployment {deploymentId} not found" });
             }
 
-            deployment.Status = Data.Entities.DeploymentStatus.Cancelled;
+            deployment.Status = DeploymentStatus.Cancelled;
             deployment.UpdatedAt = DateTime.UtcNow;
             await _dbContext.SaveChangesAsync(cancellationToken);
 

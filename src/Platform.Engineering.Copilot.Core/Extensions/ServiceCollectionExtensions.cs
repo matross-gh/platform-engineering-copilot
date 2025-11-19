@@ -47,6 +47,15 @@ public static class ServiceCollectionExtensions
         services.AddMemoryCache(); // Required for IMemoryCache
         services.AddSingleton<IIntelligentChatCacheService, IntelligentChatCacheService>();
         
+        // Register configuration service for persistent subscription storage
+        services.AddSingleton<ConfigService>();
+        
+        // Register shared configuration plugin (available to all agents)
+        services.AddTransient<Plugins.ConfigurationPlugin>();
+        
+        // Register token management services (Phase 1)
+        services.AddTokenManagementServices();
+        
         // Register Semantic Text Memory for Service Wizard state management
 #pragma warning disable SKEXP0001 // Type is for evaluation purposes only
         services.AddSingleton<Microsoft.SemanticKernel.Memory.ISemanticTextMemory>(sp =>

@@ -17,7 +17,15 @@ public interface IAtoRemediationEngine
     Task<RemediationPlan> GenerateRemediationPlanAsync(
         string subscriptionId,
         List<AtoFinding> findings,
-        RemediationPlanOptions? options = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Analyzes findings and generates a comprehensive, prioritized remediation plan with custom options
+    /// </summary>
+    Task<RemediationPlan> GenerateRemediationPlanAsync(
+        string subscriptionId,
+        List<AtoFinding> findings,
+        RemediationPlanOptions options,
         CancellationToken cancellationToken = default);
 
     /// <summary>

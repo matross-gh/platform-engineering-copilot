@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
@@ -13,6 +14,7 @@ using Platform.Engineering.Copilot.Core.Models.Azure;
 using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Core.Plugins;
 using System.ComponentModel;
+using Platform.Engineering.Copilot.Discovery.Core.Configuration;
 
 namespace Platform.Engineering.Copilot.Discovery.Core;
 
@@ -25,15 +27,18 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
 {
     private readonly IAzureResourceService _azureResourceService;
     private readonly AzureMcpClient _azureMcpClient;
+    private readonly DiscoveryAgentOptions _options;
 
     public AzureResourceDiscoveryPlugin(
         ILogger<AzureResourceDiscoveryPlugin> logger,
         Kernel kernel,
         IAzureResourceService azureResourceService,
-        AzureMcpClient azureMcpClient) : base(logger, kernel)
+        AzureMcpClient azureMcpClient,
+        IOptions<DiscoveryAgentOptions> options) : base(logger, kernel)
     {
         _azureResourceService = azureResourceService ?? throw new ArgumentNullException(nameof(azureResourceService));
         _azureMcpClient = azureMcpClient ?? throw new ArgumentNullException(nameof(azureMcpClient));
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     // ========== DISCOVERY & INVENTORY FUNCTIONS ==========
@@ -84,6 +89,12 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
             {
                 filteredResources = filteredResources.Where(r => 
                     r.Location?.Equals(location, StringComparison.OrdinalIgnoreCase) == true);
+            }
+
+            // Apply configuration: MaxResourcesPerQuery
+            if (_options.Discovery.MaxResourcesPerQuery > 0)
+            {
+                filteredResources = filteredResources.Take(_options.Discovery.MaxResourcesPerQuery);
             }
 
             var resourceList = filteredResources.ToList();
@@ -178,9 +189,9 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
 
-            // Get health status if requested
+            // Get health status if requested and enabled
             object? healthStatus = null;
-            if (includeHealth)
+            if (includeHealth && _options.EnableHealthMonitoring)
             {
                 try
                 {
@@ -265,14 +276,22 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                 if (string.IsNullOrWhiteSpace(tagValue)) return true;
 
                 return r.Tags[tagKey]?.Equals(tagValue, StringComparison.OrdinalIgnoreCase) == true;
-            }).ToList();
+            });
+
+            // Apply configuration: MaxResourcesPerQuery
+            if (_options.Discovery.MaxResourcesPerQuery > 0)
+            {
+                matchedResources = matchedResources.Take(_options.Discovery.MaxResourcesPerQuery);
+            }
+
+            var resourceList = matchedResources.ToList();
 
             // Group by resource type and tag value
-            var byType = matchedResources.GroupBy(r => r.Type ?? "Unknown")
+            var byType = resourceList.GroupBy(r => r.Type ?? "Unknown")
                 .Select(g => new { type = g.Key, count = g.Count() })
                 .OrderByDescending(x => x.count);
 
-            var byTagValue = matchedResources
+            var byTagValue = resourceList
                 .Where(r => r.Tags != null && r.Tags.ContainsKey(tagKey))
                 .GroupBy(r => r.Tags![tagKey] ?? "null")
                 .Select(g => new { tagValue = g.Key, count = g.Count() })
@@ -338,6 +357,15 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
         try
         {
             _logger.LogInformation("Analyzing resource dependencies in subscription {SubscriptionId}", subscriptionId);
+
+            if (!_options.EnableDependencyMapping)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = "Dependency mapping is currently disabled. Please enable it in the Discovery Agent configuration."
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
 
             if (string.IsNullOrWhiteSpace(subscriptionId))
             {
@@ -755,6 +783,15 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
         {
             _logger.LogInformation("Getting health overview for subscription {SubscriptionId}", subscriptionId);
 
+            if (!_options.EnableHealthMonitoring)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = "Health monitoring is currently disabled. Please enable it in the Discovery Agent configuration."
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
             if (string.IsNullOrWhiteSpace(subscriptionId))
             {
                 return JsonSerializer.Serialize(new
@@ -840,6 +877,15 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
         {
             _logger.LogInformation("Getting health history for subscription {SubscriptionId}, timeRange {TimeRange}", 
                 subscriptionId, timeRange);
+
+            if (!_options.EnableHealthMonitoring)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = "Health monitoring is currently disabled. Please enable it in the Discovery Agent configuration."
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
 
             if (string.IsNullOrWhiteSpace(subscriptionId))
             {
@@ -1349,9 +1395,9 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
 
-            // 2. Get health status if requested
+            // 2. Get health status if requested and enabled
             object? healthStatus = null;
-            if (includeHealth)
+            if (includeHealth && _options.EnableHealthMonitoring)
             {
                 try
                 {

@@ -2,6 +2,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Platform.Engineering.Copilot.Core.Interfaces.Agents;
 using Platform.Engineering.Copilot.Core.Interfaces.Deployment;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
+using Platform.Engineering.Copilot.Environment.Agent.Plugins;
+using Platform.Engineering.Copilot.Environment.Agent.Services.Agents;
 using Platform.Engineering.Copilot.Environment.Agent.Services.Deployment;
 using Platform.Engineering.Copilot.Infrastructure.Core.Services;
 

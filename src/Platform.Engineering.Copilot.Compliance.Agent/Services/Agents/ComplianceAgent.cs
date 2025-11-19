@@ -1,5 +1,6 @@
 using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
@@ -7,6 +8,7 @@ using Platform.Engineering.Copilot.Core.Interfaces.Agents;
 using Platform.Engineering.Copilot.Core.Models.Agents;
 using System.Text.RegularExpressions;
 using Platform.Engineering.Copilot.Compliance.Agent.Plugins;
+using Platform.Engineering.Copilot.Compliance.Core.Configuration;
 using Platform.Engineering.Copilot.Core.Services.Agents;
 
 namespace Platform.Engineering.Copilot.Compliance.Agent.Services.Agents;
@@ -21,13 +23,17 @@ public class ComplianceAgent : ISpecializedAgent
     private readonly Kernel _kernel;
     private readonly IChatCompletionService? _chatCompletion;
     private readonly ILogger<ComplianceAgent> _logger;
+    private readonly ComplianceAgentOptions _options;
 
     public ComplianceAgent(
         ISemanticKernelService semanticKernelService,
         ILogger<ComplianceAgent> logger,
-        CompliancePlugin compliancePlugin)
+        IOptions<ComplianceAgentOptions> options,
+        CompliancePlugin compliancePlugin,
+        Platform.Engineering.Copilot.Core.Plugins.ConfigurationPlugin configurationPlugin)
     {
         _logger = logger;
+        _options = options.Value;
         
         // Create specialized kernel for compliance operations
         _kernel = semanticKernelService.CreateSpecializedKernel(AgentType.Compliance);
@@ -44,6 +50,9 @@ public class ComplianceAgent : ISpecializedAgent
             _chatCompletion = null;
         }
 
+        // Register shared configuration plugin (set_azure_subscription, get_azure_subscription, etc.)
+        _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(configurationPlugin, "ConfigurationPlugin"));
+        
         // Register compliance plugin
         _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(compliancePlugin, "CompliancePlugin"));
 
@@ -95,8 +104,8 @@ public class ComplianceAgent : ISpecializedAgent
             // Execute with lower temperature for precision in compliance assessments
             var executionSettings = new OpenAIPromptExecutionSettings
             {
-                Temperature = 0.2, // Very low temperature for precise compliance assessments
-                MaxTokens = 4000,
+                Temperature = _options.Temperature,
+                MaxTokens = _options.MaxTokens,
                 ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions
             };
 
@@ -205,20 +214,37 @@ DISTINGUISH between different types of requests:
 1. **ASSESSMENT REQUESTS** - User wants to see actual findings/results (DEFAULT when saved subscription exists):
    
    Examples:
+   - ""Run a compliance assessment"" ← MOST COMMON
+   - ""Run assessment"" ← MOST COMMON
+   - ""Assess my subscription"" ← MOST COMMON
    - ""Get control family details for CM""
    - ""Show me CM findings""
    - ""Get AC control family details""
    - ""Check compliance for my subscription""
    - ""Scan subscription XYZ for NIST compliance""
    - ""Assess my resource group""
-   - ""Run a compliance assessment""
    
-   **CRITICAL LOGIC:**
-   - IF the user message mentions a control family code (CM, AC, AU, etc.) AND there's a saved subscription ID in context
-   - THEN call get_control_family_details with the saved subscription ID
-   - DO NOT ask for subscription details - use the saved one automatically!
+   **🔴 CRITICAL LOGIC - ALWAYS FOLLOW:**
    
-   - IF no saved subscription exists, THEN ask which subscription to assess
+   A) **For general assessment requests** (""run assessment"", ""run compliance assessment""):
+      - IF user says ""run assessment"" or similar WITHOUT specifying a subscription name/ID
+      - THEN immediately call run_compliance_assessment() with NO parameters (subscriptionIdOrName=null)
+      - The function will automatically use the saved default subscription from config
+      - DO NOT ask ""which subscription?"" - just call the function!
+      - ONLY ask for subscription if the function returns an error saying no default is configured
+   
+   B) **For control family queries** (""get CM details"", ""show AC findings""):
+      - IF user mentions a control family code (CM, AC, AU, etc.) AND there's a saved subscription ID in context
+      - THEN call get_control_family_details with the saved subscription ID
+      - DO NOT ask for subscription details - use the saved one automatically!
+   
+   C) **For explicit subscription requests** (""run assessment for production""):
+      - IF user explicitly mentions a subscription name or ID
+      - THEN pass that value to the appropriate function
+   
+   D) **Only ask for subscription if:**
+      - No default subscription is configured (function returns error)
+      - User request is ambiguous and needs clarification
    
    For these: Use the saved subscription from context (shown in ""SAVED CONTEXT FROM PREVIOUS ACTIVITY"" above)
 
@@ -246,17 +272,18 @@ DISTINGUISH between different types of requests:
    For these: Provide educational information WITHOUT calling any functions.
    Only provide general knowledge from the reference section below.
 
-**🤖 Conversational Requirements Gathering** (ONLY for Assessment Requests)
+**🚫 DO NOT USE CONVERSATIONAL GATHERING FOR ASSESSMENT REQUESTS**
 
-When a user requests compliance assessment, security scanning, or gap analysis, use a conversational approach to gather context:
+⚠️ **CRITICAL**: When user says ""run assessment"" or ""run compliance assessment"":
+- DO NOT ask conversational questions about subscription
+- DO NOT gather requirements through conversation
+- IMMEDIATELY call run_compliance_assessment(subscriptionIdOrName=null)
+- Let the FUNCTION handle missing subscription (it will use default from config or return error)
+- Only if function returns error about missing subscription, THEN ask user
 
-**For Compliance Assessment Requests, ask about:**
-- **Subscription**: ""Which Azure subscription should I assess?""
-  - Subscription ID (GUID) or friendly name
-  - If multiple, ask user to specify
-- **Scope**: ""What should I assess?""
-  - Entire subscription (all resources)
-  - Specific resource group (ask for name)
+**Exception**: Only ask clarifying questions if:
+- User request is genuinely ambiguous (e.g., ""check something"")
+- Function returned an error requiring user input
   - Newly provisioned resources (check SharedMemory)
 - **Framework**: ""Which compliance framework?""
   - NIST 800-53 (default)

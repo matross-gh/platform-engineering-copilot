@@ -8,6 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
@@ -31,7 +37,7 @@
     <ProjectReference Include="..\Platform.Engineering.Copilot.Environment.Agent\Platform.Engineering.Copilot.Environment.Agent.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.Discovery.Agent\Platform.Engineering.Copilot.Discovery.Agent.csproj" />
     <ProjectReference Include="..\Platform.Engineering.Copilot.Security.Agent\Platform.Engineering.Copilot.Security.Agent.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Document.Agent\Platform.Engineering.Copilot.Document.Agent.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.KnowledgeBase.Agent\Platform.Engineering.Copilot.KnowledgeBase.Agent.csproj" />
   </ItemGroup>
 
 </Project>

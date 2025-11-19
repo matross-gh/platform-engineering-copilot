@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Admin.Models;
+using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;
 

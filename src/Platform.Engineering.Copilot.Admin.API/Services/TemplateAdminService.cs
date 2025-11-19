@@ -3,6 +3,7 @@ using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Admin.Models;
+using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 
 namespace Platform.Engineering.Copilot.Admin.Services;
 

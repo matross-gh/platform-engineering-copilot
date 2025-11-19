@@ -30,7 +30,6 @@ public interface IAtoComplianceEngine
         string controlFamily, 
         IProgress<EvidenceCollectionProgress>? progress = null,
         CancellationToken cancellationToken = default);
-    Task<RemediationPlan> GenerateRemediationPlanAsync(string subscriptionId, List<AtoFinding> findings, CancellationToken cancellationToken = default);
     Task<ComplianceTimeline> GetComplianceTimelineAsync(string subscriptionId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
     Task<RiskAssessment> PerformRiskAssessmentAsync(string subscriptionId, CancellationToken cancellationToken = default);
     Task<ComplianceCertificate> GenerateComplianceCertificateAsync(string subscriptionId, CancellationToken cancellationToken = default);

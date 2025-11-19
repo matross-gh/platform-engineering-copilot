@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
@@ -9,6 +9,7 @@ using Platform.Engineering.Copilot.Core.Interfaces;
 using System.Text.RegularExpressions;
 using Platform.Engineering.Copilot.CostManagement.Agent.Plugins;
 using Platform.Engineering.Copilot.Core.Interfaces.Chat;
+using Platform.Engineering.Copilot.CostManagement.Core.Configuration;
 
 namespace Platform.Engineering.Copilot.CostManagement.Agent.Services.Agents;
 
@@ -22,22 +23,30 @@ public class CostManagementAgent : ISpecializedAgent
     private readonly Kernel _kernel;
     private readonly IChatCompletionService _chatCompletion;
     private readonly ILogger<CostManagementAgent> _logger;
+    private readonly CostManagementAgentOptions _options;
 
     public CostManagementAgent(
         ISemanticKernelService semanticKernelService,
         ILogger<CostManagementAgent> logger,
-        CostManagementPlugin costManagementPlugin)
+        CostManagementPlugin costManagementPlugin,
+        Platform.Engineering.Copilot.Core.Plugins.ConfigurationPlugin configurationPlugin,
+        IOptions<CostManagementAgentOptions> options)
     {
         _logger = logger;
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         
         // Create specialized kernel for cost management operations
         _kernel = semanticKernelService.CreateSpecializedKernel(AgentType.CostManagement);
         _chatCompletion = _kernel.GetRequiredService<IChatCompletionService>();
 
+        // Register shared configuration plugin (set_azure_subscription, get_azure_subscription, etc.)
+        _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(configurationPlugin, "ConfigurationPlugin"));
+        
         // Register cost management plugin
         _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(costManagementPlugin, "CostManagementPlugin"));
 
-        _logger.LogInformation("✅ Cost Management Agent initialized with specialized kernel");
+        _logger.LogInformation("✅ Cost Management Agent initialized with specialized kernel (Temperature: {Temperature}, MaxTokens: {MaxTokens}, Currency: {Currency})",
+            _options.Temperature, _options.MaxTokens, _options.DefaultCurrency);
     }
 
     public async Task<AgentResponse> ProcessAsync(AgentTask task, SharedMemory memory)
@@ -69,11 +78,11 @@ public class CostManagementAgent : ISpecializedAgent
             chatHistory.AddSystemMessage(systemPrompt);
             chatHistory.AddUserMessage(userMessage);
 
-            // Execute with moderate temperature for analytical cost assessments
+            // Execute with configured temperature for analytical cost assessments
             var executionSettings = new OpenAIPromptExecutionSettings
             {
-                Temperature = 0.3, // Low temperature for precise cost analysis
-                MaxTokens = 4000,
+                Temperature = _options.Temperature,
+                MaxTokens = _options.MaxTokens,
                 ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions
             };
 
