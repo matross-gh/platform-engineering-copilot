@@ -48,6 +48,9 @@ RUN node --version && npm --version
 # Copy published app
 COPY --from=publish /app/publish .
 
+# Copy appsettings.json from repository root
+COPY appsettings.json ./appsettings.json
+
 # Set environment variables
 ENV ASPNETCORE_URLS=http://+:5100
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false

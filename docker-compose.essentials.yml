@@ -45,12 +45,23 @@ services:
       - ASPNETCORE_URLS=http://0.0.0.0:5100
       - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=McpDb;User=sa;Password=$${SA_PASSWORD:-SupervisorDB123!};TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
       
+      # Azure AD Authentication (CAC/PIV)
+      - AzureAd__Instance=${AZURE_AD_INSTANCE:-https://login.microsoftonline.us/}
+      - AzureAd__TenantId=${AZURE_AD_TENANT_ID:-}
+      - AzureAd__ClientId=${AZURE_AD_CLIENT_ID:-}
+      - AzureAd__ClientSecret=${AZURE_AD_CLIENT_SECRET:-}
+      - AzureAd__Audience=${AZURE_AD_AUDIENCE:-}
+      - AzureAd__RequireMfa=${AZURE_AD_REQUIRE_MFA:-false}
+      - AzureAd__RequireCac=${AZURE_AD_REQUIRE_CAC:-false}
+      - AzureAd__EnableUserTokenPassthrough=${AZURE_AD_ENABLE_USER_TOKEN_PASSTHROUGH:-false}
+      
       # Azure Configuration
       - Gateway__Azure__SubscriptionId=${AZURE_SUBSCRIPTION_ID}
       - Gateway__Azure__TenantId=${AZURE_TENANT_ID}
       - Gateway__Azure__CloudEnvironment=${AZURE_CLOUD_ENVIRONMENT:-AzureGovernment}
       - Gateway__Azure__UseManagedIdentity=${AZURE_USE_MANAGED_IDENTITY:-false}
       - Gateway__Azure__Enabled=${AZURE_ENABLED:-true}
+      - Gateway__Azure__EnableUserTokenPassthrough=${AZURE_ENABLE_USER_TOKEN_PASSTHROUGH:-false}
       
       # Azure Service Principal Authentication (for Azure MCP Server)
       - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
@@ -97,6 +108,7 @@ services:
       - "5100:5100"
     volumes:
       - plaform-engineering-copilot-logs:/app/logs
+      - ./appsettings.json:/app/appsettings.json:ro
     networks:
       - plaform-engineering-copilot-network
     healthcheck:
