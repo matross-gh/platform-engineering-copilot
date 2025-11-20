@@ -25,6 +25,10 @@ Choose your path:
 ### Option A: Docker (Recommended for First-Time Users)
 
 ```bash
+# 0. Login to Azure (REQUIRED for Discovery Agent)
+az login --use-device-code
+az account set --subscription "your-subscription-id"
+
 # 1. Clone repository
 git clone https://github.com/azurenoops/platform-engineering-copilot.git
 cd platform-engineering-copilot
@@ -43,6 +47,8 @@ curl http://localhost:5100/health
 ```
 
 **You're running!** MCP Server is at `http://localhost:5100`
+
+> **⚠️ Critical:** You MUST run `az login` before starting Docker! The container needs your Azure credentials to discover resources. See [troubleshooting](#-troubleshooting) if Discovery Agent returns no resources.
 
 ### Option B: Local Development (.NET)
 
@@ -154,13 +160,55 @@ az account set --subscription "your-subscription-id"
 az account show
 ```
 
+**CAC/PIV Authentication (Azure Government)**
+
+For DoD environments requiring Common Access Card (CAC) or Personal Identity Verification (PIV):
+
+```bash
+# Configure for Azure Government
+az cloud set --name AzureUSGovernment
+az login
+
+# Set tenant ID
+export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
+```
+
+**Enable CAC token validation** in `appsettings.json`:
+```json
+{
+  "AzureAd": {
+    "Instance": "https://login.microsoftonline.us/",
+    "TenantId": "your-tenant-id",
+    "ClientId": "your-client-id",
+    "ClientSecret": "your-client-secret",
+    "Audience": "api://your-api-id",
+    "RequireMfa": true,
+    "RequireCac": true,
+    "EnableUserTokenPassthrough": true
+  }
+}
+```
+
+📖 **Complete CAC/PIV guide**: See `releases/CAC-AUTHENTICATION.md` for detailed setup
+
 **Production (Managed Identity)**
 
 See **[AUTHENTICATION.md](./AUTHENTICATION.md)** for production setup with managed identity.
 
 ### Step 4: Configuration
 
-Create `src/Platform.Engineering.Copilot.Mcp/appsettings.Development.json`:
+**📍 Configuration is now centralized at repository root** (`appsettings.json`)
+
+**Quick setup:**
+```bash
+# Copy example configuration
+cp appsettings.example.json appsettings.json
+
+# Edit with your Azure credentials
+vi appsettings.json
+```
+
+**Configuration structure** (`appsettings.json` at repository root):
 
 ```json
 {
@@ -170,10 +218,48 @@ Create `src/Platform.Engineering.Copilot.Mcp/appsettings.Development.json`:
       "Microsoft.AspNetCore": "Warning"
     }
   },
-  "Azure": {
-    "SubscriptionId": "your-subscription-id",
-    "TenantId": "your-tenant-id",
-    "CloudEnvironment": "AzureCloud"
+  "Gateway": {
+    "Azure": {
+      "UseManagedIdentity": false,
+      "CloudEnvironment": "AzureGovernment",
+      "Enabled": true,
+      "EnableUserTokenPassthrough": true
+    },
+    "AzureOpenAI": {
+      "ApiKey": "your-azure-openai-api-key-here",
+      "Endpoint": "https://your-resource-name.openai.azure.us/",
+      "DeploymentName": "gpt-4o",
+      "UseManagedIdentity": false,
+      "ChatDeploymentName": "gpt-4o",
+      "EmbeddingDeploymentName": "text-embedding-ada-002"
+    },
+    "GitHub": {
+      "AccessToken": "ghp_your_github_personal_access_token_here",
+      "ApiBaseUrl": "https://api.github.com",
+      "DefaultOwner": "your-github-username-or-org",
+      "Enabled": true,
+      "PersonalAccessToken": "ghp_your_github_personal_access_token_here",
+      "WebhookSecret": "your-webhook-secret-here",
+      "EnablePrReviews": true,
+      "AutoApproveOnSuccess": false,
+      "MaxFileSizeKb": 1024
+    },
+    "ConnectionTimeoutSeconds": 60,
+    "RequestTimeoutSeconds": 300
+  },
+  "AzureAd": {
+    "Instance": "https://login.microsoftonline.us/",
+    "TenantId": "your-gov-tenant-id",
+    "ClientId": "your-mcp-app-registration-id",
+    "ClientSecret": "USE_KEY_VAULT_REFERENCE",
+    "Audience": "api://platform-engineering-copilot",
+    "RequireMfa": false,
+    "RequireCac": false,
+    "ValidIssuers": [
+      "https://login.microsoftonline.us/{tenant-id}/v2.0",
+      "https://sts.windows.net/{tenant-id}/"
+    ],
+    "EnableUserTokenPassthrough": false
   },
   "AzureOpenAI": {
     "Endpoint": "https://your-endpoint.openai.azure.com/",
@@ -182,7 +268,7 @@ Create `src/Platform.Engineering.Copilot.Mcp/appsettings.Development.json`:
     "EmbeddingDeploymentName": "text-embedding-ada-002"
   },
   "ConnectionStrings": {
-    "DefaultConnection": "Data Source=../../../platform_engineering_copilot_management.db"
+    "DefaultConnection": "Data Source=platform_engineering_copilot_management.db"
   },
   "AgentConfiguration": {
     "InfrastructureAgent": {
@@ -282,25 +368,67 @@ dotnet run  # Port 5003
 ### Quick Docker Start
 
 ```bash
-# 1. Copy environment template
+# 1. Login to Azure (Required for resource discovery)
+az login --use-device-code
+az account set --subscription "your-subscription-id"
+
+# 2. Copy environment template
 cp .env.example .env
 
-# 2. Edit .env with your credentials
+# 3. Edit .env with your credentials
 # Required variables:
 #   - AZURE_SUBSCRIPTION_ID
 #   - AZURE_TENANT_ID
 #   - AZURE_OPENAI_API_KEY
 #   - AZURE_OPENAI_ENDPOINT
+#
+# Optional (for CAC/PIV authentication):
+#   - AZURE_AD_INSTANCE
+#   - AZURE_AD_TENANT_ID
+#   - AZURE_AD_CLIENT_ID
+#   - AZURE_AD_CLIENT_SECRET
+#   - AZURE_AD_AUDIENCE
+#   - AZURE_AD_REQUIRE_MFA
+#   - AZURE_AD_REQUIRE_CAC
+#   - AZURE_AD_ENABLE_USER_TOKEN_PASSTHROUGH
 
-# 3. Start essentials (MCP + Database)
+# 4. Start essentials (MCP + Database)
 docker compose -f docker-compose.essentials.yml up -d
 
-# 4. View logs
+# 5. View logs
 docker compose logs -f platform-mcp
 
-# 5. Verify
+# 6. Verify
 curl http://localhost:5100/health
 ```
+
+> **⚠️ Important:** The container needs access to your Azure credentials!  
+> The `docker-compose.essentials.yml` automatically mounts your `~/.azure` directory so the container can use your Azure CLI login.  
+> **Without `az login`, Agents cannot query Azure resources.**
+
+### How Azure Authentication Works in Docker
+
+The MCP container uses **DefaultAzureCredential** which tries authentication methods in this order:
+
+1. **Environment variables** (Service Principal) - For production
+2. **Managed Identity** - For Azure-hosted containers
+3. **Azure CLI** - For local development ✅ **(Mounted via volume)**
+4. **Azure PowerShell** - Alternative to CLI
+5. **Interactive browser** - Last resort
+
+**For local Docker development**, the container uses your Azure CLI credentials via:
+```yaml
+volumes:
+  - ~/.azure:/root/.azure:ro  # Read-only mount
+```
+
+This means:
+- ✅ You must run `az login` on your host machine **before** starting Docker
+- ✅ The container will use your Azure identity
+- ✅ No need to configure Service Principal for local dev
+- ✅ Agents can query your Azure subscriptions
+
+**For production**, use Service Principal or Managed Identity (see [AUTHENTICATION.md](./AUTHENTICATION.md)).
 
 ### Full Stack Docker
 
@@ -359,6 +487,50 @@ docker compose up -d --scale platform-mcp=3
 ```
 
 **📖 Complete Docker guide:** [DEPLOYMENT.md](./DEPLOYMENT.md#docker-deployment)
+
+### Centralized Configuration (v0.7.0+)
+
+Configuration is now centralized at the repository root for easier management:
+
+**File Structure:**
+```
+platform-engineering-copilot/
+├── appsettings.json              ← Centralized configuration (single source of truth)
+├── appsettings.example.json      ← Template for new deployments
+├── .env                          ← Environment-specific overrides
+└── src/Platform.Engineering.Copilot.Mcp/
+    └── (no appsettings.json)     ← References root config via .csproj link
+```
+
+**Configuration Priority** (later overrides earlier):
+1. `appsettings.json` (root) - Base configuration
+2. Environment variables - Per-environment overrides
+3. Command-line arguments - Runtime overrides
+
+**Docker Integration:**
+- Dockerfile copies `appsettings.json` from root during build
+- Docker Compose mounts config as read-only volume
+- Environment variables override config values
+
+**Azure AD Environment Variables** (available in all docker-compose files):
+```yaml
+- AzureAd__Instance=${AZURE_AD_INSTANCE:-https://login.microsoftonline.us/}
+- AzureAd__TenantId=${AZURE_AD_TENANT_ID:-}
+- AzureAd__ClientId=${AZURE_AD_CLIENT_ID:-}
+- AzureAd__ClientSecret=${AZURE_AD_CLIENT_SECRET:-}
+- AzureAd__Audience=${AZURE_AD_AUDIENCE:-}
+- AzureAd__RequireMfa=${AZURE_AD_REQUIRE_MFA:-false}
+- AzureAd__RequireCac=${AZURE_AD_REQUIRE_CAC:-false}
+- AzureAd__EnableUserTokenPassthrough=${AZURE_AD_ENABLE_USER_TOKEN_PASSTHROUGH:-false}
+- Gateway__Azure__EnableUserTokenPassthrough=${AZURE_ENABLE_USER_TOKEN_PASSTHROUGH:-false}
+```
+
+**Benefits:**
+- ✅ Single configuration file for all environments
+- ✅ Easy version control without secrets
+- ✅ Environment-specific overrides via `.env`
+- ✅ Container-safe with read-only mounts
+- ✅ Consistent dev/prod/container deployments
 
 ---
 
@@ -1315,6 +1487,33 @@ az account set --subscription "your-subscription-id"
 az account show
 ```
 
+**Issue: "Discovery Agent returns no resources" or "Taking too long"**
+
+This means the Docker container doesn't have access to Azure credentials.
+
+```bash
+# 1. Ensure you're logged in to Azure on your HOST machine
+az login --use-device-code
+az account set --subscription "your-subscription-id"
+
+# 2. Verify ~/.azure directory exists
+ls -la ~/.azure/
+
+# 3. Restart Docker container to pick up credentials
+docker-compose -f docker-compose.essentials.yml down
+docker-compose -f docker-compose.essentials.yml up -d
+
+# 4. Check container can access Azure
+docker exec plaform-engineering-copilot-mcp ls -la /root/.azure
+
+# 5. Watch logs for authentication errors
+docker logs -f plaform-engineering-copilot-mcp | grep -i "auth\|credential\|azure"
+```
+
+**Root Cause:** The container mounts `~/.azure:/root/.azure:ro` to use your Azure CLI credentials. If you haven't run `az login`, this directory is empty and DefaultAzureCredential fails silently.
+
+**Solution:** Always run `az login` before starting Docker containers.
+
 **Issue: "Database migration failed"**
 ```bash
 # Ensure EF tools installed
@@ -1375,6 +1574,7 @@ cat src/Platform.Engineering.Copilot.Mcp/appsettings.json | grep AgentConfigurat
 | Document | Purpose |
 |----------|---------|
 | **[AUTHENTICATION.md](./AUTHENTICATION.md)** | Azure authentication setup |
+| **[CAC-AUTHENTICATION.md](../releases/CAC-AUTHENTICATION.md)** | CAC/PIV authentication for Azure Government (v0.7.0) |
 | **[DEPLOYMENT.md](./DEPLOYMENT.md)** | Production deployment guide |
 | **[DEVELOPMENT.md](./DEVELOPMENT.md)** | Development deep dive |
 | **[ARCHITECTURE.md](./ARCHITECTURE.md)** | System architecture |

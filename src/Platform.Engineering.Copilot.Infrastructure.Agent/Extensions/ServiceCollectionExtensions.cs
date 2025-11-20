@@ -2,12 +2,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Platform.Engineering.Copilot.Core.Interfaces.Agents;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
+using Platform.Engineering.Copilot.Core.Interfaces.Deployment;
 using Platform.Engineering.Copilot.Infrastructure.Core.Services;
 using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Services.ServiceCreation;
 using Platform.Engineering.Copilot.Core.Services.Generators.Documentation;
 using Platform.Engineering.Copilot.Infrastructure.Agent.Configuration;
 using Platform.Engineering.Copilot.Infrastructure.Agent.Plugins;
+using Platform.Engineering.Copilot.Infrastructure.Agent.Services.Deployment;
 
 namespace Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
 
@@ -21,6 +23,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<InfrastructureAgent>();
         services.AddScoped<ISpecializedAgent, InfrastructureAgent>(sp => sp.GetRequiredService<InfrastructureAgent>());
         services.AddScoped<InfrastructurePlugin>();
+        
+        // Register Deployment Orchestration Service
+        services.AddSingleton<IDeploymentOrchestrationService, DeploymentOrchestrationService>();
         
         // Register Infrastructure Services
         services.AddScoped<NetworkTopologyDesignService>();

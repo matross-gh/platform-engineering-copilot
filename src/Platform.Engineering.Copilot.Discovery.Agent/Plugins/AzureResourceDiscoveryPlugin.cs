@@ -1,12 +1,13 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
-using Platform.Engineering.Copilot.Core.Interfaces.Discovery;
 using Platform.Engineering.Copilot.Core.Models.Azure;
 using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Core.Plugins;
 using System.ComponentModel;
+using Platform.Engineering.Copilot.Discovery.Core.Configuration;
 
 namespace Platform.Engineering.Copilot.Discovery.Agent.Plugins;
 
@@ -19,139 +20,18 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
 {
     private readonly IAzureResourceService _azureResourceService;
     private readonly AzureMcpClient _azureMcpClient;
-    private readonly IAzureResourceDiscoveryService _azureResourceDiscoveryService;
+    private readonly DiscoveryAgentOptions _options;
+
     public AzureResourceDiscoveryPlugin(
         ILogger<AzureResourceDiscoveryPlugin> logger,
         Kernel kernel,
         IAzureResourceService azureResourceService,
         AzureMcpClient azureMcpClient,
-        IAzureResourceDiscoveryService azureResourceDiscoveryService) : base(logger, kernel)
+        IOptions<DiscoveryAgentOptions> options) : base(logger, kernel)
     {
         _azureResourceService = azureResourceService ?? throw new ArgumentNullException(nameof(azureResourceService));
         _azureMcpClient = azureMcpClient ?? throw new ArgumentNullException(nameof(azureMcpClient));
-        _azureResourceDiscoveryService = azureResourceDiscoveryService ?? throw new ArgumentNullException(nameof(azureResourceDiscoveryService));
-    }
-
-    // ========== NATURAL LANGUAGE DISCOVERY FUNCTIONS ==========
-
-    [KernelFunction("discover_resources_from_query")]
-    [Description("PRIMARY FUNCTION for discovering Azure resources using natural language. " +
-                 "Use this when user asks to find, search, list, or discover resources in plain English. " +
-                 "Examples: 'Find all storage accounts in eastus', 'Show me VMs in production', 'List AKS clusters'")]
-    public async Task<string> DiscoverResourcesFromQueryAsync(
-        [Description("Natural language query describing resources to find")] string query,
-        [Description("Azure subscription ID to search in")] string subscriptionId,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("Discovering resources from natural language query: {Query}", query);
-
-            var result = await _azureResourceDiscoveryService.DiscoverResourcesAsync(query, subscriptionId, cancellationToken);
-
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error discovering resources from query: {Query}", query);
-            return CreateErrorResponse("discover resources from query", ex);
-        }
-    }
-
-    [KernelFunction("get_resource_details_from_query")]
-    [Description("Get detailed information about a specific resource using natural language. " +
-                 "Use when user asks for details, configuration, or status of a specific resource. " +
-                 "Examples: 'Show me details of storage account mydata', 'What's the status of VM web-01?'")]
-    public async Task<string> GetResourceDetailsFromQueryAsync(
-        [Description("Natural language query identifying the resource")] string query,
-        [Description("Azure subscription ID")] string subscriptionId,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("Getting resource details from query: {Query}", query);
-
-            var result = await _azureResourceDiscoveryService.GetResourceDetailsAsync(query, subscriptionId, cancellationToken);
-
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting resource details from query: {Query}", query);
-            return CreateErrorResponse("get resource details from query", ex);
-        }
-    }
-
-    [KernelFunction("get_inventory_from_query")]
-    [Description("Get resource inventory summary using natural language. " +
-                 "Use when user asks for inventory, summary, or overview of resources. " +
-                 "Examples: 'Show inventory for rg-prod', 'What resources do I have in eastus?', 'Get summary'")]
-    public async Task<string> GetInventoryFromQueryAsync(
-        [Description("Natural language query for inventory scope")] string query,
-        [Description("Azure subscription ID")] string subscriptionId,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("Getting inventory from query: {Query}", query);
-
-            var result = await _azureResourceDiscoveryService.GetInventorySummaryAsync(query, subscriptionId, cancellationToken);
-
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting inventory from query: {Query}", query);
-            return CreateErrorResponse("get inventory from query", ex);
-        }
-    }
-
-    [KernelFunction("search_resources_by_tags_query")]
-    [Description("Search for resources by tags using natural language. " +
-                 "Use when user asks to find resources with specific tags. " +
-                 "Examples: 'Find all resources tagged environment=prod', 'Show production resources', 'List resources with cost-center tag'")]
-    public async Task<string> SearchResourcesByTagsQueryAsync(
-        [Description("Natural language query with tag filters")] string query,
-        [Description("Azure subscription ID")] string subscriptionId,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("Searching resources by tags from query: {Query}", query);
-
-            var result = await _azureResourceDiscoveryService.SearchByTagsAsync(query, subscriptionId, cancellationToken);
-
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error searching resources by tags from query: {Query}", query);
-            return CreateErrorResponse("search resources by tags from query", ex);
-        }
-    }
-
-    [KernelFunction("check_resource_health_from_query")]
-    [Description("Check health status of resources using natural language. " +
-                 "Use when user asks about resource health, availability, or status. " +
-                 "Examples: 'Check health of VMs in rg-prod', 'Are there unhealthy resources?', 'Show resource health'")]
-    public async Task<string> CheckResourceHealthFromQueryAsync(
-        [Description("Natural language query for health check")] string query,
-        [Description("Azure subscription ID")] string subscriptionId,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("Checking resource health from query: {Query}", query);
-
-            var result = await _azureResourceDiscoveryService.GetHealthStatusAsync(query, subscriptionId, cancellationToken);
-
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error checking resource health from query: {Query}", query);
-            return CreateErrorResponse("check resource health from query", ex);
-        }
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     // ========== DISCOVERY & INVENTORY FUNCTIONS ==========
@@ -188,20 +68,26 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
 
             if (!string.IsNullOrWhiteSpace(resourceGroup))
             {
-                filteredResources = filteredResources.Where(r =>
+                filteredResources = filteredResources.Where(r => 
                     r.ResourceGroup?.Equals(resourceGroup, StringComparison.OrdinalIgnoreCase) == true);
             }
 
             if (!string.IsNullOrWhiteSpace(resourceType))
             {
-                filteredResources = filteredResources.Where(r =>
+                filteredResources = filteredResources.Where(r => 
                     r.Type?.Equals(resourceType, StringComparison.OrdinalIgnoreCase) == true);
             }
 
             if (!string.IsNullOrWhiteSpace(location))
             {
-                filteredResources = filteredResources.Where(r =>
+                filteredResources = filteredResources.Where(r => 
                     r.Location?.Equals(location, StringComparison.OrdinalIgnoreCase) == true);
+            }
+
+            // Apply configuration: MaxResourcesPerQuery
+            if (_options.Discovery.MaxResourcesPerQuery > 0)
+            {
+                filteredResources = filteredResources.Take(_options.Discovery.MaxResourcesPerQuery);
             }
 
             var resourceList = filteredResources.ToList();
@@ -251,7 +137,7 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                     location = r.Location,
                     tags = r.Tags
                 }),
-                nextSteps = resourceList.Count > 50
+                nextSteps = resourceList.Count > 50 
                     ? "Results limited to 50 resources - use more specific filters. Say 'I want to see details for resource <resource-id>' to inspect specific resources, 'search for resources with tag Environment' to find tagged resources, or 'give me a complete inventory summary for this subscription' for a full report."
                     : "Say 'I want to see details for resource <resource-id>' to inspect specific resources, 'search for resources with tag Environment' to find tagged resources, or 'give me a complete inventory summary for this subscription' for a full report."
             }, new JsonSerializerOptions { WriteIndented = true });
@@ -296,9 +182,9 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
 
-            // Get health status if requested
+            // Get health status if requested and enabled
             object? healthStatus = null;
-            if (includeHealth)
+            if (includeHealth && _options.EnableHealthMonitoring)
             {
                 try
                 {
@@ -383,14 +269,22 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                 if (string.IsNullOrWhiteSpace(tagValue)) return true;
 
                 return r.Tags[tagKey]?.Equals(tagValue, StringComparison.OrdinalIgnoreCase) == true;
-            }).ToList();
+            });
+
+            // Apply configuration: MaxResourcesPerQuery
+            if (_options.Discovery.MaxResourcesPerQuery > 0)
+            {
+                matchedResources = matchedResources.Take(_options.Discovery.MaxResourcesPerQuery);
+            }
+
+            var resourceList = matchedResources.ToList();
 
             // Group by resource type and tag value
-            var byType = matchedResources.GroupBy(r => r.Type ?? "Unknown")
+            var byType = resourceList.GroupBy(r => r.Type ?? "Unknown")
                 .Select(g => new { type = g.Key, count = g.Count() })
                 .OrderByDescending(x => x.count);
 
-            var byTagValue = matchedResources
+            var byTagValue = resourceList
                 .Where(r => r.Tags != null && r.Tags.ContainsKey(tagKey))
                 .GroupBy(r => r.Tags![tagKey] ?? "null")
                 .Select(g => new { tagValue = g.Key, count = g.Count() })
@@ -408,7 +302,7 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                 },
                 summary = new
                 {
-                    totalMatches = matchedResources.Count,
+                    totalMatches = matchedResources.Count(),
                     uniqueTypes = byType.Count(),
                     uniqueValues = byTagValue.Count()
                 },
@@ -429,8 +323,8 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                 }),
                 nextSteps = new[]
                 {
-                    matchedResources.Count == 0 ? $"No resources found with tag '{tagKey}'. Try searching for a different tag or check your tag naming." : null,
-                    matchedResources.Count > 100 ? "Results limited to 100 resources - consider filtering by tag value to narrow results." : null,
+                    matchedResources.Count() == 0 ? $"No resources found with tag '{tagKey}'. Try searching for a different tag or check your tag naming." : null,
+                    matchedResources.Count() > 100 ? "Results limited to 100 resources - consider filtering by tag value to narrow results." : null,
                     "Say 'show me details for resource <resource-id>' to inspect specific resources.",
                     "Consider adding tags to untagged resources by saying 'I need to tag resources in this subscription'."
                 }.Where(s => s != null)
@@ -456,6 +350,15 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
         try
         {
             _logger.LogInformation("Analyzing resource dependencies in subscription {SubscriptionId}", subscriptionId);
+
+            if (!_options.EnableDependencyMapping)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = "Dependency mapping is currently disabled. Please enable it in the Discovery Agent configuration."
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
 
             if (string.IsNullOrWhiteSpace(subscriptionId))
             {
@@ -578,11 +481,11 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                 dynamic rgData = rg;
                 string? rgName = rgData.name?.ToString();
 
-                if (!string.IsNullOrEmpty(rgName) && !string.IsNullOrEmpty(subscriptionId))
+                if (!string.IsNullOrEmpty(rgName))
                 {
                     try
                     {
-                        var resources = await _azureResourceService.ListAllResourcesInResourceGroupAsync(subscriptionId!, rgName!, cancellationToken);
+                        var resources = await _azureResourceService.ListAllResourcesInResourceGroupAsync(subscriptionId, rgName!, cancellationToken);
                         var resourceCount = resources.Count();
 
                         rgWithCounts.Add(new
@@ -676,17 +579,8 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
 
-            if (string.IsNullOrWhiteSpace(subscriptionId))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = "Subscription ID is required"
-                }, new JsonSerializerOptions { WriteIndented = true });
-            }
-
             // Get all resources in the resource group
-            var resources = await _azureResourceService.ListAllResourcesInResourceGroupAsync(subscriptionId!, resourceGroupName, cancellationToken);
+            var resources = await _azureResourceService.ListAllResourcesInResourceGroupAsync(subscriptionId, resourceGroupName, cancellationToken);
             var resourceList = resources.ToList();
 
             // Analyze resources
@@ -882,6 +776,15 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
         {
             _logger.LogInformation("Getting health overview for subscription {SubscriptionId}", subscriptionId);
 
+            if (!_options.EnableHealthMonitoring)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = "Health monitoring is currently disabled. Please enable it in the Discovery Agent configuration."
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
             if (string.IsNullOrWhiteSpace(subscriptionId))
             {
                 return JsonSerializer.Serialize(new
@@ -967,6 +870,15 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
         {
             _logger.LogInformation("Getting health history for subscription {SubscriptionId}, timeRange {TimeRange}", 
                 subscriptionId, timeRange);
+
+            if (!_options.EnableHealthMonitoring)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    success = false,
+                    error = "Health monitoring is currently disabled. Please enable it in the Discovery Agent configuration."
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
 
             if (string.IsNullOrWhiteSpace(subscriptionId))
             {
@@ -1316,7 +1228,7 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
 
     // ========== AZURE MCP ENHANCED FUNCTIONS ==========
 
-    [KernelFunction("discover_azure_resources_with_guidance")]
+    [KernelFunction("discover_resources_with_guidance")]
     [Description("Discover Azure resources with best practices and optimization recommendations. " +
                  "Combines fast SDK-based resource discovery with Azure MCP best practices guidance. " +
                  "Use when you want actionable recommendations along with your resource inventory.")]
@@ -1441,7 +1353,7 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
         }
     }
 
-    [KernelFunction("get_resource_details_with_diagnostics")]
+    [KernelFunction("get_resource_with_diagnostics")]
     [Description("Get comprehensive resource details with AppLens diagnostics and troubleshooting guidance. " +
                  "Combines SDK resource data with Azure MCP's AppLens diagnostics for deep analysis. " +
                  "Use when troubleshooting resource issues or performing detailed health analysis.")]
@@ -1476,9 +1388,9 @@ public class AzureResourceDiscoveryPlugin : BaseSupervisorPlugin
                 }, new JsonSerializerOptions { WriteIndented = true });
             }
 
-            // 2. Get health status if requested
+            // 2. Get health status if requested and enabled
             object? healthStatus = null;
-            if (includeHealth)
+            if (includeHealth && _options.EnableHealthMonitoring)
             {
                 try
                 {

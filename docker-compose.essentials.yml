@@ -43,7 +43,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://0.0.0.0:5100
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=McpDb;User=sa;Password=$${SA_PASSWORD:-SupervisorDB123!};TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=McpDb;User=sa;Password=${SA_PASSWORD:-SupervisorDB123!};TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
       
       # Azure AD Authentication (CAC/PIV)
       - AzureAd__Instance=${AZURE_AD_INSTANCE:-https://login.microsoftonline.us/}
@@ -109,6 +109,7 @@ services:
     volumes:
       - plaform-engineering-copilot-logs:/app/logs
       - ./appsettings.json:/app/appsettings.json:ro
+      - ~/.azure:/root/.azure:ro
     networks:
       - plaform-engineering-copilot-network
     healthcheck:

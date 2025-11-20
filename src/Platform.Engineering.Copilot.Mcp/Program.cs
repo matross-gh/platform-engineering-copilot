@@ -264,8 +264,6 @@ class Program
                     };
                 });
 
-            builder.Services.AddAuthorization();
-
             Log.Information("✅ JWT Bearer authentication configured for Azure AD tenant: {TenantId}", 
                 azureAdOptions.TenantId);
         }
@@ -273,6 +271,9 @@ class Program
         {
             Log.Warning("⚠️  Azure AD authentication not configured - MCP will not validate user tokens");
         }
+
+        // Add authorization services (required for UseAuthorization middleware)
+        builder.Services.AddAuthorization();
 
         // Add Azure credential provider for user token passthrough
         builder.Services.AddAzureCredentialProvider();
@@ -306,19 +307,23 @@ class Program
 
         if (agentConfig.IsAgentEnabled("Compliance"))
         {
+            var complianceConfig = builder.Configuration.GetSection("AgentConfiguration:ComplianceAgent");
+            builder.Services.AddComplianceAgent(complianceConfig);
             logger.LogInformation("✅ Compliance agent enabled");
-            enabledCount++;
-        }
-        
-        if (agentConfig.IsAgentEnabled("Infrastructure"))
-        {
-            logger.LogInformation("✅ Infrastructure agent enabled");
             enabledCount++;
         }
 
         if (agentConfig.IsAgentEnabled("CostManagement"))
         {
+            builder.Services.AddCostManagementAgent();
             logger.LogInformation("✅ CostManagement agent enabled");
+            enabledCount++;
+        }
+
+        if (agentConfig.IsAgentEnabled("Discovery"))
+        {
+            builder.Services.AddDiscoveryAgent();
+            logger.LogInformation("✅ Discovery agent enabled");
             enabledCount++;
         }
 
@@ -328,10 +333,11 @@ class Program
             logger.LogInformation("✅ Environment agent enabled");
             enabledCount++;
         }
-
-        if (agentConfig.IsAgentEnabled("Discovery"))
+        
+        if (agentConfig.IsAgentEnabled("Infrastructure"))
         {
-            logger.LogInformation("✅ Discovery agent enabled");
+            builder.Services.AddInfrastructureAgent();
+            logger.LogInformation("✅ Infrastructure agent enabled");
             enabledCount++;
         }
 
@@ -379,12 +385,20 @@ class Program
         // Configure URLs
         app.Urls.Add($"http://0.0.0.0:{port}");
 
-        // Add authentication middleware (must be before authorization)
-        app.UseAuthentication();
-        app.UseAuthorization();
+        // Add authentication middleware only if Azure AD is configured
+        var appAzureAdConfig = app.Configuration.GetSection(AzureAdOptions.SectionName);
+        var appAzureAdOptions = new AzureAdOptions();
+        appAzureAdConfig.Bind(appAzureAdOptions);
+        
+        if (!string.IsNullOrEmpty(appAzureAdOptions.TenantId) && !string.IsNullOrEmpty(appAzureAdOptions.Audience))
+        {
+            // Add authentication middleware (must be before authorization)
+            app.UseAuthentication();
+            app.UseAuthorization();
 
-        // Add user token middleware to extract CAC identity and create Azure credentials
-        app.UseUserTokenAuthentication();
+            // Add user token middleware to extract CAC identity and create Azure credentials
+            app.UseUserTokenAuthentication();
+        }
 
         // Add audit logging middleware for HTTP requests
         app.UseMiddleware<AuditLoggingMiddleware>();

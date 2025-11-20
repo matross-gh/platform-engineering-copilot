@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Platform.Engineering.Copilot.Core.Interfaces.Agents;
 using Platform.Engineering.Copilot.Core.Interfaces.Discovery;
+using Platform.Engineering.Copilot.Discovery.Agent.Plugins;
 using Platform.Engineering.Copilot.Discovery.Agent.Services;
 using Platform.Engineering.Copilot.Discovery.Core.Configuration;
 

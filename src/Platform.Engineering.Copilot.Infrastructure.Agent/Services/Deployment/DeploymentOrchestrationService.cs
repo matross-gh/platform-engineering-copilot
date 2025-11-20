@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Deployment;
 
-namespace Platform.Engineering.Copilot.Environment.Agent.Services.Deployment
+namespace Platform.Engineering.Copilot.Infrastructure.Agent.Services.Deployment
 {
     /// <summary>
     /// Service for orchestrating infrastructure deployments across cloud providers.

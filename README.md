@@ -47,6 +47,13 @@ export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
 # Configure environment
 cp .env.example .env
 # Edit .env with your Azure OpenAI and subscription details
+
+# Optional: Enable CAC/PIV Authentication (Azure Government)
+# See docs/CAC-AUTHENTICATION-QUICKSTART.md for complete setup
+export AZURE_AD_TENANT_ID="your-tenant-id"
+export AZURE_AD_CLIENT_ID="your-client-id"
+export AZURE_AD_CLIENT_SECRET="your-client-secret"
+export AZURE_AD_REQUIRE_CAC="true"
 ```
 
 ### 2. Deploy
@@ -98,6 +105,8 @@ curl -X POST http://localhost:5100/api/chat/message \
 - Idle resource identification
 
 ### Security
+- **CAC/PIV Authentication**: Azure Government support with smart card validation
+- **User Token Passthrough**: On-Behalf-Of flow for complete audit trails
 - Vulnerability scanning and threat detection
 - Azure Policy integration with approval workflows
 - Security posture monitoring
@@ -108,6 +117,12 @@ curl -X POST http://localhost:5100/api/chat/message \
 - Template validation and deployment
 - Security defaults for all resources
 - Auto-create resource groups with managed tags
+
+### Configuration Management
+- **Centralized Configuration**: Single `appsettings.json` at repository root
+- **Environment Overrides**: Docker Compose environment variables
+- **Layered Configuration**: Base + environment-specific overrides (dev/prod)
+- **Secure Secrets**: Azure Key Vault integration and environment variable support
 
 
 ## 🏗️ Architecture
@@ -153,6 +168,8 @@ curl -X POST http://localhost:5100/api/chat/message \
 
 **Getting Started:**
 - [Authentication Quick Start](./docs/QUICKSTART-AUTHENTICATION.md)
+- [CAC/PIV Authentication](./docs/CAC-AUTHENTICATION.md) - Azure Government with smart cards
+- [CAC Quick Start](./docs/CAC-AUTHENTICATION-QUICKSTART.md) - 15-minute setup guide
 - [Docker Deployment](./DOCKER-COMPOSE-GUIDE.md)
 - [Development Setup](./docs/DEVELOPMENT.md)
 
@@ -196,6 +213,12 @@ curl -X POST http://localhost:5100/api/chat/message \
 ```
 "Generate System Security Plan for production environment"
 → Collects evidence → Generates SSP, SAR, POAM → Tracks submission
+```
+
+**CAC/PIV Authentication (Azure Government):**
+```
+"Configure CAC authentication for Azure Government deployment"
+→ Azure AD app registration → Certificate trust setup → Token validation → User OBO flow
 ```
 
 
@@ -291,8 +314,8 @@ MIT License - Copyright © 2025 Microsoft Federal
 
 ---
 
-**Version**: 0.6.35  
-**Last Updated**: November 11, 2025  
+**Version**: 0.7.0  
+**Last Updated**: November 19, 2025  
 **Team**: Microsoft Federal CSU Platform Engineering
 
 ## 🤝 Contributing
@@ -322,6 +345,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **[Microsoft Semantic Kernel](https://learn.microsoft.com/en-us/semantic-kernel/)**
 - **[Model Context Protocol](https://modelcontextprotocol.io/)**
 - **[Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/ai-services/openai/)**
+- **[DoD PKI Documentation](https://public.cyber.mil/pki-pke/)** - CAC/PIV certificates
+
+**Release Notes:**
+- **[v0.7.0 Release Notes](./RELEASE_NOTES_v0.7.0.md)** - CAC authentication and configuration centralization
+- **[v0.6.35 Release Notes](./RELEASE_NOTES_v0.6.35.md)** - Azure MCP best practices and LLM configuration
 
 ---
 
@@ -343,22 +371,44 @@ For issues, questions, or contributions:
 
 ---
 
-## ✨ What's New in 2.1
+## ✨ What's New in v0.7.0
 
-### MCP Server Architecture
+### 🔐 CAC/PIV Authentication (Azure Government)
+- **Smart Card Authentication**: CAC/PIV token validation with Azure AD
+- **On-Behalf-Of Flow**: User identity propagation to all Azure resources
+- **DoD Compliance**: Support for Impact Level 4/5 requirements
+- **Complete Audit Trail**: All operations executed as authenticated user
+- **Flexible Enforcement**: Toggle CAC/MFA requirements per environment
+- **Azure Government**: Configured for `.azure.us` endpoints
+
+### 🏗️ Configuration Management
+- **Centralized Config**: Single `appsettings.json` at repository root
+- **Docker Integration**: Volume mounts and environment variable overrides
+- **Layered Configuration**: Base settings + environment-specific overrides
+- **9 New Environment Variables**: Complete Azure AD authentication control
+- **All Docker Compose Files Updated**: Essentials, All, and base configurations
+
+### 📚 Documentation
+- **CAC-AUTHENTICATION.md**: Complete setup guide (14,711 lines)
+- **CAC-AUTHENTICATION-QUICKSTART.md**: 15-minute deployment guide (5,732 lines)
+- Topics: Azure AD setup, certificate trust, client examples, security, troubleshooting
+
+### Previous Features (v0.6.35 and earlier)
+
+#### MCP Server Architecture
 - 🔧 **Model Context Protocol Server**: Dual-mode operation (HTTP + stdio)
 - 🤖 **Multi-Agent Orchestration**: 6 specialized AI agents
 - 🔌 **AI Client Integration**: GitHub Copilot and Claude Desktop support
 - 📦 **Flexible Deployment**: Essentials (MCP only) and Full platform options
 
-### Enhanced Features
+#### Enhanced Features
 - 📊 **Gap Analysis**: Automated compliance gap identification in Compliance Agent
 - 💰 **Cost Overview Dashboard**: Comprehensive cost visibility in Cost Optimization Agent
 - 🛡️ **NIST 800-53 Rev 5**: Complete implementation with 18 control families
 - 🔐 **RMF Framework**: Full Risk Management Framework support
 - 📝 **ATO Documentation**: Automated SSP, SAR, and POAM generation
 
-### Deployment Improvements
+#### Deployment Improvements
 - 🐳 **Docker Compose Configurations**: Essentials vs Full platform options
 - 📖 **Enhanced Documentation**: New guides for Docker, deployment, and integration
 - 🚀 **Production Ready**: Scaling, resource limits, and health checks

@@ -11,6 +11,7 @@ using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 using Platform.Engineering.Copilot.Core.Configuration;
 using Platform.Engineering.Copilot.Discovery.Agent;
 using Platform.Engineering.Copilot.Discovery.Core.Configuration;
+using Platform.Engineering.Copilot.Discovery.Agent.Plugins;
 
 namespace Platform.Engineering.Copilot.Discovery.Core;
 

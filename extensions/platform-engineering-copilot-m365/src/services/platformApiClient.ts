@@ -1,42 +1,65 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 
 export interface IntelligentChatRequest {
     message: string;
-    conversationId: string;
+    conversationId?: string;
     context?: Record<string, any>;
 }
 
 export interface IntelligentChatResponse {
+    success: boolean;
     response: string;
-    intentType: string;
-    toolExecuted: boolean;
-    requiresFollowUp: boolean;
+    conversationId: string;
+    intentType?: string;
+    confidence?: number;
+    toolExecuted?: string;
+    executionTimeMs?: number;
+    requiresFollowUp?: boolean;
     followUpPrompt?: string;
     missingFields?: string[];
     quickReplies?: string[];
     generatedCode?: string;
+    metadata?: {
+        resourceId?: string;
+        complianceScore?: number;
+        [key: string]: any;
+    };
+    // Convenience accessors for common metadata fields
     resourceId?: string;
-    success: boolean;
-    metadata?: Record<string, any>;
+    error?: string;
+}
+
+export interface McpHealthResponse {
+    status: string;
+    mode: string;
+    server: string;
+    version: string;
 }
 
 export class PlatformApiClient {
     private readonly client: AxiosInstance;
+    private readonly baseUrl: string;
 
     constructor(baseUrl: string, apiKey?: string) {
+        this.baseUrl = baseUrl;
+        
         this.client = axios.create({
             baseURL: baseUrl,
-            timeout: 60000, // 60 seconds for complex operations
+            timeout: 300000, // 5 minutes for long-running operations
             headers: {
                 'Content-Type': 'application/json',
+                'User-Agent': 'Platform-Copilot-M365-Extension/1.0.0',
                 ...(apiKey ? { 'X-API-Key': apiKey } : {})
             }
         });
 
-        // Add request logging
+        // Request interceptor
         this.client.interceptors.request.use(
             (config) => {
                 console.log(`🔵 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+                if (config.data) {
+                    console.log('  Request data:', config.data);
+                }
                 return config;
             },
             (error) => {
@@ -45,116 +68,167 @@ export class PlatformApiClient {
             }
         );
 
-        // Add response logging
+        // Response interceptor
         this.client.interceptors.response.use(
             (response) => {
                 console.log(`✅ API Response: ${response.status} ${response.config.url}`);
                 return response;
             },
-            (error) => {
-                console.error('❌ API Response Error:', error.response?.status, error.message);
+            (error: AxiosError) => {
+                if (error.response) {
+                    console.error(`❌ API Response Error: ${error.response.status} ${error.config?.url}`, error.response.data);
+                } else if (error.request) {
+                    console.error('❌ No response received:', error.message);
+                } else {
+                    console.error('❌ Request setup error:', error.message);
+                }
                 return Promise.reject(error);
             }
         );
     }
 
-    async sendIntelligentQuery(request: IntelligentChatRequest): Promise<IntelligentChatResponse> {
+    /**
+     * Send a chat message to the MCP server
+     */
+    async sendChatMessage(
+        message: string,
+        conversationId?: string,
+        context?: Record<string, any>
+    ): Promise<IntelligentChatResponse> {
         try {
-            const response = await this.client.post<IntelligentChatResponse>(
-                '/api/chat/intelligent-query',
-                {
-                    ...request,
-                    context: {
-                        ...request.context,
-                        source: 'm365-copilot',
-                        timestamp: new Date().toISOString()
-                    }
+            const request: IntelligentChatRequest = {
+                message,
+                conversationId: conversationId || this.generateConversationId(),
+                context: {
+                    source: 'm365-copilot',
+                    platform: 'M365',
+                    ...context
                 }
-            );
+            };
+
+            const response = await this.client.post<IntelligentChatResponse>('/mcp/chat', request);
+            
+            if (!response.data.success) {
+                throw new Error(response.data.error || 'MCP server returned unsuccessful response');
+            }
 
             return response.data;
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                throw new Error(
-                    `Platform API Error: ${error.response?.status} - ${error.response?.data?.message || error.message}`
-                );
-            }
-            throw error;
+            throw this.handleError(error, 'Failed to send chat message to MCP server');
         }
     }
 
-    async provisionInfrastructure(query: string): Promise<any> {
-        try {
-            const response = await this.client.post('/api/infrastructure/provision', {
-                query
-            });
-            return response.data;
-        } catch (error) {
-            if (axios.isAxiosError(error)) {
-                throw new Error(
-                    `Infrastructure Provisioning Error: ${error.response?.data?.message || error.message}`
-                );
-            }
-            throw error;
-        }
+    /**
+     * Send intelligent query (alias for sendChatMessage for backward compatibility)
+     */
+    async sendIntelligentQuery(request: IntelligentChatRequest): Promise<IntelligentChatResponse> {
+        return this.sendChatMessage(
+            request.message,
+            request.conversationId,
+            request.context
+        );
     }
 
-    async runComplianceAssessment(subscriptionId: string, resourceGroupName?: string): Promise<any> {
-        try {
-            const response = await this.client.post('/api/compliance/assess', {
-                subscriptionId,
-                resourceGroupName
-            });
-            return response.data;
-        } catch (error) {
-            if (axios.isAxiosError(error)) {
-                throw new Error(
-                    `Compliance Assessment Error: ${error.response?.data?.message || error.message}`
-                );
-            }
-            throw error;
-        }
+    /**
+     * Provision infrastructure
+     */
+    async provisionInfrastructure(query: string): Promise<IntelligentChatResponse> {
+        return this.sendChatMessage(query, undefined, {
+            operation: 'infrastructure-provisioning',
+            intent: 'infrastructure-provisioning'
+        });
     }
 
-    async estimateCost(resourceDefinition: any): Promise<any> {
-        try {
-            const response = await this.client.post('/api/cost/estimate', {
-                resourceDefinition
-            });
-            return response.data;
-        } catch (error) {
-            if (axios.isAxiosError(error)) {
-                throw new Error(
-                    `Cost Estimation Error: ${error.response?.data?.message || error.message}`
-                );
-            }
-            throw error;
-        }
+    /**
+     * Run compliance assessment
+     */
+    async runComplianceAssessment(
+        subscriptionId: string,
+        resourceGroupName?: string
+    ): Promise<IntelligentChatResponse> {
+        const message = resourceGroupName 
+            ? `Run compliance assessment for subscription ${subscriptionId} resource group ${resourceGroupName}`
+            : `Run compliance assessment for subscription ${subscriptionId}`;
+        
+        return this.sendChatMessage(message, undefined, {
+            operation: 'compliance-assessment',
+            intent: 'compliance-assessment',
+            subscriptionId,
+            resourceGroupName
+        });
     }
 
-    async listResources(resourceGroupName: string): Promise<any> {
-        try {
-            const response = await this.client.get('/api/resources/list', {
-                params: { resourceGroupName }
-            });
-            return response.data;
-        } catch (error) {
-            if (axios.isAxiosError(error)) {
-                throw new Error(
-                    `List Resources Error: ${error.response?.data?.message || error.message}`
-                );
-            }
-            throw error;
-        }
+    /**
+     * Estimate cost
+     */
+    async estimateCost(resourceDefinition: any): Promise<IntelligentChatResponse> {
+        const message = `Estimate cost for the following resource: ${JSON.stringify(resourceDefinition)}`;
+        
+        return this.sendChatMessage(message, undefined, {
+            operation: 'cost-estimation',
+            intent: 'cost-estimation',
+            resourceDefinition
+        });
     }
 
+    /**
+     * List resources
+     */
+    async listResources(resourceGroupName: string): Promise<IntelligentChatResponse> {
+        const message = `List all resources in resource group ${resourceGroupName}`;
+        
+        return this.sendChatMessage(message, undefined, {
+            operation: 'list-resources',
+            intent: 'list-resources',
+            resourceGroupName
+        });
+    }
+
+    /**
+     * Check MCP server health
+     */
     async healthCheck(): Promise<boolean> {
         try {
-            const response = await this.client.get('/health');
-            return response.status === 200;
+            const response = await this.client.get<McpHealthResponse>('/health');
+            return response.status === 200 && response.data.status === 'healthy';
         } catch (error) {
             console.error('Platform API health check failed:', error);
             return false;
         }
+    }
+
+    /**
+     * Generate a unique conversation ID
+     */
+    private generateConversationId(): string {
+        return `m365-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    /**
+     * Handle and format errors
+     */
+    private handleError(error: any, contextMessage: string): Error {
+        if (error instanceof AxiosError) {
+            if (error.response) {
+                const statusCode = error.response.status;
+                const responseData = error.response.data;
+                
+                return new Error(
+                    `${contextMessage}: HTTP ${statusCode} - ${
+                        responseData?.error || responseData?.message || 'Unknown server error'
+                    }`
+                );
+            } else if (error.request) {
+                return new Error(
+                    `${contextMessage}: Could not reach MCP server at ${this.baseUrl}. Please verify the server is running.`
+                );
+            } else {
+                return new Error(`${contextMessage}: Request configuration error - ${error.message}`);
+            }
+        }
+
+        return new Error(
+            `${contextMessage}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
     }
 }
