@@ -1,17 +1,9 @@
 using Microsoft.Extensions.Logging;
-using Platform.Engineering.Copilot.Core.Models.CostOptimization;
+using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization.Analysis;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Cost;
 using AzureResource = Platform.Engineering.Copilot.Core.Models.Azure.AzureResource;
-using CostAnomaly = Platform.Engineering.Copilot.Core.Models.CostAnomaly;
-using CostForecast = Platform.Engineering.Copilot.Core.Models.CostForecast;
-using CostMonitoringDashboard = Platform.Engineering.Copilot.Core.Models.CostMonitoringDashboard;
-using AnomalyType = Platform.Engineering.Copilot.Core.Models.AnomalyType;
-using AnomalySeverity = Platform.Engineering.Copilot.Core.Models.AnomalySeverity;
-using ForecastMethod = Platform.Engineering.Copilot.Core.Models.ForecastMethod;
-using ForecastAccuracy = Platform.Engineering.Copilot.Core.Models.ForecastAccuracy;
-using ForecastDataPoint = Platform.Engineering.Copilot.Core.Models.ForecastDataPoint;
-using ForecastAssumption = Platform.Engineering.Copilot.Core.Models.ForecastAssumption;
 
 namespace Platform.Engineering.Copilot.Core.Services.Azure.Cost;
 
@@ -239,7 +231,7 @@ namespace Platform.Engineering.Copilot.Core.Services.Azure.Cost;
                     CurrentMonthlyCost = currentCost,
                     EstimatedMonthlySavings = currentCost * 0.5m, // 50% savings by downsizing
                     Description = $"VM '{resource.Name}' has average CPU usage of {cpuPattern.AverageUsage:F2}%. Consider downsizing.",
-                    Complexity = ImplementationComplexity.Simple,
+                    Complexity = OptimizationComplexity.Simple,
                     Actions = new List<OptimizationAction>
                     {
                         new OptimizationAction
@@ -289,7 +281,7 @@ namespace Platform.Engineering.Copilot.Core.Services.Azure.Cost;
                     CurrentMonthlyCost = currentCost,
                     EstimatedMonthlySavings = currentCost,
                     Description = $"VM '{resource.Name}' is stopped but still incurring charges. Deallocate to save costs.",
-                    Complexity = ImplementationComplexity.Simple,
+                    Complexity = OptimizationComplexity.Simple,
                     Actions = new List<OptimizationAction>
                     {
                         new OptimizationAction
@@ -325,7 +317,7 @@ namespace Platform.Engineering.Copilot.Core.Services.Azure.Cost;
                     CurrentMonthlyCost = currentCost,
                     EstimatedMonthlySavings = currentCost * 0.2m, // 20% potential savings
                     Description = $"Storage account '{resource.Name}' lacks lifecycle management policies. Enable to automatically move data to cooler tiers.",
-                    Complexity = ImplementationComplexity.Simple,
+                    Complexity = OptimizationComplexity.Simple,
                     Actions = new List<OptimizationAction>
                     {
                         new OptimizationAction
@@ -372,7 +364,7 @@ namespace Platform.Engineering.Copilot.Core.Services.Azure.Cost;
                     CurrentMonthlyCost = currentCost,
                     EstimatedMonthlySavings = currentCost * 0.4m,
                     Description = $"SQL Database '{resource.Name}' has low DTU usage ({dtuPattern.AverageUsage:F2}%). Consider scaling down.",
-                    Complexity = ImplementationComplexity.Simple,
+                    Complexity = OptimizationComplexity.Simple,
                     Actions = new List<OptimizationAction>
                     {
                         new OptimizationAction
@@ -414,7 +406,7 @@ namespace Platform.Engineering.Copilot.Core.Services.Azure.Cost;
                     CurrentMonthlyCost = currentCost,
                     EstimatedMonthlySavings = currentCost * 0.3m,
                     Description = $"App Service '{resource.Name}' has low traffic. Consider disabling Always On or implementing scheduled scaling.",
-                    Complexity = ImplementationComplexity.Moderate,
+                    Complexity = OptimizationComplexity.Moderate,
                     Actions = new List<OptimizationAction>
                     {
                         new OptimizationAction
@@ -461,7 +453,7 @@ namespace Platform.Engineering.Copilot.Core.Services.Azure.Cost;
                     CurrentMonthlyCost = currentCost,
                     EstimatedMonthlySavings = currentCost * 0.25m,
                     Description = $"AKS cluster '{resource.Name}' may benefit from auto-scaling to optimize node usage.",
-                    Complexity = ImplementationComplexity.Moderate,
+                    Complexity = OptimizationComplexity.Moderate,
                     Actions = new List<OptimizationAction>
                     {
                         new OptimizationAction
@@ -503,7 +495,7 @@ namespace Platform.Engineering.Copilot.Core.Services.Azure.Cost;
                     CurrentMonthlyCost = 0,
                     EstimatedMonthlySavings = 0,
                     Description = $"Resource '{resource.Name}' is missing required tags for cost allocation and management.",
-                    Complexity = ImplementationComplexity.Simple,
+                    Complexity = OptimizationComplexity.Simple,
                     Actions = new List<OptimizationAction>
                     {
                         new OptimizationAction
@@ -537,7 +529,7 @@ namespace Platform.Engineering.Copilot.Core.Services.Azure.Cost;
                     CurrentMonthlyCost = currentCost,
                     EstimatedMonthlySavings = currentCost * 0.4m, // 40% savings typical for 3-year RIs
                     Description = $"Resource '{resource.Name}' is eligible for Reserved Instance pricing.",
-                    Complexity = ImplementationComplexity.Simple,
+                    Complexity = OptimizationComplexity.Simple,
                     Actions = new List<OptimizationAction>
                     {
                         new OptimizationAction

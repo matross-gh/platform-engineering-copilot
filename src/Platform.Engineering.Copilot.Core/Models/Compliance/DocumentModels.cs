@@ -56,6 +56,12 @@ public class ControlNarrative
     public DateTime LastReviewed { get; set; } = DateTime.UtcNow;
     public string ComplianceStatus { get; set; } = "Compliant";
     public string Content { get; set; } = string.Empty;
+    
+    // AI-enhanced properties
+    public string? Evidence { get; set; }
+    public string? Gaps { get; set; }
+    public string? ResponsibleParty { get; set; }
+    public string? ImplementationDetails { get; set; }
 }
 
 /// <summary>

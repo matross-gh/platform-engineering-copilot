@@ -34,7 +34,7 @@ public static class ServiceCollectionExtensions
                 case "sqlite":
                     options.UseSqlite(connectionString, sqliteOptions =>
                     {
-                        sqliteOptions.MigrationsAssembly("Platform.Engineering.Copilot.Data");
+                        sqliteOptions.MigrationsAssembly("Platform.Engineering.Copilot.Core");
                     });
                     break;
                     

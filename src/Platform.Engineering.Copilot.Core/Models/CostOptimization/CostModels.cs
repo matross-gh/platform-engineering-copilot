@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization.Analysis;
 
 namespace Platform.Engineering.Copilot.Core.Models;
 
@@ -63,21 +64,6 @@ public class CostSummary
     public int BudgetAlertsTriggered { get; set; }
     public decimal PotentialSavings { get; set; }
     public int OptimizationOpportunities { get; set; }
-}
-
-/// <summary>
-/// Cost trend data point for time-series analysis
-/// </summary>
-public class CostTrend
-{
-    public DateTime Date { get; set; }
-    public decimal DailyCost { get; set; }
-    public decimal CumulativeMonthlyCost { get; set; }
-    public Dictionary<string, decimal> ServiceCosts { get; set; } = new();
-    public Dictionary<string, decimal> ResourceGroupCosts { get; set; } = new();
-    public Dictionary<string, decimal> TagBasedCosts { get; set; } = new();
-    public int ResourceCount { get; set; }
-    public List<string> CostDrivers { get; set; } = new(); // Top spending resources/services
 }
 
 #endregion
@@ -155,62 +141,6 @@ public class BudgetScope
 #endregion
 
 #region Cost Optimization
-
-/// <summary>
-/// Cost optimization recommendation with detailed analysis
-/// </summary>
-public class CostOptimizationRecommendation
-{
-    public string RecommendationId { get; set; } = Guid.NewGuid().ToString();
-    public string Id { get; set; } = Guid.NewGuid().ToString(); // Alias for compatibility
-    public string ResourceId { get; set; } = string.Empty;
-    public string ResourceName { get; set; } = string.Empty;
-    public string ResourceType { get; set; } = string.Empty;
-    public string ResourceGroup { get; set; } = string.Empty;
-    public OptimizationType Type { get; set; }
-    public OptimizationPriority Priority { get; set; }
-    public string Title { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public string Impact { get; set; } = string.Empty;
-    public decimal PotentialMonthlySavings { get; set; }
-    public decimal EstimatedMonthlySavings { get; set; } // Alias for compatibility
-    public decimal PotentialAnnualSavings { get; set; }
-    public decimal ImplementationCost { get; set; }
-    public TimeSpan PaybackPeriod { get; set; }
-    public OptimizationComplexity ImplementationComplexity { get; set; }
-    public OptimizationRisk Risk { get; set; }
-    public List<string> AffectedResources { get; set; } = new();
-    public List<OptimizationAction> RecommendedActions { get; set; } = new();
-    public List<OptimizationAction> Actions { get; set; } = new(); // Alias for compatibility
-    public OptimizationCategory Category { get; set; }
-    public DateTime DetectedAt { get; set; } = DateTime.UtcNow;
-    public string Evidence { get; set; } = string.Empty;
-    public Dictionary<string, object> Metadata { get; set; } = new();
-    public bool IsAutomatable { get; set; }
-    public string AutomationScript { get; set; } = string.Empty;
-    public object? ScheduleDetails { get; set; } // For auto-shutdown recommendations
-}
-
-/// <summary>
-/// Specific optimization action
-/// </summary>
-public class OptimizationAction
-{
-    public string ActionId { get; set; } = Guid.NewGuid().ToString();
-    public string ActionType { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public List<string> Steps { get; set; } = new();
-    public decimal EstimatedSavings { get; set; }
-    public TimeSpan EstimatedImplementationTime { get; set; }
-    public string EstimatedDuration { get; set; } = string.Empty; // String representation
-    public bool RequiresDowntime { get; set; }
-    public bool Automated { get; set; }
-    public List<string> Prerequisites { get; set; } = new();
-    public List<string> RisksAndConsiderations { get; set; } = new();
-    public List<string> Resources { get; set; } = new();
-    public string DocumentationLink { get; set; } = string.Empty;
-}
 
 /// <summary>
 /// Resource rightsizing recommendation
@@ -436,26 +366,6 @@ public enum BudgetAlertSeverity
 {
     Info,
     Warning,
-    Critical
-}
-
-public enum OptimizationType
-{
-    Rightsizing,
-    ReservedInstances,
-    StorageOptimization,
-    NetworkOptimization,
-    UnusedResources,
-    SchedulingAutomation,
-    LocationOptimization,
-    ServiceTierOptimization
-}
-
-public enum OptimizationPriority
-{
-    Low,
-    Medium,
-    High,
     Critical
 }
 

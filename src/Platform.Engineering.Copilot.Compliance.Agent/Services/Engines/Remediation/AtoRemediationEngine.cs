@@ -8,6 +8,10 @@ using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 using Microsoft.Extensions.Options;
 using Platform.Engineering.Copilot.Compliance.Core.Configuration;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Platform.Engineering.Copilot.Compliance.Agent.Services.Compliance;
 /// <summary>
@@ -19,21 +23,60 @@ public class AtoRemediationEngine : IAtoRemediationEngine
     private readonly IInfrastructureRemediationService _infrastructureService;
     private readonly ILogger<AtoRemediationEngine> _logger;
     private readonly ComplianceAgentOptions _options;
+    private readonly IChatCompletionService? _chatCompletion;
+    private readonly INistControlsService? _nistService;
+    private readonly IScriptSanitizationService? _sanitizationService;
+    
+    // Refactored remediation services
+    private readonly INistRemediationStepsService _nistRemediationSteps;
+    private readonly IAzureArmRemediationService _armRemediationService;
+    private readonly IRemediationScriptExecutor _scriptExecutor;
+    private readonly IAiRemediationPlanGenerator _aiRemediationGenerator;
     
     // In-memory tracking (in production, use persistent storage)
     private readonly Dictionary<string, RemediationExecution> _activeRemediations = new();
     private readonly List<RemediationExecution> _remediationHistory = new();
+    
+    // Execution configuration
+    private const int DefaultScriptTimeoutSeconds = 300; // 5 minutes
+    private const int MaxRetryAttempts = 3;
 
     public AtoRemediationEngine(        
         IAzureResourceService resourceService,
         IInfrastructureRemediationService infrastructureService,
         ILogger<AtoRemediationEngine> logger,
-        IOptions<ComplianceAgentOptions> options)
+        IOptions<ComplianceAgentOptions> options,
+        INistRemediationStepsService nistRemediationSteps,
+        IAzureArmRemediationService armRemediationService,
+        IRemediationScriptExecutor scriptExecutor,
+        IAiRemediationPlanGenerator aiRemediationGenerator,
+        Kernel? kernel = null,
+        INistControlsService? nistService = null,
+        IScriptSanitizationService? sanitizationService = null)
     {        
         _resourceService = resourceService;
         _infrastructureService = infrastructureService;
         _logger = logger;
         _options = options.Value;
+        _nistRemediationSteps = nistRemediationSteps ?? throw new ArgumentNullException(nameof(nistRemediationSteps));
+        _armRemediationService = armRemediationService ?? throw new ArgumentNullException(nameof(armRemediationService));
+        _scriptExecutor = scriptExecutor ?? throw new ArgumentNullException(nameof(scriptExecutor));
+        _aiRemediationGenerator = aiRemediationGenerator ?? throw new ArgumentNullException(nameof(aiRemediationGenerator));
+        _chatCompletion = kernel?.Services.GetService(typeof(IChatCompletionService)) as IChatCompletionService;
+        _nistService = nistService;
+        _sanitizationService = sanitizationService;
+        
+        _logger.LogInformation("ATO Remediation Engine initialized with refactored service architecture");
+        
+        if (_chatCompletion != null)
+        {
+            _logger.LogInformation("AI-enhanced capabilities enabled via AiRemediationPlanGenerator");
+        }
+        
+        if (_sanitizationService != null)
+        {
+            _logger.LogInformation("Script sanitization enabled for enhanced security");
+        }
     }
 
     /// <summary>
@@ -193,40 +236,83 @@ public class AtoRemediationEngine : IAtoRemediationEngine
             {
                 try
                 {
-                    // Check if Infrastructure Remediation Service can handle this finding
-                    var canInfrastructureRemediate = await _infrastructureService.CanAutoRemediateAsync(finding);
-                    
-                    if (canInfrastructureRemediate)
+                    // Priority 1: Try AI-generated script if AI is available
+                    if (_chatCompletion != null && options.UseAiScript)
                     {
-                        _logger.LogInformation("🔧 Using Infrastructure Remediation Service for finding {FindingId}", finding.Id);
+                        _logger.LogInformation("🤖 Attempting AI-generated script execution for finding {FindingId}", finding.Id);
                         
-                        // Use Infrastructure Service for Azure resource-level remediation
-                        var infraPlan = await _infrastructureService.GenerateRemediationPlanAsync(finding, null, cancellationToken);
-                        var infraResult = await _infrastructureService.ExecuteRemediationAsync(infraPlan, options.DryRun, cancellationToken);
-                        
-                        // Map infrastructure results to ATO execution results
-                        execution.StepsExecuted = infraResult.ActionResults.Select((a, index) => new RemediationStep
+                        try
                         {
-                            Order = index + 1,
-                            Description = a.Action.Description,
-                            Command = "Infrastructure Service Azure ARM API"
-                        }).ToList();
-                        
-                        execution.ChangesApplied = infraResult.ActionResults.Select(a => a.Action.Description).ToList();
-                        execution.Success = infraResult.IsSuccess;
-                        execution.Message = infraResult.IsSuccess 
-                            ? $"Infrastructure Service successfully applied {infraResult.ActionResults.Count} changes to {finding.ResourceName}"
-                            : $"Infrastructure Service failed: {string.Join("; ", infraResult.Errors)}";
-                        
-                        if (!infraResult.IsSuccess)
+                            var aiScript = await GenerateRemediationScriptAsync(finding, "AzureCLI", cancellationToken);
+                            var scriptResult = await ExecuteAiGeneratedScriptAsync(aiScript, finding, cancellationToken);
+                            
+                            if (scriptResult.Success)
+                            {
+                                execution.StepsExecuted = new List<RemediationStep>
+                                {
+                                    new RemediationStep
+                                    {
+                                        Order = 1,
+                                        Description = "Executed AI-generated remediation script",
+                                        Command = aiScript.ScriptType,
+                                        AutomationScript = aiScript.Script
+                                    }
+                                };
+                                execution.ChangesApplied = scriptResult.ChangesApplied;
+                                execution.Success = true;
+                                execution.Message = $"AI script successfully remediated {finding.ResourceName}: {scriptResult.Message}";
+                                
+                                _logger.LogInformation("✅ AI-generated script executed successfully for finding {FindingId}", finding.Id);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("AI script execution failed, falling back to Infrastructure Service: {Error}", scriptResult.Error);
+                                // Fall through to Infrastructure Service
+                            }
+                        }
+                        catch (Exception aiEx)
                         {
-                            execution.ErrorMessage = string.Join("; ", infraResult.Errors);
-                            execution.Error = string.Join("\n", infraResult.Errors);
+                            _logger.LogWarning(aiEx, "AI script generation/execution failed, falling back to Infrastructure Service");
+                            // Fall through to Infrastructure Service
                         }
                     }
-                    else if (finding.RemediationActions.Any())
+                    
+                    // Priority 2: Check if Infrastructure Remediation Service can handle this finding
+                    if (!execution.Success)
                     {
-                        _logger.LogInformation("🛠️ Using ATO legacy remediation actions for finding {FindingId}", finding.Id);
+                        var canInfrastructureRemediate = await _infrastructureService.CanAutoRemediateAsync(finding);
+                        
+                        if (canInfrastructureRemediate)
+                        {
+                            _logger.LogInformation("🔧 Using Infrastructure Remediation Service for finding {FindingId}", finding.Id);
+                        
+                            // Use Infrastructure Service for Azure resource-level remediation
+                            var infraPlan = await _infrastructureService.GenerateRemediationPlanAsync(finding, null, cancellationToken);
+                            var infraResult = await _infrastructureService.ExecuteRemediationAsync(infraPlan, options.DryRun, cancellationToken);
+                            
+                            // Map infrastructure results to ATO execution results
+                            execution.StepsExecuted = infraResult.ActionResults.Select((a, index) => new RemediationStep
+                            {
+                                Order = index + 1,
+                                Description = a.Action.Description,
+                                Command = "Infrastructure Service Azure ARM API"
+                            }).ToList();
+                            
+                            execution.ChangesApplied = infraResult.ActionResults.Select(a => a.Action.Description).ToList();
+                            execution.Success = infraResult.IsSuccess;
+                            execution.Message = infraResult.IsSuccess 
+                                ? $"Infrastructure Service successfully applied {infraResult.ActionResults.Count} changes to {finding.ResourceName}"
+                                : $"Infrastructure Service failed: {string.Join("; ", infraResult.Errors)}";
+                            
+                            if (!infraResult.IsSuccess)
+                            {
+                                execution.ErrorMessage = string.Join("; ", infraResult.Errors);
+                                execution.Error = string.Join("\n", infraResult.Errors);
+                            }
+                        }
+                        else if (finding.RemediationActions.Any())
+                        {
+                            _logger.LogInformation("🛠️ Using ATO legacy remediation actions for finding {FindingId}", finding.Id);
                         
                         // Fallback to existing ATO remediation actions
                         execution.StepsExecuted = GenerateRemediationSteps(finding);
@@ -246,16 +332,17 @@ public class AtoRemediationEngine : IAtoRemediationEngine
                             execution.ChangesApplied.Add(changeDescription);
                         }
                         
-                        execution.Success = true;
-                        execution.Message = $"Successfully applied {execution.ChangesApplied.Count} remediation actions to {finding.ResourceName}";
-                    }
-                    else
-                    {
-                        _logger.LogWarning("Finding {FindingId} marked as auto-remediable but no remediation method available", finding.Id);
+                            execution.Success = true;
+                            execution.Message = $"Successfully applied {execution.ChangesApplied.Count} remediation actions to {finding.ResourceName}";
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Finding {FindingId} marked as auto-remediable but no remediation method available", finding.Id);
                         execution.Success = false;
-                        execution.ErrorMessage = "No remediation actions available";
-                        execution.Error = "Finding is marked auto-remediable but has no RemediationActions and cannot be handled by Infrastructure Service";
-                        execution.Message = "Manual remediation required - no automated method available";
+                            execution.ErrorMessage = "No remediation actions available";
+                            execution.Error = "Finding is marked auto-remediable but has no RemediationActions and cannot be handled by Infrastructure Service";
+                            execution.Message = "Manual remediation required - no automated method available";
+                        }
                     }
                     
                     if (execution.Success)
@@ -1918,5 +2005,227 @@ public class AtoRemediationEngine : IAtoRemediationEngine
         }
 
         return recommendations;
+    }
+
+    #region AI Service Integration Methods
+
+    /// <summary>
+    /// Generate remediation plan for a single finding (AI-enhanced if available)
+    /// </summary>
+    public async Task<RemediationPlan> GenerateRemediationPlanAsync(
+        AtoFinding finding,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Generating remediation plan for single finding {FindingId}", finding.Id);
+
+        var plan = new RemediationPlan
+        {
+            PlanId = Guid.NewGuid().ToString(),
+            SubscriptionId = finding.SubscriptionId,
+            CreatedAt = DateTimeOffset.UtcNow,
+            TotalFindings = 1,
+            RemediationItems = new List<RemediationItem>(),
+            EstimatedEffort = TimeSpan.FromMinutes(30),
+            Priority = finding.Severity.ToString()
+        };
+
+        // Use AI remediation plan generator if available
+        if (_chatCompletion != null)
+        {
+            try
+            {
+                _logger.LogInformation("Using AI to generate remediation plan for {FindingId}", finding.Id);
+                
+                var aiPlan = await _aiRemediationGenerator.GenerateAiEnhancedPlanAsync(
+                    finding, 
+                    cancellationToken);
+                
+                if (aiPlan != null && aiPlan.RemediationItems.Any())
+                {
+                    plan.RemediationItems.AddRange(aiPlan.RemediationItems);
+                    plan.EstimatedEffort = aiPlan.EstimatedEffort;
+                    plan.Priority = aiPlan.Priority ?? finding.Severity.ToString();
+                    
+                    _logger.LogInformation("Successfully generated AI-enhanced remediation plan for {FindingId}", finding.Id);
+                    return plan;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AI remediation failed for {FindingId}, falling back to standard remediation", finding.Id);
+                // Fall through to standard remediation
+            }
+        }
+
+        // Standard remediation using NIST remediation steps service
+        var controlId = finding.AffectedControls.FirstOrDefault() ?? "Unknown";
+        
+        try
+        {
+            var remediationStepsDefinition = await _nistRemediationSteps.GetRemediationStepsAsync(controlId);
+            
+            if (remediationStepsDefinition != null && remediationStepsDefinition.Steps != null && remediationStepsDefinition.Steps.Any())
+            {
+                var remediationItem = new RemediationItem
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    FindingId = finding.Id,
+                    ControlId = controlId,
+                    Title = $"Remediation for {finding.Title}",
+                    ResourceId = finding.ResourceId,
+                    Priority = finding.Severity.ToString(),
+                    Status = AtoRemediationStatus.NotStarted,
+                    IsAutomated = true,
+                    AutomationAvailable = true,
+                    EstimatedEffort = TimeSpan.FromMinutes(30),
+                    Steps = remediationStepsDefinition.Steps.ToList(),
+                    ValidationSteps = new List<string> 
+                    { 
+                        "Verify remediation applied",
+                        "Confirm compliance restored",
+                        "Test security controls"
+                    }
+                };
+                
+                plan.RemediationItems.Add(remediationItem);
+                plan.EstimatedEffort = remediationItem.EstimatedEffort ?? TimeSpan.Zero;
+                plan.Priority = remediationItem.Priority ?? "Medium";
+                
+                _logger.LogInformation("Generated standard remediation plan for {ControlId}", controlId);
+                return plan;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get remediation steps for control {ControlId}", controlId);
+        }
+
+        // Fallback: Manual remediation required
+        var manualItem = new RemediationItem
+        {
+            Id = Guid.NewGuid().ToString(),
+            FindingId = finding.Id,
+            ControlId = controlId,
+            Title = $"Manual Remediation Required for {finding.Title}",
+            ResourceId = finding.ResourceId,
+            Priority = finding.Severity.ToString(),
+            Status = AtoRemediationStatus.NotStarted,
+            IsAutomated = false,
+            AutomationAvailable = false,
+            EstimatedEffort = TimeSpan.FromMinutes(60),
+            Steps = new List<RemediationStep>
+            {
+                new RemediationStep 
+                { 
+                    Order = 1, 
+                    Description = "Manual remediation required", 
+                    Command = "# Manual remediation required" 
+                },
+                new RemediationStep 
+                { 
+                    Order = 2, 
+                    Description = $"Review {controlId} baseline and implement controls", 
+                    Command = $"# Review NIST 800-53 control {controlId} baseline and implement required controls" 
+                }
+            },
+            ValidationSteps = new List<string> { "Verify manual remediation completed" }
+        };
+        
+        plan.RemediationItems.Add(manualItem);
+        plan.EstimatedEffort = manualItem.EstimatedEffort ?? TimeSpan.FromMinutes(60);
+        plan.Priority = manualItem.Priority ?? "Medium";
+        
+        return plan;
+    }
+    
+    /// <summary>
+    /// Generate AI-powered remediation script (used by CompliancePlugin)
+    /// </summary>
+    public async Task<RemediationScript> GenerateRemediationScriptAsync(
+        AtoFinding finding,
+        string scriptType = "AzureCLI",
+        CancellationToken cancellationToken = default)
+    {
+        // Delegate to AI remediation plan generator service
+        return await _aiRemediationGenerator.GenerateRemediationScriptAsync(
+            finding, 
+            scriptType, 
+            cancellationToken);
+    }
+    
+    /// <summary>
+    /// Get natural language remediation guidance (AI-enhanced)
+    /// </summary>
+    public async Task<RemediationGuidance> GetRemediationGuidanceAsync(
+        AtoFinding finding,
+        CancellationToken cancellationToken = default)
+    {
+        // Delegate to AI remediation plan generator service
+        return await _aiRemediationGenerator.GetRemediationGuidanceAsync(
+            finding, 
+            cancellationToken);
+    }
+    
+    /// <summary>
+    /// AI-powered finding prioritization with business context
+    /// </summary>
+    public async Task<List<PrioritizedFinding>> PrioritizeFindingsWithAiAsync(
+        List<AtoFinding> findings,
+        string businessContext = "",
+        CancellationToken cancellationToken = default)
+    {
+        // Delegate to AI remediation plan generator service
+        return await _aiRemediationGenerator.PrioritizeFindingsWithAiAsync(
+            findings, 
+            businessContext, 
+            cancellationToken);
+    }
+    
+    #endregion
+    
+    #region AI Script Execution
+    
+    /// <summary>
+    /// Execute AI-generated remediation script
+    /// </summary>
+    private async Task<ScriptExecutionResult> ExecuteAiGeneratedScriptAsync(
+        RemediationScript script,
+        AtoFinding finding,
+        CancellationToken cancellationToken)
+    {
+        // Delegate to script executor service
+        return await _scriptExecutor.ExecuteScriptAsync(
+            script,
+            new ScriptExecutionOptions
+            {
+                TimeoutSeconds = DefaultScriptTimeoutSeconds,
+                MaxRetryAttempts = MaxRetryAttempts,
+                EnableSanitization = true
+            },
+            cancellationToken);
+    }
+    
+    #endregion
+    
+    private string GetSystemPrompt(string scriptType) => scriptType switch
+    {
+        "PowerShell" => "You are an Azure PowerShell automation expert. Generate production-ready PowerShell scripts using Az modules. Follow best practices: error handling, parameter validation, idempotency, logging.",
+        "AzureCLI" => "You are an Azure CLI expert. Generate bash scripts using az commands. Follow best practices: error handling, validation, idempotency, JSON parsing with jq.",
+        "Terraform" => "You are a Terraform IaC expert. Generate HCL code for Azure resources. Use azurerm provider, follow HashiCorp style guide, include variables and outputs.",
+        _ => "You are an Azure automation expert."
+    };
+    
+    private string ExtractCodeFromResponse(string response)
+    {
+        var codeBlockPattern = @"```(?:bash|powershell|terraform|hcl|sh)?\s*\n(.*?)\n```";
+        var match = Regex.Match(response, codeBlockPattern, RegexOptions.Singleline);
+        return match.Success ? match.Groups[1].Value.Trim() : response;
+    }
+    
+    private string ExtractJsonFromResponse(string response)
+    {
+        var jsonPattern = @"(\[.*?\]|\{.*?\})";
+        var match = Regex.Match(response, jsonPattern, RegexOptions.Singleline);
+        return match.Success ? match.Value : "[]";
     }
 }

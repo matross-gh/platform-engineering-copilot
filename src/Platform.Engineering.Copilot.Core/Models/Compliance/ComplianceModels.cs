@@ -939,6 +939,7 @@ public class RemediationExecutionOptions
     public bool AutoValidate { get; set; } = true;
     public bool AutoRollbackOnFailure { get; set; } = true;
     public bool CaptureSnapshots { get; set; } = true;
+    public bool UseAiScript { get; set; } = true; // TIER 3: Try AI-generated script first
     public Dictionary<string, object> CustomParameters { get; set; } = new();
     public List<string> NotificationRecipients { get; set; } = new();
     public string? ExecutedBy { get; set; }

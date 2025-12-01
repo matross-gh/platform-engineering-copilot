@@ -293,7 +293,10 @@ CRITICAL Rules (apply in order):
 3. **Informational questions about compliance/NIST/STIGs** (""what is""/""explain""/""show me""/""what controls""/""what nist""/""map nist to stig"") → KnowledgeBase agent ONLY, primaryIntent: ""knowledge""
    - Examples: ""what is CM family"", ""explain RMF"", ""what nist controls map to stigs"", ""show me IL5 requirements""
    - DO NOT route to Compliance agent unless explicitly requesting assessment/scan
-4. **Compliance scanning/assessment** (""check""/""scan""/""assess"" + subscription/resource) → Compliance agent, primaryIntent: ""compliance""
+4. **Compliance scanning/assessment/recommendations** (""check""/""scan""/""assess""/""compliance recommendations""/""security recommendations"" + subscription/resource) → Compliance agent ONLY, primaryIntent: ""compliance""
+   - CRITICAL: If query contains ""compliance recommendations"" or ""security posture"" or ""compliance advice"" → route ONLY to Compliance agent
+   - DO NOT route to multiple agents for compliance-related recommendations
+   - Examples: ""compliance recommendations"", ""improve security posture"", ""what should I fix for compliance""
 5. **Template generation** (""create""/""deploy""/""I need"" infra) → Infrastructure agent, primaryIntent: ""infrastructure""
 6. **Cost analysis** (""cost""/""price""/""estimate"") → Cost Management agent, primaryIntent: ""cost""
 7. **Discovery and inventory** (""list""/""find""/""discover""/""inventory"") → Discovery agent, primaryIntent: ""discovery""
@@ -640,10 +643,13 @@ Synthesized response:";
 
         // Azure context management (subscription, tenant, authentication)
         if (lowerMessage.Contains("use subscription") || lowerMessage.Contains("set subscription") ||
+            lowerMessage.Contains("set my subscription") || lowerMessage.Contains("use my subscription") ||
+            lowerMessage.Contains("my subscription is") || lowerMessage.Contains("configure subscription") ||
             lowerMessage.Contains("use tenant") || lowerMessage.Contains("set tenant") ||
             lowerMessage.Contains("set authentication") || lowerMessage.Contains("what subscription") ||
             lowerMessage.Contains("get azure context") || lowerMessage.Contains("azure context") ||
-            lowerMessage.Contains("current subscription"))
+            lowerMessage.Contains("current subscription") || lowerMessage.Contains("switch subscription") ||
+            lowerMessage.Contains("change subscription"))
             return AgentType.Infrastructure;
 
         if (lowerMessage.Contains("provision") || lowerMessage.Contains("create") ||
@@ -655,6 +661,12 @@ Synthesized response:";
             lowerMessage.Contains("security") || lowerMessage.Contains("ato") ||
             lowerMessage.Contains("emass") || lowerMessage.Contains("scan") ||
             lowerMessage.Contains("assess") || lowerMessage.Contains("remediat"))
+            return AgentType.Compliance;
+
+        // Prioritize Compliance for security posture and compliance recommendations
+        if ((lowerMessage.Contains("recommendations") || lowerMessage.Contains("advice") || 
+             lowerMessage.Contains("improve") || lowerMessage.Contains("posture")) &&
+            (lowerMessage.Contains("security") || lowerMessage.Contains("compliance")))
             return AgentType.Compliance;
 
         if (lowerMessage.Contains("cost") || lowerMessage.Contains("budget") ||
@@ -862,10 +874,13 @@ Synthesized response:";
         // Check this EARLY before other patterns (to avoid false matches)
         var isAzureContextConfig = 
             lowerMessage.Contains("use subscription") || lowerMessage.Contains("set subscription") ||
+            lowerMessage.Contains("set my subscription") || lowerMessage.Contains("use my subscription") ||
+            lowerMessage.Contains("my subscription is") || lowerMessage.Contains("configure subscription") ||
             lowerMessage.Contains("use tenant") || lowerMessage.Contains("set tenant") ||
             lowerMessage.Contains("set authentication") || lowerMessage.Contains("what subscription") ||
             lowerMessage.Contains("get azure context") || lowerMessage.Contains("azure context") ||
-            lowerMessage.Contains("current subscription");
+            lowerMessage.Contains("current subscription") || lowerMessage.Contains("switch subscription") ||
+            lowerMessage.Contains("change subscription");
         
         _logger.LogInformation("🔍 Fast-path Azure context check: isAzureContextConfig={IsConfig}, message={Message}", 
             isAzureContextConfig, lowerMessage.Substring(0, Math.Min(50, lowerMessage.Length)));

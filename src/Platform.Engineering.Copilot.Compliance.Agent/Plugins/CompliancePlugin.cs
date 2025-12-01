@@ -10,12 +10,17 @@ using Platform.Engineering.Copilot.Core.Services;
 using Platform.Engineering.Copilot.Core.Plugins;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
+using Platform.Engineering.Copilot.Core.Interfaces.Audits;
 using Platform.Engineering.Copilot.Core.Models.Compliance;
 using Platform.Engineering.Copilot.Core.Data.Context;
 using Platform.Engineering.Copilot.Compliance.Core.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Platform.Engineering.Copilot.Compliance.Core.Configuration;
+using Platform.Engineering.Copilot.Core.Authorization;
+using Platform.Engineering.Copilot.Core.Models.Audits;
+using Platform.Engineering.Copilot.Core.Services.Audits;
+using Platform.Engineering.Copilot.Compliance.Agent.Extensions;
 
 namespace Platform.Engineering.Copilot.Compliance.Agent.Plugins;
 
@@ -33,6 +38,8 @@ public class CompliancePlugin : BaseSupervisorPlugin
     private readonly ConfigService _configService;
     private readonly PlatformEngineeringCopilotContext _dbContext;
     private readonly ComplianceAgentOptions _options;
+    private readonly IUserContextService? _userContextService;
+    private readonly IAuditLoggingService? _auditLoggingService;
     
     private const string LAST_SUBSCRIPTION_CACHE_KEY = "compliance_last_subscription";
     private const int ASSESSMENT_CACHE_HOURS = 4; // Cache assessments for 4 hours
@@ -47,7 +54,9 @@ public class CompliancePlugin : BaseSupervisorPlugin
         IMemoryCache cache,
         ConfigService configService,
         PlatformEngineeringCopilotContext dbContext,
-        IOptions<ComplianceAgentOptions> options) : base(logger, kernel)
+        IOptions<ComplianceAgentOptions> options,
+        IUserContextService? userContextService = null,
+        IAuditLoggingService? auditLoggingService = null) : base(logger, kernel)
     {
         _complianceEngine = complianceEngine ?? throw new ArgumentNullException(nameof(complianceEngine));
         _remediationEngine = remediationEngine ?? throw new ArgumentNullException(nameof(remediationEngine));
@@ -57,6 +66,114 @@ public class CompliancePlugin : BaseSupervisorPlugin
         _configService = configService ?? throw new ArgumentNullException(nameof(configService));
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _userContextService = userContextService; // Optional for HTTP mode
+        _auditLoggingService = auditLoggingService; // Optional for HTTP mode
+    }
+    
+    // ========== AUTHORIZATION HELPERS ==========
+    
+    /// <summary>
+    /// Checks if the current user has the required role for an operation.
+    /// Returns true if authorization check passes or if running in stdio mode (no auth).
+    /// </summary>
+    private bool CheckAuthorization(params string[] requiredRoles)
+    {
+        // If no user context service (stdio mode), allow operation
+        if (_userContextService == null)
+        {
+            _logger.LogDebug("Running in stdio mode - authorization bypass");
+            return true;
+        }
+
+        // Check if user is authenticated
+        if (!_userContextService.IsAuthenticated())
+        {
+            _logger.LogWarning("Unauthorized access attempt - user not authenticated");
+            return false;
+        }
+
+        // Check if user has any of the required roles
+        foreach (var role in requiredRoles)
+        {
+            if (_userContextService.IsInRole(role))
+            {
+                _logger.LogInformation("User authorized with role: {Role}", role);
+                return true;
+            }
+        }
+
+        var userRoles = string.Join(", ", _userContextService.GetUserRoles());
+        _logger.LogWarning(
+            "User lacks required roles. Required: {RequiredRoles}, User has: {UserRoles}",
+            string.Join(", ", requiredRoles),
+            userRoles);
+        
+        return false;
+    }
+
+    /// <summary>
+    /// Logs an audit entry for a compliance operation.
+    /// </summary>
+    private async Task LogAuditAsync(
+        string eventType,
+        string action,
+        string resourceId,
+        AuditSeverity severity = AuditSeverity.Informational,
+        string? description = null,
+        Dictionary<string, object>? metadata = null)
+    {
+        if (_auditLoggingService == null || _userContextService == null)
+            return;
+
+        try
+        {
+            await _auditLoggingService.LogAsync(new AuditLogEntry
+            {
+                EventType = eventType,
+                EventCategory = "Compliance",
+                ActorId = _userContextService.GetCurrentUserId(),
+                ActorName = _userContextService.GetCurrentUserName(),
+                ActorType = "User",
+                Action = action,
+                ResourceId = resourceId,
+                ResourceType = "ComplianceOperation",
+                Description = description ?? $"{action} on {resourceId}",
+                Result = "Success",
+                Severity = severity,
+                Metadata = metadata?.ToDictionary(k => k.Key, v => v.Value?.ToString() ?? string.Empty) ?? new Dictionary<string, string>(),
+                ComplianceContext = new ComplianceContext
+                {
+                    RequiresReview = severity >= AuditSeverity.High,
+                    ControlIds = new List<string> { "AC-2", "AC-6", "AU-2", "AU-3" }
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to log audit entry for {EventType}", eventType);
+        }
+    }
+    
+    /// <summary>
+    /// Logs an audit event with simplified parameters (wrapper for LogAuditAsync).
+    /// </summary>
+    private async Task LogAuditEventAsync(string action, object data)
+    {
+        if (_auditLoggingService == null)
+            return;
+            
+        var metadata = new Dictionary<string, object>
+        {
+            ["data"] = data
+        };
+        
+        await LogAuditAsync(
+            eventType: "ComplianceOperation",
+            action: action,
+            resourceId: action,
+            severity: AuditSeverity.Informational,
+            description: $"Compliance operation: {action}",
+            metadata: metadata);
     }
     
     // ========== CONFIGURATION HELPERS ==========
@@ -1452,13 +1569,28 @@ public class CompliancePlugin : BaseSupervisorPlugin
                  "DO NOT use for: 'run assessment', 'scan', 'check compliance', 'find vulnerabilities'. " +
                  "Output: Evidence package with configuration data, logs, metrics, policies - suitable for ATO attestation and audits. " +
                  "Requires NIST control family (AC, AU, CM, etc.). Can scope to specific resource group. " +
-                 "Accepts subscription GUID or friendly name (e.g., 'production', 'dev', 'staging').")]
+                 "Accepts subscription GUID or friendly name (e.g., 'production', 'dev', 'staging'). " +
+                 "RBAC: Requires Compliance.Administrator, Compliance.Auditor, or Compliance.Analyst role.")]
     public async Task<string> CollectEvidenceAsync(
         [Description("Azure subscription ID (GUID) or friendly name (e.g., 'production', 'dev', 'staging')")] string subscriptionIdOrName,
         [Description("NIST control family (e.g., AC, AU, CM, IA)")] string controlFamily,
         [Description("Optional resource group name to limit scope")] string? resourceGroupName = null,
         CancellationToken cancellationToken = default)
     {
+        // Authorization check
+        if (!CheckAuthorization(ComplianceRoles.Administrator, ComplianceRoles.Auditor, ComplianceRoles.Analyst))
+        {
+            var errorResult = JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = "Unauthorized: User must have Compliance.Administrator, Compliance.Auditor, or Compliance.Analyst role to collect evidence",
+                required_roles = new[] { ComplianceRoles.Administrator, ComplianceRoles.Auditor, ComplianceRoles.Analyst }
+            }, new JsonSerializerOptions { WriteIndented = true });
+
+            _logger.LogWarning("Unauthorized evidence collection attempt");
+            return errorResult;
+        }
+
         try
         {
             // Resolve subscription name to GUID
@@ -1468,14 +1600,29 @@ public class CompliancePlugin : BaseSupervisorPlugin
             string userName;
             try
             {
-                userName = await _azureResourceService.GetCurrentAzureUserAsync(cancellationToken);
+                userName = _userContextService?.GetCurrentUserName() ?? await _azureResourceService.GetCurrentAzureUserAsync(cancellationToken);
                 _logger.LogInformation("Evidence collection initiated by: {UserName}", userName);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Could not determine current Azure user, using 'Unknown'");
+                _logger.LogWarning(ex, "Could not determine current user, using 'Unknown'");
                 userName = "Unknown";
             }
+            
+            // Log audit entry
+            await LogAuditAsync(
+                eventType: "EvidenceCollected",
+                action: "Collect",
+                resourceId: $"{subscriptionId}/evidence/{controlFamily}",
+                severity: AuditSeverity.Medium, // Evidence collection is sensitive
+                description: $"Evidence collection for control family {controlFamily}",
+                metadata: new Dictionary<string, object>
+                {
+                    ["SubscriptionId"] = subscriptionId,
+                    ["ControlFamily"] = controlFamily,
+                    ["ResourceGroupName"] = resourceGroupName ?? "All",
+                    ["Collector"] = userName
+                });
             
             var scope = string.IsNullOrWhiteSpace(resourceGroupName) 
                 ? $"subscription {subscriptionId}" 
@@ -1786,11 +1933,16 @@ public class CompliancePlugin : BaseSupervisorPlugin
     // ========== REMEDIATION FUNCTIONS ==========
 
     [KernelFunction("generate_remediation_plan")]
-    [Description("Generate a comprehensive remediation plan for compliance findings. " +
-                 "Analyzes findings and creates a prioritized action plan. " +
-                 "Essential for planning compliance improvements. Can scope to a specific resource group. " +
+    [Description("Generate a comprehensive, prioritized remediation plan with actionable steps to fix compliance violations and security findings. " +
+                 "Creates a detailed action plan with effort estimates, priorities, and implementation guidance. " +
+                 "Use this when user requests: 'remediation plan', 'action plan', 'fix plan', 'create plan to fix findings', " +
+                 "'generate remediation steps', 'how to fix violations', 'prioritized remediation', 'remediation roadmap'. " +
+                 "Returns: Prioritized violations, remediation steps per finding, effort estimates, dependencies, implementation order. " +
                  "Accepts either a subscription GUID or friendly name (e.g., 'production', 'dev', 'staging'). " +
-                 "If no subscription is specified, uses the most recent assessment from the last used subscription.")]
+                 "If no subscription is specified, uses the most recent assessment from the last used subscription. " +
+                 "Can be scoped to a specific resource group. " +
+                 "Example user requests: 'generate a remediation plan for this assessment', 'create an action plan to fix these violations', " +
+                 "'I need detailed remediation steps', 'show me how to fix the compliance gaps', 'create a prioritized fix plan'.")]
     public async Task<string> GenerateRemediationPlanAsync(
         [Description("Azure subscription ID (GUID) or friendly name (e.g., 'production', 'dev', 'staging'). " +
                      "Optional - if not provided, uses the last assessed subscription.")] string? subscriptionIdOrName = null,
@@ -2000,7 +2152,8 @@ public class CompliancePlugin : BaseSupervisorPlugin
     [KernelFunction("execute_remediation")]
     [Description("Execute automated remediation for a specific compliance finding. " +
                  "Use dry-run mode first to preview changes. Supports rollback on failure. Can scope to a specific resource group. " +
-                 "Accepts either a subscription GUID or friendly name (e.g., 'production', 'dev', 'staging').")]
+                 "Accepts either a subscription GUID or friendly name (e.g., 'production', 'dev', 'staging'). " +
+                 "RBAC: Requires Compliance.Administrator or Compliance.Analyst role.")]
     public async Task<string> ExecuteRemediationAsync(
         [Description("Azure subscription ID (GUID) or friendly name (e.g., 'production', 'dev', 'staging')")] string subscriptionIdOrName,
         [Description("Finding ID to remediate")] string findingId,
@@ -2009,10 +2162,40 @@ public class CompliancePlugin : BaseSupervisorPlugin
         [Description("Require approval before executing (true/false, default: false)")] bool requireApproval = false,
         CancellationToken cancellationToken = default)
     {
+        // Authorization check
+        if (!CheckAuthorization(ComplianceRoles.Administrator, ComplianceRoles.Analyst))
+        {
+            var errorResult = JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = "Unauthorized: User must have Compliance.Administrator or Compliance.Analyst role to execute remediation",
+                required_roles = new[] { ComplianceRoles.Administrator, ComplianceRoles.Analyst }
+            }, new JsonSerializerOptions { WriteIndented = true });
+
+            _logger.LogWarning("Unauthorized remediation attempt by user");
+            return errorResult;
+        }
+
         try
         {
             // Resolve subscription name to GUID
             string subscriptionId = await ResolveSubscriptionIdAsync(subscriptionIdOrName);
+            
+            // Log audit entry
+            await LogAuditAsync(
+                eventType: "RemediationExecuted",
+                action: dryRun ? "DryRun" : "Execute",
+                resourceId: $"{subscriptionId}/findings/{findingId}",
+                severity: dryRun ? AuditSeverity.Informational : AuditSeverity.High,
+                description: $"Remediation {(dryRun ? "dry-run" : "execution")} for finding {findingId}",
+                metadata: new Dictionary<string, object>
+                {
+                    ["SubscriptionId"] = subscriptionId,
+                    ["FindingId"] = findingId,
+                    ["DryRun"] = dryRun,
+                    ["RequireApproval"] = requireApproval,
+                    ["ResourceGroupName"] = resourceGroupName ?? "All"
+                });
             
             var scope = string.IsNullOrWhiteSpace(resourceGroupName) 
                 ? $"subscription {subscriptionId}" 
@@ -3858,9 +4041,21 @@ Platform Engineering Copilot - Compliance Module
             var effectiveFramework = GetEffectiveFramework(framework ?? "nist-800-53");
             _logger.LogInformation("Using compliance framework: {Framework}", effectiveFramework);
 
-            // 1. Get compliance assessment from existing engine
-            var assessment = await _complianceEngine.RunComprehensiveAssessmentAsync(
-                resolvedSubscriptionId, resourceGroup, null, cancellationToken);
+            // 1. Get or reuse recent compliance assessment (avoid full report)
+            var assessment = await _complianceEngine.GetLatestAssessmentAsync(
+                resolvedSubscriptionId, cancellationToken);
+            
+            // If no recent assessment (within last 24 hours), run a quick one
+            if (assessment == null || (DateTime.UtcNow - assessment.EndTime).TotalHours > 24)
+            {
+                _logger.LogInformation("No recent assessment found. Running fresh assessment for recommendations.");
+                assessment = await _complianceEngine.RunComprehensiveAssessmentAsync(
+                    resolvedSubscriptionId, resourceGroup, null, cancellationToken);
+            }
+            else
+            {
+                _logger.LogInformation("Using recent assessment from {AssessmentTime} for recommendations.", assessment.EndTime);
+            }
 
             // 2. Get framework-specific recommendations from MCP
             var frameworkQuery = effectiveFramework.ToLowerInvariant() switch
@@ -3918,56 +4113,120 @@ Platform Engineering Copilot - Compliance Module
                 };
             }
 
-            // 5. Compile comprehensive recommendations report
+            // 5. Compile focused recommendations report with brief assessment context
+            var topFailingFamilies = assessment.ControlFamilyResults.Values
+                .Where(cf => cf.ComplianceScore < 90)
+                .OrderBy(cf => cf.ComplianceScore)
+                .Take(5)
+                .Select(cf => new
+                {
+                    family = cf.ControlFamily,
+                    score = Math.Round(cf.ComplianceScore, 1),
+                    findingsCount = cf.Findings.Count
+                })
+                .ToList();
+
+            var priorityFindings = assessment.ControlFamilyResults.Values
+                .SelectMany(cf => cf.Findings)
+                .Where(f => f.Severity == AtoFindingSeverity.Critical || f.Severity == AtoFindingSeverity.High)
+                .OrderByDescending(f => f.Severity)
+                .Take(10)
+                .Select(f => new
+                {
+                    resource = f.ResourceName ?? f.ResourceId,
+                    issue = f.Title,
+                    severity = f.Severity.ToString(),
+                    controls = string.Join(", ", f.AffectedNistControls.Take(3))
+                })
+                .ToList();
+
             return JsonSerializer.Serialize(new
             {
                 success = true,
-                resourceGroup = resourceGroup,
-                subscriptionId = resolvedSubscriptionId,
-                framework = effectiveFramework.ToUpperInvariant(),
-                complianceStatus = new
+                displayMode = "recommendations", // Signal to agent: this is recommendations-focused, not full assessment
+                
+                // Brief assessment summary (just enough context)
+                assessmentSummary = new
                 {
-                    overallScore = assessment.OverallComplianceScore,
+                    subscriptionId = resolvedSubscriptionId,
+                    framework = effectiveFramework.ToUpperInvariant(),
+                    overallScore = Math.Round(assessment.OverallComplianceScore, 1),
+                    grade = assessment.OverallComplianceScore >= 90 ? "A" :
+                            assessment.OverallComplianceScore >= 80 ? "B" :
+                            assessment.OverallComplianceScore >= 70 ? "C" :
+                            assessment.OverallComplianceScore >= 60 ? "D" : "F",
                     totalFindings = assessment.TotalFindings,
                     criticalFindings = assessment.CriticalFindings,
                     highFindings = assessment.HighFindings,
-                    mediumFindings = assessment.MediumFindings,
-                    lowFindings = assessment.LowFindings,
-                    assessedAt = assessment.EndTime
+                    assessedAt = assessment.EndTime,
+                    message = (DateTime.UtcNow - assessment.EndTime).TotalMinutes < 5 
+                        ? "📊 Fresh assessment completed" 
+                        : $"📊 Using assessment from {assessment.EndTime:yyyy-MM-dd HH:mm} UTC"
                 },
+                
+                // Top problem areas (brief)
+                topIssues = new
+                {
+                    failingControlFamilies = topFailingFamilies,
+                    priorityFindings = priorityFindings.Take(5) // Only show top 5
+                },
+                
+                // Main content: Recommendations
                 recommendations = new
                 {
+                    // Quick wins (auto-remediable)
+                    quickWins = remediationSteps != null ? new
+                    {
+                        available = true,
+                        autoFixCount = allFindings.Count(f => IsAutoRemediable(f)),
+                        message = "You have automated fixes available - say 'execute remediation' to apply them"
+                    } : null,
+                    
+                    // Framework-specific guidance
                     frameworkGuidance = new
                     {
-                        source = $"Azure MCP - {effectiveFramework.ToUpperInvariant()}",
-                        guidance = recommendations
+                        framework = effectiveFramework.ToUpperInvariant(),
+                        guidance = recommendations,
+                        source = "Azure MCP Best Practices"
                     },
-                    azurePolicy = new
+                    
+                    // Azure Policy recommendations
+                    policyRecommendations = new
                     {
-                        source = "Azure Policy via MCP",
-                        policyGuidance = policyRecommendations
+                        recommendations = policyRecommendations,
+                        source = "Azure Policy Analysis"
                     },
-                    remediationPlan = remediationSteps
+                    
+                    // Top remediation actions (if included)
+                    topActions = remediationSteps
                 },
-                failingControls = assessment.ControlFamilyResults.Values
-                    .SelectMany(cf => cf.Findings)
-                    .Where(f => f.Severity == AtoFindingSeverity.Critical || f.Severity == AtoFindingSeverity.High)
-                    .Take(10)
-                    .Select(f => new
-                    {
-                        resourceId = f.ResourceId,
-                        resourceName = f.ResourceName,
-                        title = f.Title,
-                        severity = f.Severity.ToString(),
-                        complianceStatus = f.ComplianceStatus.ToString()
-                    }).ToList(),
+                
+                // Next steps
                 nextSteps = new[]
                 {
-                    $"Review {effectiveFramework.ToUpperInvariant()} compliance guidance above",
-                    "Check Azure Policy recommendations for quick wins",
-                    includeRemediation ? "Execute remediation plan to fix failing controls" : "Say 'get compliance recommendations with remediation' to see fix steps",
-                    "Say 'remediate compliance issues' to auto-fix violations",
-                    "Say 'generate compliance evidence' for ATO documentation"
+                    assessment.CriticalFindings > 0 
+                        ? $"🔴 URGENT: Address {assessment.CriticalFindings} critical finding(s) immediately" 
+                        : null,
+                    assessment.HighFindings > 0 
+                        ? $"⚠️ Review {assessment.HighFindings} high-priority finding(s) within 24-48 hours" 
+                        : null,
+                    topFailingFamilies.Any() 
+                        ? $"📋 Focus on these control families: {string.Join(", ", topFailingFamilies.Take(3).Select(f => f.family))}" 
+                        : null,
+                    includeRemediation && allFindings.Any()
+                        ? "🔧 Say 'generate remediation plan' for detailed fix steps"
+                        : null,
+                    "📄 Say 'collect compliance evidence' to prepare ATO documentation",
+                    "📊 Say 'show full assessment' to see detailed compliance report"
+                }.Where(s => s != null).ToArray(),
+                
+                // Quick commands
+                suggestedCommands = new[]
+                {
+                    new { command = "generate remediation plan", description = "Get step-by-step fix plan" },
+                    new { command = "execute remediation", description = $"Auto-fix {allFindings.Count(f => IsAutoRemediable(f))} issues" },
+                    new { command = "get control family details for " + topFailingFamilies.FirstOrDefault()?.family, description = "Drill into worst-performing family" },
+                    new { command = "show full assessment", description = "View complete compliance report" }
                 }
             }, new JsonSerializerOptions { WriteIndented = true });
         }
@@ -4750,6 +5009,396 @@ Platform Engineering Copilot - Compliance Module
                        slope > 0 ? "improving" : "declining";
         
         return (direction, slope);
+    }
+
+    #endregion
+
+    #region AI-Enhanced Remediation Functions (TIER 3)
+
+    /// <summary>
+    /// Generate AI-powered remediation script (Azure CLI, PowerShell, or Terraform)
+    /// </summary>
+    [KernelFunction("generate_remediation_script")]
+    [Description("Generate an AI-powered remediation script for a compliance finding. Supports Azure CLI, PowerShell, and Terraform. Returns executable code with explanations.")]
+    // [RequireComplianceRole(ComplianceRoles.Administrator, ComplianceRoles.Analyst)]
+    public async Task<string> GenerateRemediationScriptAsync(
+        [Description("The finding ID to generate remediation for")] string findingId,
+        [Description("Script type: AzureCLI, PowerShell, or Terraform")] string scriptType = "AzureCLI")
+    {
+        if (!CheckAuthorization(ComplianceRoles.Administrator, ComplianceRoles.Analyst))
+        {
+            _logger.LogWarning("Unauthorized access attempt to generate_remediation_script by user: {UserEmail}", 
+                _userContextService?.GetCurrentUserEmail() ?? "unknown");
+            return "⛔ Access Denied: You must have Administrator or Analyst role to generate remediation scripts.";
+        }
+
+        try
+        {
+            await LogAuditEventAsync("generate_remediation_script", new { findingId, scriptType });
+
+            _logger.LogInformation("Generating {ScriptType} remediation script for finding {FindingId}", scriptType, findingId);
+
+            // Get finding from database
+            var finding = await _dbContext.ComplianceFindings
+                .FirstOrDefaultAsync(f => f.FindingId == findingId);
+
+            if (finding == null)
+            {
+                return $"❌ Finding {findingId} not found.";
+            }
+
+            // Convert to model
+            var findingModel = finding.ToModel();
+
+            // Generate remediation script using AI
+            var script = await _remediationEngine.GenerateRemediationScriptAsync(findingModel, scriptType);
+
+            var output = new StringBuilder();
+            output.AppendLine($"# 🤖 AI-Generated Remediation Script");
+            output.AppendLine($"**Finding:** {findingId}");
+            output.AppendLine($"**Script Type:** {scriptType}");
+            output.AppendLine($"**Generated:** {script.GeneratedAt:yyyy-MM-dd HH:mm:ss} UTC");
+            if (script.RequiresApproval)
+            {
+                output.AppendLine("⚠️ **REQUIRES APPROVAL** - Critical/High severity remediation");
+            }
+            output.AppendLine();
+
+            if (script.AvailableRemediations.Count > 0)
+            {
+                output.AppendLine("## Available Remediation Actions");
+                foreach (var action in script.AvailableRemediations)
+                {
+                    output.AppendLine($"- **{action.Action}**: {action.Description} (Risk: {action.Risk}, Est: {action.EstimatedMinutes} min)");
+                }
+                output.AppendLine();
+                output.AppendLine($"**Recommended:** {script.RecommendedAction}");
+                output.AppendLine();
+            }
+
+            output.AppendLine("## Generated Script");
+            output.AppendLine($"```{scriptType.ToLower()}");
+            output.AppendLine(script.Script);
+            output.AppendLine("```");
+
+            return output.ToString();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("AI features not available"))
+        {
+            _logger.LogWarning("AI features not available for generate_remediation_script");
+            return "⚠️ AI features not available. Azure OpenAI service is not configured.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate remediation script for finding {FindingId}", findingId);
+            return $"❌ Error generating script: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Get natural language remediation guidance
+    /// </summary>
+    [KernelFunction("get_remediation_guidance")]
+    [Description("Get AI-powered natural language guidance for remediating a compliance finding. Returns step-by-step instructions in plain English.")]
+    // [RequireComplianceRole(ComplianceRoles.Administrator, ComplianceRoles.Analyst, ComplianceRoles.Auditor)]
+    public async Task<string> GetRemediationGuidanceAsync(
+        [Description("The finding ID to get guidance for")] string findingId)
+    {
+        if (!CheckAuthorization(ComplianceRoles.Administrator, ComplianceRoles.Analyst, ComplianceRoles.Auditor))
+        {
+            _logger.LogWarning("Unauthorized access attempt to get_remediation_guidance by user: {UserEmail}", 
+                _userContextService?.GetCurrentUserEmail() ?? "unknown");
+            return "⛔ Access Denied: You must have Administrator, Analyst, or Auditor role to view remediation guidance.";
+        }
+
+        try
+        {
+            await LogAuditEventAsync("get_remediation_guidance", new { findingId });
+
+            _logger.LogInformation("Generating remediation guidance for finding {FindingId}", findingId);
+
+            // Get finding from database
+            var finding = await _dbContext.ComplianceFindings
+                .FirstOrDefaultAsync(f => f.FindingId == findingId);
+
+            if (finding == null)
+            {
+                return $"❌ Finding {findingId} not found.";
+            }
+
+            // Convert to model
+            var findingModel = finding.ToModel();
+
+            // Get AI guidance from remediation engine
+            var guidance = await _remediationEngine.GetRemediationGuidanceAsync(findingModel);
+
+            var output = new StringBuilder();
+            output.AppendLine($"# 💡 Remediation Guidance");
+            output.AppendLine($"**Finding:** {findingId} - {finding.ControlId}");
+            output.AppendLine($"**Generated:** {guidance.GeneratedAt:yyyy-MM-dd HH:mm:ss} UTC");
+            output.AppendLine($"**Confidence:** {guidance.Confidence:P0}");
+            output.AppendLine();
+            output.AppendLine(guidance.Explanation);
+
+            if (guidance.TechnicalPlan != null)
+            {
+                output.AppendLine();
+                output.AppendLine("## Technical Details");
+                output.AppendLine($"**Plan ID:** {guidance.TechnicalPlan.PlanId}");
+                output.AppendLine($"**Total Findings:** {guidance.TechnicalPlan.TotalFindings}");
+                output.AppendLine($"**Priority:** {guidance.TechnicalPlan.Priority}");
+                output.AppendLine($"**Estimated Effort:** {guidance.TechnicalPlan.EstimatedEffort.TotalMinutes:F0} minutes");
+                if (guidance.TechnicalPlan.RemediationItems.Any())
+                {
+                    output.AppendLine($"**Remediation Actions:** {guidance.TechnicalPlan.RemediationItems.Count}");
+                }
+            }
+
+            return output.ToString();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("AI features not available"))
+        {
+            _logger.LogWarning("AI features not available for get_remediation_guidance");
+            return "⚠️ AI features not available. Azure OpenAI service is not configured.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate guidance for finding {FindingId}", findingId);
+            return $"❌ Error generating guidance: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Prioritize findings using AI with business context
+    /// </summary>
+    [KernelFunction("prioritize_findings")]
+    [Description("Use AI to prioritize compliance findings based on risk, business impact, and ease of remediation. Provide business context for better prioritization.")]
+    // [RequireComplianceRole(ComplianceRoles.Administrator, ComplianceRoles.Analyst)]
+    public async Task<string> PrioritizeFindingsAsync(
+        [Description("Subscription ID to prioritize findings for")] string subscriptionId,
+        [Description("Business context for prioritization (e.g., 'Production environment for healthcare app')")] string businessContext = "")
+    {
+        if (!CheckAuthorization(ComplianceRoles.Administrator, ComplianceRoles.Analyst))
+        {
+            _logger.LogWarning("Unauthorized access attempt to prioritize_findings by user: {UserEmail}", 
+                _userContextService?.GetCurrentUserEmail() ?? "unknown");
+            return "⛔ Access Denied: You must have Administrator or Analyst role to prioritize findings.";
+        }
+
+        try
+        {
+            await LogAuditEventAsync("prioritize_findings", new { subscriptionId, businessContext });
+
+            _logger.LogInformation("AI-prioritizing findings for subscription {SubscriptionId}", subscriptionId);
+
+            // Get findings from database
+            var findings = await _dbContext.ComplianceFindings
+                .Where(f => f.Assessment.SubscriptionId == subscriptionId && f.ResolvedAt == null)
+                .Include(f => f.Assessment)
+                .ToListAsync();
+
+            if (findings.Count == 0)
+            {
+                return $"No unresolved findings found for subscription {subscriptionId}.";
+            }
+
+            // Convert to models
+            var findingModels = findings.Select(f => f.ToModel()).ToList();
+
+            // Get AI prioritization from remediation engine
+            var prioritized = await _remediationEngine.PrioritizeFindingsWithAiAsync(
+                findingModels, businessContext);
+
+            var output = new StringBuilder();
+            output.AppendLine($"# 🎯 AI-Prioritized Findings");
+            output.AppendLine($"**Subscription:** {subscriptionId}");
+            output.AppendLine($"**Total Findings:** {findings.Count}");
+            if (!string.IsNullOrEmpty(businessContext))
+            {
+                output.AppendLine($"**Business Context:** {businessContext}");
+            }
+            output.AppendLine();
+
+            output.AppendLine("## Priority Rankings");
+            foreach (var pf in prioritized.OrderBy(p => p.Priority))
+            {
+                var finding = findings.First(f => f.Id.ToString() == pf.FindingId);
+                var findingModel = finding.ToModel();
+                output.AppendLine($"### Priority {pf.Priority}: {findingModel.AffectedControls.FirstOrDefault() ?? "N/A"}");
+                output.AppendLine($"**Finding ID:** {pf.FindingId}");
+                output.AppendLine($"**Severity:** {findingModel.Severity}");
+                output.AppendLine($"**Reasoning:** {pf.Reasoning}");
+                output.AppendLine();
+            }
+
+            return output.ToString();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("AI features not available"))
+        {
+            _logger.LogWarning("AI features not available for prioritize_findings");
+            return "⚠️ AI features not available. Azure OpenAI service is not configured.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to prioritize findings for subscription {SubscriptionId}", subscriptionId);
+            return $"❌ Error prioritizing findings: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Execute an AI-generated remediation script
+    /// </summary>
+    [KernelFunction("execute_ai_remediation")]
+    [Description("Execute an AI-generated remediation script for a compliance finding. Supports dry-run mode and requires approval for critical findings.")]
+    // [RequireComplianceRole(ComplianceRoles.Administrator)]
+    public async Task<string> ExecuteAiRemediationAsync(
+        [Description("The subscription ID containing the resource")] string subscriptionId,
+        [Description("The finding ID to remediate")] string findingId,
+        [Description("Dry run mode - simulate without making changes")] bool dryRun = true,
+        [Description("Script type: AzureCLI, PowerShell, or Terraform")] string scriptType = "AzureCLI")
+    {
+        if (!CheckAuthorization(ComplianceRoles.Administrator))
+        {
+            _logger.LogWarning("Unauthorized access attempt to execute_ai_remediation by user: {UserEmail}", 
+                _userContextService?.GetCurrentUserEmail() ?? "unknown");
+            return "⛔ Access Denied: You must have Administrator role to execute remediation scripts.";
+        }
+
+        try
+        {
+            await LogAuditEventAsync("execute_ai_remediation", new { subscriptionId, findingId, dryRun, scriptType });
+
+            _logger.LogInformation("Executing AI remediation for finding {FindingId} (DryRun: {DryRun})", findingId, dryRun);
+
+            // Get finding from database
+            var finding = await _dbContext.ComplianceFindings
+                .Include(f => f.Assessment)
+                .FirstOrDefaultAsync(f => f.FindingId == findingId && f.Assessment.SubscriptionId == subscriptionId);
+
+            if (finding == null)
+            {
+                return $"❌ Finding {findingId} not found in subscription {subscriptionId}.";
+            }
+
+            // Convert to model
+            var findingModel = finding.ToModel();
+
+            // Execute remediation with AI script enabled
+            var options = new RemediationExecutionOptions
+            {
+                DryRun = dryRun,
+                UseAiScript = true, // Enable AI script execution path
+                RequireApproval = finding.Severity is "Critical" or "High",
+                AutoValidate = true,
+                AutoRollbackOnFailure = true,
+                CaptureSnapshots = true,
+                ExecutedBy = _userContextService?.GetCurrentUserEmail() ?? "system",
+                Justification = $"AI-generated {scriptType} script execution for {findingId}"
+            };
+
+            var execution = await _remediationEngine.ExecuteRemediationAsync(
+                subscriptionId, findingModel, options);
+
+            var output = new StringBuilder();
+            output.AppendLine($"# 🚀 AI Remediation Execution");
+            output.AppendLine($"**Finding:** {findingId} - {finding.ControlId}");
+            output.AppendLine($"**Subscription:** {subscriptionId}");
+            output.AppendLine($"**Mode:** {(dryRun ? "DRY RUN (Simulation)" : "LIVE EXECUTION")}");
+            output.AppendLine($"**Script Type:** {scriptType}");
+            output.AppendLine($"**Status:** {(execution.Success ? "✅ SUCCESS" : "❌ FAILED")}");
+            output.AppendLine($"**Duration:** {execution.Duration.TotalSeconds:F2} seconds");
+            output.AppendLine();
+
+            if (!string.IsNullOrEmpty(execution.Message))
+            {
+                output.AppendLine($"**Message:** {execution.Message}");
+                output.AppendLine();
+            }
+
+            if (execution.StepsExecuted.Count > 0)
+            {
+                output.AppendLine("## Execution Steps");
+                foreach (var step in execution.StepsExecuted)
+                {
+                    output.AppendLine($"{step.Order}. {step.Description}");
+                    if (!string.IsNullOrEmpty(step.Command))
+                    {
+                        output.AppendLine($"   - Command: `{step.Command}`");
+                    }
+                }
+                output.AppendLine();
+            }
+
+            if (execution.ChangesApplied.Count > 0)
+            {
+                output.AppendLine("## Changes Applied");
+                foreach (var change in execution.ChangesApplied)
+                {
+                    output.AppendLine($"- {change}");
+                }
+                output.AppendLine();
+            }
+
+            if (!string.IsNullOrEmpty(execution.ErrorMessage))
+            {
+                output.AppendLine("## Error Details");
+                output.AppendLine($"```");
+                output.AppendLine(execution.ErrorMessage);
+                output.AppendLine($"```");
+            }
+
+            if (!dryRun && execution.Success)
+            {
+                // Update finding status in database
+                finding.ComplianceStatus = "Remediating";
+                // Note: ResolvedAt will be set when verification confirms the fix
+                await _dbContext.SaveChangesAsync();
+                
+                output.AppendLine("✅ Finding status updated to Remediating. Run compliance assessment to verify remediation.");
+            }
+
+            return output.ToString();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("AI features not available"))
+        {
+            _logger.LogWarning("AI features not available for execute_ai_remediation");
+            return "⚠️ AI features not available. Azure OpenAI service is not configured.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to execute AI remediation for finding {FindingId}", findingId);
+            return $"❌ Error executing AI remediation: {ex.Message}";
+        }
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    /// <summary>
+    /// Check if a finding can be automatically remediated
+    /// </summary>
+    private bool IsAutoRemediable(AtoFinding finding)
+    {
+        // Check if finding is marked as auto-remediable
+        if (finding.IsAutoRemediable)
+            return true;
+
+        // Common auto-remediable patterns
+        var autoRemediablePatterns = new[]
+        {
+            "enable encryption",
+            "enable diagnostic",
+            "enable https",
+            "disable public access",
+            "enable tls",
+            "configure firewall",
+            "enable logging",
+            "enable monitoring"
+        };
+
+        var title = finding.Title?.ToLowerInvariant() ?? "";
+        return autoRemediablePatterns.Any(pattern => title.Contains(pattern));
     }
 
     #endregion

@@ -272,11 +272,70 @@ class Program
             Log.Warning("⚠️  Azure AD authentication not configured - MCP will not validate user tokens");
         }
 
-        // Add authorization services (required for UseAuthorization middleware)
-        builder.Services.AddAuthorization();
+        // Add authorization services with compliance RBAC policies
+        builder.Services.AddAuthorization(options =>
+        {
+            // Remediation policies
+            options.AddPolicy("CanExecuteRemediation", policy =>
+                policy.RequireRole(
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Administrator,
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Analyst));
+
+            options.AddPolicy("CanApproveRemediation", policy =>
+                policy.RequireRole(Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Administrator));
+
+            // Evidence and export policies
+            options.AddPolicy("CanExportEvidence", policy =>
+                policy.RequireRole(
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Administrator,
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Auditor));
+
+            options.AddPolicy("CanCollectEvidence", policy =>
+                policy.RequireRole(
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Administrator,
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Auditor,
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Analyst));
+
+            // Assessment policies
+            options.AddPolicy("CanDeleteAssessment", policy =>
+                policy.RequireRole(Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Administrator));
+
+            options.AddPolicy("CanRunAssessment", policy =>
+                policy.RequireRole(
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Administrator,
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Auditor,
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Analyst));
+
+            // Document generation policies
+            options.AddPolicy("CanGenerateDocuments", policy =>
+                policy.RequireAssertion(context =>
+                    context.User.IsInRole(Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Administrator) ||
+                    context.User.IsInRole(Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Auditor) ||
+                    context.User.HasClaim(c => c.Value == Platform.Engineering.Copilot.Core.Authorization.CompliancePermissions.GenerateDocuments)));
+
+            options.AddPolicy("CanExportDocuments", policy =>
+                policy.RequireRole(
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Administrator,
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Auditor));
+
+            // Finding management policies
+            options.AddPolicy("CanUpdateFindings", policy =>
+                policy.RequireRole(
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Administrator,
+                    Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Analyst));
+
+            options.AddPolicy("CanDeleteFindings", policy =>
+                policy.RequireRole(Platform.Engineering.Copilot.Core.Authorization.ComplianceRoles.Administrator));
+
+            Log.Information("✅ Compliance authorization policies configured");
+        });
 
         // Add Azure credential provider for user token passthrough
         builder.Services.AddAzureCredentialProvider();
+
+        // Register user context service for accessing current user information
+        builder.Services.AddScoped<Platform.Engineering.Copilot.Core.Services.IUserContextService, 
+            Platform.Engineering.Copilot.Core.Services.UserContextService>();
 
         // Add Core services (Multi-Agent Orchestrator, Plugins, etc.)
         builder.Services.AddPlatformEngineeringCopilotCore();
@@ -395,6 +454,9 @@ class Program
             // Add authentication middleware (must be before authorization)
             app.UseAuthentication();
             app.UseAuthorization();
+
+            // Add compliance authorization middleware for auditing access to compliance endpoints
+            app.UseComplianceAuthorization();
 
             // Add user token middleware to extract CAC identity and create Azure credentials
             app.UseUserTokenAuthentication();

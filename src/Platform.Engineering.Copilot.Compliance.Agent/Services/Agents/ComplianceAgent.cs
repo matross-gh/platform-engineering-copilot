@@ -30,6 +30,7 @@ public class ComplianceAgent : ISpecializedAgent
         ILogger<ComplianceAgent> logger,
         IOptions<ComplianceAgentOptions> options,
         CompliancePlugin compliancePlugin,
+        DocumentGenerationPlugin documentGenerationPlugin,
         Platform.Engineering.Copilot.Core.Plugins.ConfigurationPlugin configurationPlugin)
     {
         _logger = logger;
@@ -55,8 +56,11 @@ public class ComplianceAgent : ISpecializedAgent
         
         // Register compliance plugin
         _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(compliancePlugin, "CompliancePlugin"));
+        
+        // Register document generation plugin for control narratives, SSP, SAR, POA&M generation
+        _kernel.Plugins.Add(KernelPluginFactory.CreateFromObject(documentGenerationPlugin, "DocumentGenerationPlugin"));
 
-        _logger.LogInformation("✅ Compliance Agent initialized with specialized kernel");
+        _logger.LogInformation("✅ Compliance Agent initialized with specialized kernel (compliance + document generation)");
     }
 
     public async Task<AgentResponse> ProcessAsync(AgentTask task, SharedMemory memory)
@@ -187,12 +191,19 @@ public class ComplianceAgent : ISpecializedAgent
 2. If user says: run assessment, scan, check compliance, assess
    → MUST call run_compliance_assessment function
 
-3. DEFAULT SUBSCRIPTION HANDLING:
+3. If user says: remediation plan, action plan, fix plan, create plan, generate plan, remediation steps, how to fix, prioritized remediation, remediation roadmap
+   → MUST call generate_remediation_plan function
+   → Recognize phrases like: ""generate a remediation plan for this assessment"", ""create an action plan"", ""show me how to fix these violations""
+   → This function analyzes findings and creates prioritized remediation steps with effort estimates
+
+4. DEFAULT SUBSCRIPTION HANDLING:
    → BEFORE asking for subscription, call get_azure_subscription to check if one is configured
    → If subscription exists in config, use it automatically (pass null to functions)
    → ONLY ask for subscription if get_azure_subscription returns no default
 
 DO NOT call run_compliance_assessment when user asks for evidence collection!
+DO NOT call collect_evidence when user asks for assessment!
+DO NOT ask for subscription without checking get_azure_subscription first!
 DO NOT call collect_evidence when user asks for assessment!
 DO NOT ask for subscription without checking get_azure_subscription first!
 
@@ -456,12 +467,17 @@ When the compliance assessment function returns a response with a 'formatted_out
 - This ensures consistent, high-quality compliance reports
 
 **CRITICAL: Remediation Plan Generation**
-When the user asks to ""generate a remediation plan"" or ""create a remediation plan"":
-- DO NOT call generate_remediation_plan immediately after run_compliance_assessment in the SAME request
-- The generate_remediation_plan function will run a NEW compliance scan which is wasteful
-- Instead: Include the remediation plan suggestion in your response to the assessment
-- Example: ""To create a remediation plan based on this assessment, you can say: 'generate a remediation plan for subscription 00000000-0000-0000-0000-000000000000'""
-- This allows the user to request the plan separately if needed, avoiding redundant scans
+When the user asks to ""generate a remediation plan"" or ""create a remediation plan"" or similar:
+- IMMEDIATELY call the generate_remediation_plan function
+- The function accepts optional subscription ID/name (if not provided, uses last assessed subscription automatically)
+- Common user phrases that trigger this: ""remediation plan"", ""action plan"", ""fix plan"", ""how to fix"", ""create plan""
+- Example user requests:
+  * ""generate a remediation plan for this assessment""
+  * ""create an action plan to fix these violations""
+  * ""show me remediation steps""
+  * ""I need a prioritized fix plan""
+- The function will return prioritized violations with detailed remediation steps and effort estimates
+- If user just completed an assessment, they likely want a remediation plan based on those findings
 
 **Response Format:**
 When assessing compliance:

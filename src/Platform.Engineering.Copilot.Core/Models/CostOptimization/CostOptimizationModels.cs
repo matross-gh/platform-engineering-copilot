@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Platform.Engineering.Copilot.Core.Models;
 
-namespace Platform.Engineering.Copilot.Core.Models.CostOptimization
+namespace Platform.Engineering.Copilot.Core.Models.CostOptimization.Analysis
 {
     public class CostOptimizationRecommendation
     {
@@ -21,8 +22,19 @@ namespace Platform.Engineering.Copilot.Core.Models.CostOptimization
         public List<OptimizationAction> Actions { get; set; } = new();
         public Dictionary<string, object> Metadata { get; set; } = new();
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public ImplementationComplexity Complexity { get; set; }
+        public OptimizationComplexity Complexity { get; set; }
         public List<string> Tags { get; set; } = new();
+        
+        // Additional properties from detailed version
+        public string Title { get; set; } = string.Empty;
+        public string Impact { get; set; } = string.Empty;
+        public OptimizationCategory Category { get; set; }
+        public string RecommendationId { get; set; } = Guid.NewGuid().ToString();
+        public DateTime DetectedAt { get; set; } = DateTime.UtcNow;
+        public decimal PotentialMonthlySavings { get; set; }
+        public decimal PotentialAnnualSavings { get; set; }
+        public object? ScheduleDetails { get; set; }
+        public OptimizationRisk Risk { get; set; }
     }
 
     public class OptimizationAction
@@ -34,6 +46,12 @@ namespace Platform.Engineering.Copilot.Core.Models.CostOptimization
         public bool IsAutomatable { get; set; }
         public string? AutomationScript { get; set; }
         public List<string> Prerequisites { get; set; } = new();
+        
+        // Additional properties from detailed version
+        public string ActionType { get; set; } = string.Empty;
+        public bool Automated { get; set; }
+        public string EstimatedDuration { get; set; } = string.Empty;
+        public List<string> Resources { get; set; } = new();
     }
 
     public class ResourceUsagePattern
@@ -73,6 +91,13 @@ namespace Platform.Engineering.Copilot.Core.Models.CostOptimization
     {
         public DateTime Date { get; set; }
         public decimal Cost { get; set; }
+        public decimal DailyCost { get; set; }
+        public decimal CumulativeMonthlyCost { get; set; }
+        public Dictionary<string, decimal> ServiceCosts { get; set; } = new();
+        public Dictionary<string, decimal> ResourceGroupCosts { get; set; } = new();
+        public Dictionary<string, decimal> TagBasedCosts { get; set; } = new();
+        public int ResourceCount { get; set; }
+        public List<string> CostDrivers { get; set; } = new();
         public string? Category { get; set; }
     }
 
@@ -109,14 +134,6 @@ namespace Platform.Engineering.Copilot.Core.Models.CostOptimization
         Migrate,
         Configure,
         Tag
-    }
-
-    public enum ImplementationComplexity
-    {
-        Simple,
-        Moderate,
-        Complex,
-        VeryComplex
     }
 
     public enum UsagePattern

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization.Analysis;
 
 namespace Platform.Engineering.Copilot.Admin.Controllers;
 

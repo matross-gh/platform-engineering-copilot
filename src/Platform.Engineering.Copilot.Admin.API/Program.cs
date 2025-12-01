@@ -16,7 +16,6 @@ using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 using Platform.Engineering.Copilot.Compliance.Agent.Services.Governance;
 using Platform.Engineering.Copilot.Security.Agent.Extensions;
-using Platform.Engineering.Copilot.Environment.Agent.Services.Deployment;
 using Platform.Engineering.Copilot.Infrastructure.Core.Services;
 using Platform.Engineering.Copilot.Compliance.Core.Extensions;
 using Platform.Engineering.Copilot.CostManagement.Core.Extensions;

@@ -409,6 +409,7 @@ appsettings.development.local.json
 # Docker
 .dockerignore
 Dockerfile.local
+docker-compose.example.yml
 
 # Terraform
 *.tfstate
@@ -424,6 +425,7 @@ terraform.tfvars.json
 .env.development.local
 .env.test.local
 .env.production.local
+.env.simplechat
 
 # macOS
 .DS_Store

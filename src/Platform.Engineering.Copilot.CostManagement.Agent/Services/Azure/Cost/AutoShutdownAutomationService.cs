@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization.Analysis;
 using System.Text;
 using System.Text.Json;
 
@@ -152,7 +154,7 @@ public class AutoShutdownAutomationService
                 Description = $"Implement automated shutdown schedule for non-production VM",
                 Impact = $"Reduce runtime from 24/7 to {schedule.ActiveHoursPerWeek} hours/week",
                 EstimatedMonthlySavings = savings,
-                ImplementationComplexity = OptimizationComplexity.Simple,
+                Complexity = OptimizationComplexity.Simple,
                 Actions = new List<OptimizationAction>
                 {
                     new OptimizationAction
@@ -217,7 +219,7 @@ public class AutoShutdownAutomationService
                 Description = "Implement automated pause/resume schedule for non-production database",
                 Impact = $"Pause database during off-hours ({168 - schedule.ActiveHoursPerWeek} hours/week)",
                 EstimatedMonthlySavings = savings,
-                ImplementationComplexity = OptimizationComplexity.Moderate,
+                Complexity = OptimizationComplexity.Moderate,
                 Actions = new List<OptimizationAction>
                 {
                     new OptimizationAction
@@ -281,7 +283,7 @@ public class AutoShutdownAutomationService
                 Description = "Scale down node pools during off-hours",
                 Impact = $"Scale to minimum nodes during {168 - schedule.ActiveHoursPerWeek} hours/week",
                 EstimatedMonthlySavings = savings,
-                ImplementationComplexity = OptimizationComplexity.Moderate,
+                Complexity = OptimizationComplexity.Moderate,
                 Actions = new List<OptimizationAction>
                 {
                     new OptimizationAction
@@ -345,7 +347,7 @@ public class AutoShutdownAutomationService
                 Description = "Scale down to F1/B1 tier during off-hours",
                 Impact = $"Use lower tier during {168 - schedule.ActiveHoursPerWeek} hours/week",
                 EstimatedMonthlySavings = savings,
-                ImplementationComplexity = OptimizationComplexity.Simple,
+                Complexity = OptimizationComplexity.Simple,
                 Actions = new List<OptimizationAction>
                 {
                     new OptimizationAction

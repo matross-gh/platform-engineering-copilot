@@ -12,6 +12,13 @@ namespace Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 public interface IAtoRemediationEngine
 {
     /// <summary>
+    /// Generate remediation plan for a single finding (used by AI for natural language guidance)
+    /// </summary>
+    Task<RemediationPlan> GenerateRemediationPlanAsync(
+        AtoFinding finding,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Analyzes findings and generates a comprehensive, prioritized remediation plan
     /// </summary>
     Task<RemediationPlan> GenerateRemediationPlanAsync(
@@ -120,4 +127,31 @@ public interface IAtoRemediationEngine
         List<AtoFinding> findings,
         DateTimeOffset scheduledTime,
         CancellationToken cancellationToken = default);
+
+    #region AI-Enhanced Methods (TIER 3)
+
+    /// <summary>
+    /// Generate AI-powered remediation script (Azure CLI, PowerShell, or Terraform)
+    /// </summary>
+    Task<RemediationScript> GenerateRemediationScriptAsync(
+        AtoFinding finding,
+        string scriptType = "AzureCLI",
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get natural language remediation guidance using AI
+    /// </summary>
+    Task<RemediationGuidance> GetRemediationGuidanceAsync(
+        AtoFinding finding,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Prioritize findings using AI with business context
+    /// </summary>
+    Task<List<PrioritizedFinding>> PrioritizeFindingsWithAiAsync(
+        List<AtoFinding> findings,
+        string businessContext = "",
+        CancellationToken cancellationToken = default);
+
+    #endregion
 }

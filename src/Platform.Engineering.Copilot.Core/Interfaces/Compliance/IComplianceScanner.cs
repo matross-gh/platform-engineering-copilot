@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Platform.Engineering.Copilot.Core.Models.Compliance;
-using Platform.Engineering.Copilot.Core.Models.Compliance;
 
 namespace Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 

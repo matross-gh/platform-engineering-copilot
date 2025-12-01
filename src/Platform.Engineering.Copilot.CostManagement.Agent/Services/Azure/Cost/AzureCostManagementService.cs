@@ -5,6 +5,8 @@ using Microsoft.Extensions.Options;
 using System.Text.Json;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Models.Cost;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization.Analysis;
 using Platform.Engineering.Copilot.Core.Configuration;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 
@@ -866,7 +868,7 @@ public class AzureCostManagementService : IAzureCostManagementService
                         RecommendationId = recElement.TryGetProperty("id", out var id) ? id.GetString() ?? Guid.NewGuid().ToString() : Guid.NewGuid().ToString(),
                         DetectedAt = DateTime.UtcNow,
                         Category = OptimizationCategory.Compute, // Default for Advisor cost recommendations
-                        Type = OptimizationType.Rightsizing
+                        Type = OptimizationType.RightSizing
                     };
 
                     // Parse short description (title)
@@ -932,13 +934,13 @@ public class AzureCostManagementService : IAzureCostManagementService
                         }
                         else if (typeIdStr.Contains("RightSize", StringComparison.OrdinalIgnoreCase))
                         {
-                            recommendation.Type = OptimizationType.Rightsizing;
+                            recommendation.Type = OptimizationType.RightSizing;
                             recommendation.Category = OptimizationCategory.Compute;
                         }
                     }
 
                     // Set implementation defaults
-                    recommendation.ImplementationComplexity = OptimizationComplexity.Simple;
+                    recommendation.Complexity = OptimizationComplexity.Simple;
                     recommendation.Risk = OptimizationRisk.Low;
 
                     recommendations.Add(recommendation);

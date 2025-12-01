@@ -7,9 +7,10 @@ using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Models.CostOptimization;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization.Analysis;
 using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Core.Plugins;
-using DetailedCostOptimizationRecommendation = Platform.Engineering.Copilot.Core.Models.CostOptimization.CostOptimizationRecommendation;
+using DetailedCostOptimizationRecommendation = Platform.Engineering.Copilot.Core.Models.CostOptimization.Analysis.CostOptimizationRecommendation;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Cost;
 using Platform.Engineering.Copilot.CostManagement.Core.Configuration;
@@ -210,7 +211,7 @@ public class CostManagementPlugin : BaseSupervisorPlugin
                     1 => "🟡 Medium",   // Medium
                     _ => "🟢 Low"       // Low
                 };
-                var complexityIcon = ((int)rec.ImplementationComplexity) switch
+                var complexityIcon = ((int)rec.Complexity) switch
                 {
                     3 => "🔴 Expert",   // VeryComplex
                     2 => "⚠️ Complex",  // Complex
@@ -417,9 +418,8 @@ public class CostManagementPlugin : BaseSupervisorPlugin
                 
                 var complexityBadge = rec.Complexity switch
                 {
-                    ImplementationComplexity.VeryComplex => "🔴 Very Complex",
-                    ImplementationComplexity.Complex => "⚠️ Complex",
-                    ImplementationComplexity.Moderate => "⚡ Moderate",
+                    OptimizationComplexity.Complex => "⚠️ Complex",
+                    OptimizationComplexity.Moderate => "⚡ Moderate",
                     _ => "✅ Simple"
                 };
                 
@@ -1070,4 +1070,685 @@ public class CostManagementPlugin : BaseSupervisorPlugin
     }
 
     #endregion
+
+    // NOTE: Advanced Forecasting Functions temporarily commented out pending implementation of advanced forecasting types
+    // (SeasonalityPattern, CostScenario, GrowthProjection, etc.) in the engine
+    #region Advanced Forecasting Functions - DISABLED
+    /*
+
+    [KernelFunction("forecast_costs_with_seasonality")]
+    [Description("Generate advanced cost forecast with seasonality detection and confidence intervals. Detects weekly/monthly patterns and provides more accurate forecasts than simple linear projection.")]
+    public async Task<string> ForecastCostsWithSeasonalityAsync(
+        [Description("Azure subscription ID to analyze")] 
+        string subscriptionId,
+        
+        [Description("Number of days to forecast (default: 90)")] 
+        int forecastDays = 90,
+        
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Generating advanced forecast with seasonality for subscription {SubscriptionId}, {Days} days", 
+                subscriptionId, forecastDays);
+
+            var forecast = await _costOptimizationEngine.GetAdvancedForecastAsync(
+                subscriptionId, 
+                forecastDays, 
+                cancellationToken);
+
+            var monthlyProjection = forecast.Projections
+                .GroupBy(p => new { p.Date.Year, p.Date.Month })
+                .Select(g => new
+                {
+                    month = $"{g.Key.Year}-{g.Key.Month:D2}",
+                    totalCost = FormatCurrency(g.Sum(p => p.ForecastedCost)),
+                    avgDailyCost = FormatCurrency(g.Average(p => p.ForecastedCost)),
+                    confidence = $"{g.Average(p => p.Confidence):P0}"
+                })
+                .Take(6)
+                .ToList();
+
+            var seasonalityInfo = forecast.Seasonality != null && forecast.Seasonality.Type != "None"
+                ? new
+                {
+                    detected = true,
+                    pattern = forecast.Seasonality.Type,
+                    strength = $"{forecast.Seasonality.Strength:P0}",
+                    confidence = $"{forecast.Seasonality.Confidence:P0}",
+                    insights = forecast.Seasonality.DetectedPatterns
+                }
+                : new
+                {
+                    detected = false,
+                    pattern = "None",
+                    strength = "0%",
+                    confidence = "0%",
+                    insights = new List<string> { "No significant seasonal patterns detected" }
+                };
+
+            var trendInfo = forecast.Trend != null
+                ? new
+                {
+                    direction = forecast.Trend.Direction.ToString(),
+                    dailyChange = FormatCurrency(forecast.Trend.AverageDailyChange),
+                    monthlyChange = FormatCurrency(forecast.Trend.ProjectedMonthlyChange),
+                    confidence = $"{forecast.Trend.RSquared:P0}"
+                }
+                : null;
+
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = true,
+                subscriptionId,
+                forecastPeriod = $"{forecastDays} days",
+                method = "Time Series Decomposition with Seasonality",
+                summary = new
+                {
+                    currentMonthlySpend = FormatCurrency(forecast.Projections.Take(30).Sum(p => p.ForecastedCost)),
+                    projectedMonthEnd = FormatCurrency(forecast.ProjectedMonthEndCost),
+                    projectedQuarterEnd = FormatCurrency(forecast.ProjectedQuarterEndCost),
+                    projectedYearEnd = FormatCurrency(forecast.ProjectedYearEndCost),
+                    overallConfidence = $"{forecast.ConfidenceLevel:P0}"
+                },
+                seasonality = seasonalityInfo,
+                trend = trendInfo,
+                monthlyProjections = monthlyProjection,
+                assumptions = forecast.Assumptions.Select(a => new
+                {
+                    description = a.Description,
+                    category = a.Category,
+                    impact = $"{a.Impact:P0}"
+                }).ToList(),
+                nextSteps = new[]
+                {
+                    "Review seasonality patterns to optimize resource scheduling",
+                    "Use trend information for budget planning",
+                    "Model what-if scenarios with 'model_cost_scenario'",
+                    "Set up budget alerts based on projected costs"
+                }
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating advanced forecast for subscription {SubscriptionId}", subscriptionId);
+            return CreateErrorResponse("generate advanced forecast", ex);
+        }
+    }
+
+    [KernelFunction("model_cost_scenario")]
+    [Description("Model what-if cost scenarios to understand impact of proposed changes before implementation. Examples: 'Downsize all VMs', 'Buy 1-year RIs', 'Migrate to Spot VMs', 'Enable auto-shutdown'.")]
+    public async Task<string> ModelCostScenarioAsync(
+        [Description("Azure subscription ID to analyze")] 
+        string subscriptionId,
+        
+        [Description("Scenario description (e.g., 'Downsize all over-provisioned VMs', 'Purchase Reserved Instances for stable workloads')")] 
+        string scenarioDescription,
+        
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Modeling cost scenario for subscription {SubscriptionId}: {Scenario}", 
+                subscriptionId, scenarioDescription);
+
+            // Get current optimization recommendations to build scenario
+            var analysis = await _costOptimizationEngine.AnalyzeSubscriptionAsync(subscriptionId);
+
+            // Build scenario from recommendations based on description
+            var scenario = new CostScenario
+            {
+                Name = scenarioDescription,
+                Description = $"What-if analysis: {scenarioDescription}"
+            };
+
+            var lowerDesc = scenarioDescription.ToLower();
+
+            // Map description to actions
+            if (lowerDesc.Contains("downsize") || lowerDesc.Contains("right-size") || lowerDesc.Contains("rightsize"))
+            {
+                var rightsizingRecs = analysis.Recommendations
+                    .Where(r => r.Type == OptimizationType.RightSizing)
+                    .ToList();
+
+                foreach (var rec in rightsizingRecs)
+                {
+                    scenario.Actions.Add(new ScenarioAction
+                    {
+                        ActionType = "ResizeVM",
+                        ResourceId = rec.ResourceId,
+                        ResourceType = rec.ResourceType,
+                        EstimatedMonthlySavings = rec.EstimatedMonthlySavings,
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["currentSize"] = "Current SKU",
+                            ["targetSize"] = "Recommended SKU"
+                        }
+                    });
+                }
+            }
+
+            if (lowerDesc.Contains("spot") || lowerDesc.Contains("spot vm"))
+            {
+                var vmRecs = analysis.Recommendations
+                    .Where(r => r.ResourceType.Contains("VirtualMachine", StringComparison.OrdinalIgnoreCase))
+                    .Take(10)
+                    .ToList();
+
+                foreach (var rec in vmRecs)
+                {
+                    scenario.Actions.Add(new ScenarioAction
+                    {
+                        ActionType = "MigrateToSpot",
+                        ResourceId = rec.ResourceId,
+                        ResourceType = rec.ResourceType,
+                        EstimatedMonthlySavings = rec.CurrentMonthlyCost * 0.7m, // 70% savings
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["evictionPolicy"] = "Deallocate",
+                            ["maxPrice"] = -1
+                        }
+                    });
+                }
+            }
+
+            if (lowerDesc.Contains("reserved") || lowerDesc.Contains("ri") || lowerDesc.Contains("reservation"))
+            {
+                var stableVMs = analysis.Recommendations
+                    .Where(r => r.ResourceType.Contains("VirtualMachine", StringComparison.OrdinalIgnoreCase))
+                    .Take(10)
+                    .ToList();
+
+                foreach (var rec in stableVMs)
+                {
+                    scenario.Actions.Add(new ScenarioAction
+                    {
+                        ActionType = "PurchaseReservedInstance",
+                        ResourceId = rec.ResourceId,
+                        ResourceType = rec.ResourceType,
+                        EstimatedMonthlySavings = rec.CurrentMonthlyCost * 0.4m, // 40% savings (1-year RI)
+                        ImplementationCost = rec.CurrentMonthlyCost * 12 * 0.6m, // Upfront cost
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["term"] = "1-year",
+                            ["paymentOption"] = "Upfront"
+                        }
+                    });
+                }
+            }
+
+            if (lowerDesc.Contains("shutdown") || lowerDesc.Contains("auto-shutdown"))
+            {
+                var devTestVMs = analysis.Recommendations
+                    .Where(r => r.ResourceType.Contains("VirtualMachine", StringComparison.OrdinalIgnoreCase))
+                    .Take(15)
+                    .ToList();
+
+                foreach (var rec in devTestVMs)
+                {
+                    scenario.Actions.Add(new ScenarioAction
+                    {
+                        ActionType = "EnableAutoShutdown",
+                        ResourceId = rec.ResourceId,
+                        ResourceType = rec.ResourceType,
+                        EstimatedMonthlySavings = rec.CurrentMonthlyCost * 0.5m, // 50% savings (12 hours/day)
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["shutdownTime"] = "20:00",
+                            ["startupTime"] = "08:00",
+                            ["timezone"] = "UTC"
+                        }
+                    });
+                }
+            }
+
+            // If no actions matched, use all high-priority recommendations
+            if (!scenario.Actions.Any())
+            {
+                var topRecs = analysis.Recommendations
+                    .Where(r => r.Priority == OptimizationPriority.High || r.Priority == OptimizationPriority.Critical)
+                    .Take(10)
+                    .ToList();
+
+                foreach (var rec in topRecs)
+                {
+                    scenario.Actions.Add(new ScenarioAction
+                    {
+                        ActionType = rec.Type.ToString(),
+                        ResourceId = rec.ResourceId,
+                        ResourceType = rec.ResourceType,
+                        EstimatedMonthlySavings = rec.EstimatedMonthlySavings
+                    });
+                }
+            }
+
+            // Model the scenario
+            var comparison = await _costOptimizationEngine.ModelCostScenarioAsync(
+                subscriptionId, 
+                scenario, 
+                cancellationToken);
+
+            var breakEvenMonths = comparison.MonthlySavings > 0 
+                ? (int)Math.Ceiling(scenario.Actions.Sum(a => a.ImplementationCost) / comparison.MonthlySavings)
+                : 0;
+
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = true,
+                subscriptionId,
+                scenario = new
+                {
+                    name = scenario.Name,
+                    totalActions = scenario.Actions.Count,
+                    actionTypes = scenario.Actions.GroupBy(a => a.ActionType)
+                        .Select(g => new { type = g.Key, count = g.Count() })
+                        .ToList()
+                },
+                comparison = new
+                {
+                    baselineMonthlyCost = FormatCurrency(comparison.BaselineMonthlyCost),
+                    scenarioMonthlyCost = FormatCurrency(comparison.ScenarioMonthlyCost),
+                    monthlySavings = FormatCurrency(comparison.MonthlySavings),
+                    annualSavings = FormatCurrency(comparison.AnnualSavings),
+                    percentageReduction = $"{comparison.PercentageChange:F1}%",
+                    breakEvenMonths = breakEvenMonths > 0 ? breakEvenMonths : "Immediate"
+                },
+                topActions = scenario.Actions
+                    .OrderByDescending(a => a.EstimatedMonthlySavings)
+                    .Take(5)
+                    .Select(a => new
+                    {
+                        action = a.ActionType,
+                        resource = a.ResourceType,
+                        monthlySavings = FormatCurrency(a.EstimatedMonthlySavings)
+                    })
+                    .ToList(),
+                monthlyProjection = comparison.ScenarioProjections
+                    .GroupBy(p => new { p.Date.Year, p.Date.Month })
+                    .Select(g => new
+                    {
+                        month = $"{g.Key.Year}-{g.Key.Month:D2}",
+                        baselineCost = FormatCurrency(
+                            comparison.BaselineProjections
+                                .Where(bp => bp.Date.Year == g.Key.Year && bp.Date.Month == g.Key.Month)
+                                .Sum(bp => bp.ForecastedCost)),
+                        scenarioCost = FormatCurrency(g.Sum(p => p.ForecastedCost)),
+                        savings = FormatCurrency(
+                            comparison.BaselineProjections
+                                .Where(bp => bp.Date.Year == g.Key.Year && bp.Date.Month == g.Key.Month)
+                                .Sum(bp => bp.ForecastedCost) - g.Sum(p => p.ForecastedCost))
+                    })
+                    .Take(3)
+                    .ToList(),
+                recommendations = comparison.Recommendations.Take(5).ToList(),
+                nextSteps = new[]
+                {
+                    $"Review the {scenario.Actions.Count} proposed actions",
+                    breakEvenMonths > 0 ? $"Plan for {breakEvenMonths} months to break even" : "Implement immediately for instant savings",
+                    "Generate implementation scripts with automation tools",
+                    "Set up monitoring for cost impact validation"
+                }
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error modeling cost scenario for subscription {SubscriptionId}", subscriptionId);
+            return CreateErrorResponse("model cost scenario", ex);
+        }
+    }
+
+    [KernelFunction("forecast_with_growth_projection")]
+    [Description("Forecast costs based on business growth projections (e.g., '50% user growth expected'). Separates elastic costs (scale with growth) from fixed costs.")]
+    public async Task<string> ForecastWithGrowthProjectionAsync(
+        [Description("Azure subscription ID to analyze")] 
+        string subscriptionId,
+        
+        [Description("Expected user/traffic growth percentage (e.g., 50 for 50% growth)")] 
+        decimal growthPercentage,
+        
+        [Description("Number of months to forecast (default: 12)")] 
+        int forecastMonths = 12,
+        
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Generating growth-based forecast for subscription {SubscriptionId}: {Growth}% over {Months} months", 
+                subscriptionId, growthPercentage, forecastMonths);
+
+            var growthProjection = new GrowthProjection
+            {
+                UserGrowthPercentage = growthPercentage,
+                TrafficGrowthPercentage = growthPercentage, // Assume same as user growth
+                ProjectionMonths = forecastMonths,
+                ElasticServices = new List<string>
+                {
+                    "Virtual Machines",
+                    "Azure Kubernetes Service",
+                    "Azure Functions",
+                    "Azure App Service",
+                    "Azure SQL Database",
+                    "Azure Cosmos DB",
+                    "Application Insights"
+                },
+                FixedServices = new List<string>
+                {
+                    "Azure Monitor",
+                    "Azure Key Vault",
+                    "Azure DNS",
+                    "Azure Backup"
+                }
+            };
+
+            var forecast = await _costOptimizationEngine.ForecastWithGrowthProjectionAsync(
+                subscriptionId, 
+                growthProjection, 
+                cancellationToken);
+
+            var quarterlyBreakdown = forecast
+                .GroupBy(f => (f.Month.Year, Quarter: (f.Month.Month - 1) / 3 + 1))
+                .Select(g => new
+                {
+                    quarter = $"Q{g.Key.Quarter} {g.Key.Year}",
+                    totalCost = FormatCurrency(g.Sum(f => f.TotalCost)),
+                    elasticCost = FormatCurrency(g.Sum(f => f.ElasticCost)),
+                    fixedCost = FormatCurrency(g.Sum(f => f.FixedCost)),
+                    avgGrowthFactor = $"{g.Average(f => f.GrowthFactor):F2}x"
+                })
+                .ToList();
+
+            var firstMonthCost = forecast.First().TotalCost;
+            var lastMonthCost = forecast.Last().TotalCost;
+            var totalIncrease = lastMonthCost - firstMonthCost;
+
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = true,
+                subscriptionId,
+                growthAssumptions = new
+                {
+                    userGrowthPercentage = $"{growthPercentage}%",
+                    forecastPeriod = $"{forecastMonths} months",
+                    elasticCostRatio = "70% (scales with growth)",
+                    fixedCostRatio = "30% (remains stable)"
+                },
+                summary = new
+                {
+                    currentMonthlyCost = FormatCurrency(firstMonthCost),
+                    projectedFinalMonthCost = FormatCurrency(lastMonthCost),
+                    totalCostIncrease = FormatCurrency(totalIncrease),
+                    percentageIncrease = firstMonthCost > 0 
+                        ? $"{(totalIncrease / firstMonthCost * 100):F1}%"
+                        : "N/A"
+                },
+                quarterlyProjections = quarterlyBreakdown,
+                monthlyProjections = forecast.Select(f => new
+                {
+                    month = f.Month.ToString("yyyy-MM"),
+                    totalCost = FormatCurrency(f.TotalCost),
+                    elasticCost = FormatCurrency(f.ElasticCost),
+                    fixedCost = FormatCurrency(f.FixedCost),
+                    growthFactor = $"{f.GrowthFactor:F2}x"
+                }).ToList(),
+                insights = new[]
+                {
+                    $"Elastic costs will grow from {FormatCurrency(forecast.First().ElasticCost)} to {FormatCurrency(forecast.Last().ElasticCost)}",
+                    $"Fixed costs remain stable at {FormatCurrency(forecast.First().FixedCost)}/month",
+                    $"Total cost increase: {FormatCurrency(totalIncrease)} over {forecastMonths} months",
+                    growthPercentage > 50 ? "⚠️ High growth rate - consider Reserved Instances and autoscaling" : "Growth is manageable with current architecture"
+                },
+                nextSteps = new[]
+                {
+                    "Review elastic services for autoscaling configuration",
+                    "Consider Reserved Instances for predictable growth",
+                    "Set up budget alerts aligned with growth projections",
+                    "Plan capacity increases before hitting limits"
+                }
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating growth-based forecast for subscription {SubscriptionId}", subscriptionId);
+            return CreateErrorResponse("generate growth forecast", ex);
+        }
+    }
+
+    [KernelFunction("simulate_policy_impact")]
+    [Description("Simulate cost impact of governance policies (e.g., 'Auto-shutdown for dev VMs', 'Block premium SKUs in non-prod') before enforcement.")]
+    public async Task<string> SimulatePolicyImpactAsync(
+        [Description("Azure subscription ID to analyze")] 
+        string subscriptionId,
+        
+        [Description("Policy description (e.g., 'Enforce auto-shutdown for all dev VMs', 'Restrict to Standard SKUs only')")] 
+        string policyDescription,
+        
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Simulating policy impact for subscription {SubscriptionId}: {Policy}", 
+                subscriptionId, policyDescription);
+
+            var simulation = await _costOptimizationEngine.SimulatePolicyImpactAsync(
+                subscriptionId, 
+                policyDescription, 
+                cancellationToken);
+
+            var roiMonths = simulation.EstimatedMonthlySavings > 0 && simulation.EstimatedImplementationDays > 0
+                ? Math.Ceiling((simulation.EstimatedImplementationDays / 30.0m * 50000) / simulation.EstimatedMonthlySavings) // Assuming $50k/month dev cost
+                : 0;
+
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = true,
+                subscriptionId,
+                policy = new
+                {
+                    name = simulation.PolicyName,
+                    type = simulation.PolicyType,
+                    complexity = simulation.Complexity.ToString()
+                },
+                impact = new
+                {
+                    impactedResources = simulation.ImpactedResourceCount,
+                    estimatedMonthlySavings = FormatCurrency(simulation.EstimatedMonthlySavings),
+                    estimatedAnnualSavings = FormatCurrency(simulation.EstimatedAnnualSavings),
+                    preventedFutureCosts = FormatCurrency(simulation.PreventedFutureCosts),
+                    savingsPercentage = "15-30% (estimated)"
+                },
+                implementation = new
+                {
+                    estimatedDays = simulation.EstimatedImplementationDays,
+                    complexity = simulation.Complexity.ToString(),
+                    prerequisites = simulation.Prerequisites,
+                    risks = simulation.Risks
+                },
+                costBenefit = new
+                {
+                    firstYearSavings = FormatCurrency(simulation.EstimatedAnnualSavings),
+                    implementationEffort = $"{simulation.EstimatedImplementationDays} days",
+                    roiMonths = roiMonths > 0 ? $"{roiMonths} months" : "Immediate",
+                    recommendation = simulation.EstimatedMonthlySavings > 1000 
+                        ? "✅ Highly recommended - significant savings potential"
+                        : simulation.EstimatedMonthlySavings > 100
+                            ? "✅ Recommended - moderate savings"
+                            : "⚠️ Low savings - consider other priorities first"
+                },
+                examples = GetPolicyExamples(simulation.PolicyType),
+                nextSteps = new[]
+                {
+                    "Create Azure Policy definition in Azure Portal",
+                    "Test policy in development subscription first",
+                    "Get stakeholder approval for enforcement",
+                    $"Implement policy (estimated: {simulation.EstimatedImplementationDays} days)",
+                    "Monitor compliance and cost impact after deployment"
+                }
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error simulating policy impact for subscription {SubscriptionId}", subscriptionId);
+            return CreateErrorResponse("simulate policy impact", ex);
+        }
+    }
+
+    [KernelFunction("detect_cost_seasonality")]
+    [Description("Analyze historical costs to detect seasonal patterns (weekly, monthly, quarterly). Useful for understanding cost cycles and planning budgets.")]
+    public async Task<string> DetectCostSeasonalityAsync(
+        [Description("Azure subscription ID to analyze")] 
+        string subscriptionId,
+        
+        [Description("Number of historical days to analyze (default: 365, minimum: 90)")] 
+        int historicalDays = 365,
+        
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Detecting seasonality patterns for subscription {SubscriptionId} over {Days} days", 
+                subscriptionId, historicalDays);
+
+            var seasonality = await _costOptimizationEngine.DetectSeasonalityAsync(
+                subscriptionId, 
+                historicalDays, 
+                cancellationToken);
+
+            var hasPattern = seasonality.Type != "None" && seasonality.Strength > 0.5;
+
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = true,
+                subscriptionId,
+                analysisWindow = $"{historicalDays} days",
+                seasonality = new
+                {
+                    detected = hasPattern,
+                    pattern = seasonality.Type,
+                    strength = $"{seasonality.Strength:P0}",
+                    confidence = $"{seasonality.Confidence:P0}",
+                    periodDays = seasonality.PeriodDays,
+                    interpretation = seasonality.Strength > 0.7 ? "Strong pattern" :
+                                    seasonality.Strength > 0.5 ? "Moderate pattern" :
+                                    seasonality.Strength > 0.3 ? "Weak pattern" : "No pattern"
+                },
+                patterns = seasonality.DetectedPatterns,
+                seasonalFactors = seasonality.SeasonalFactors.Any()
+                    ? seasonality.SeasonalFactors.Select(kv => new
+                    {
+                        period = seasonality.Type == "Weekly" ? $"Day {kv.Key} ({GetDayName(kv.Key)})" : $"Day {kv.Key}",
+                        costMultiplier = $"{kv.Value:F2}x",
+                        interpretation = kv.Value < 0.9m ? "Lower cost period" :
+                                       kv.Value > 1.1m ? "Higher cost period" : "Normal"
+                    }).ToList()
+                    : new List<object>(),
+                insights = GenerateSeasonalityInsights(seasonality),
+                recommendations = new[]
+                {
+                    hasPattern ? $"Leverage {seasonality.Type.ToLower()} patterns for budget planning" : "No seasonal patterns - costs are stable",
+                    seasonality.Type == "Weekly" ? "Consider scheduling intensive workloads during low-cost periods" : null,
+                    "Use advanced forecasting to account for seasonal variations",
+                    "Set up different budget thresholds for high/low cost periods"
+                }.Where(r => r != null).ToList()
+            }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error detecting seasonality for subscription {SubscriptionId}", subscriptionId);
+            return CreateErrorResponse("detect seasonality", ex);
+        }
+    }
+
+    */
+    #endregion
+
+    #region Helper Methods
+
+    private List<string> GetPolicyExamples(string policyType)
+    {
+        return policyType switch
+        {
+            "AutoShutdown" => new List<string>
+            {
+                "Auto-shutdown VMs at 8 PM, startup at 8 AM (weekdays only)",
+                "Deallocate VMs tagged 'Environment=Dev' during non-business hours",
+                "Scale AKS node pools to 0 on weekends for non-prod clusters"
+            },
+            "SKURestriction" => new List<string>
+            {
+                "Block Premium SSD creation in dev/test subscriptions",
+                "Limit VM SKUs to D-series in non-production",
+                "Restrict expensive database tiers (P4+) to production only"
+            },
+            "TagEnforcement" => new List<string>
+            {
+                "Require 'CostCenter', 'Owner', 'Environment' tags on all resources",
+                "Deny resource creation without 'Project' tag",
+                "Auto-tag resources with creation date"
+            },
+            "BudgetControl" => new List<string>
+            {
+                "Block new resource creation when 90% of budget spent",
+                "Send alerts at 50%, 80%, 100% budget thresholds",
+                "Auto-approve only resources under $100/month"
+            },
+            _ => new List<string>
+            {
+                "Define custom policies based on your requirements",
+                "Use Azure Policy for enforcement",
+                "Combine multiple policies for comprehensive governance"
+            }
+        };
+    }
+
+    /*
+    private List<string> GenerateSeasonalityInsights(SeasonalityPattern seasonality)
+    {
+        var insights = new List<string>();
+
+        if (seasonality.Type == "Weekly" && seasonality.Strength > 0.6)
+        {
+            insights.Add($"Strong weekly pattern detected - costs vary by up to {(seasonality.SeasonalFactors.Values.Max() / seasonality.SeasonalFactors.Values.Min() - 1) * 100:F0}% throughout the week");
+            
+            var weekendFactor = seasonality.SeasonalFactors.Where(kv => kv.Key >= 5).Average(kv => kv.Value);
+            var weekdayFactor = seasonality.SeasonalFactors.Where(kv => kv.Key < 5).Average(kv => kv.Value);
+            
+            if (weekendFactor < 0.8m * weekdayFactor)
+            {
+                insights.Add("Weekend costs are significantly lower - auto-shutdown policies are working effectively");
+            }
+            else if (weekendFactor > 1.1m * weekdayFactor)
+            {
+                insights.Add("⚠️ Weekend costs are higher than weekdays - investigate batch jobs or weekend operations");
+            }
+        }
+        else if (seasonality.Type == "Monthly" && seasonality.Strength > 0.6)
+        {
+            insights.Add("Monthly cost pattern detected - likely related to billing cycles or scheduled operations");
+        }
+        else if (seasonality.Type == "None")
+        {
+            insights.Add("No significant seasonal patterns - costs are relatively stable over time");
+        }
+
+        return insights;
+    }
+
+    private string GetDayName(int dayIndex)
+    {
+        return dayIndex switch
+        {
+            0 => "Sun",
+            1 => "Mon",
+            2 => "Tue",
+            3 => "Wed",
+            4 => "Thu",
+            5 => "Fri",
+            6 => "Sat",
+            _ => $"Day{dayIndex}"
+        };
+    }
+    */
+
+    #endregion
 }
+

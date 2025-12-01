@@ -11,8 +11,38 @@ using Platform.Engineering.Copilot.Environment.Core.Extensions;
 using Platform.Engineering.Copilot.Discovery.Core.Extensions;
 using Platform.Engineering.Copilot.Security.Agent.Extensions;
 using Platform.Engineering.Copilot.KnowledgeBase.Agent.Extensions;
+using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure Azure Key Vault for secure secret management
+var keyVaultEndpoint = builder.Configuration["KeyVault:Endpoint"];
+if (!string.IsNullOrEmpty(keyVaultEndpoint))
+{
+    try
+    {
+        builder.Configuration.AddAzureKeyVault(
+            new Uri(keyVaultEndpoint),
+            new DefaultAzureCredential(new DefaultAzureCredentialOptions
+            {
+                // Prioritize Managed Identity for Azure deployments
+                ManagedIdentityClientId = builder.Configuration["KeyVault:ManagedIdentityClientId"],
+                // Exclude IDE credentials for production security
+                ExcludeVisualStudioCredential = true,
+                ExcludeVisualStudioCodeCredential = true
+            }));
+        
+        Log.Logger?.Information("✅ Azure Key Vault configured: {KeyVaultEndpoint}", keyVaultEndpoint);
+    }
+    catch (Exception ex)
+    {
+        Log.Logger?.Warning(ex, "⚠️  Failed to configure Azure Key Vault. Using local configuration only.");
+    }
+}
+else
+{
+    Log.Logger?.Warning("⚠️  Key Vault not configured. Using local secrets only. Set 'KeyVault:Endpoint' in appsettings.json for production.");
+}
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()

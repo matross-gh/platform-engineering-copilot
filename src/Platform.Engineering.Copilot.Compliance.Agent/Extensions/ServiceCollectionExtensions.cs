@@ -133,10 +133,22 @@ public static class ServiceCollectionExtensions
         // Register Governance Engine - Scoped (policy enforcement and approval workflows)
         services.AddScoped<IGovernanceEngine, Platform.Engineering.Copilot.Compliance.Agent.Services.Governance.GovernanceEngine>();
         
+        // Register STIG Validation Service - Scoped (refactored from AtoComplianceEngine)
+        services.AddScoped<IStigValidationService, StigValidationService>();
+        
         // Register ATO Compliance Engine - Scoped (requires DbContext)
         services.AddScoped<IAtoComplianceEngine, AtoComplianceEngine>();
         
-        // Register ATO Remediation Engine - Scoped (indirectly depends on AtoComplianceEngine)
+        // Register Script Sanitization Service - Scoped (validates and sanitizes remediation scripts)
+        services.AddScoped<IScriptSanitizationService, ScriptSanitizationService>();
+        
+        // Register Remediation Support Services - Scoped (refactored from AtoRemediationEngine)
+        services.AddScoped<INistRemediationStepsService, NistRemediationStepsService>();
+        services.AddScoped<IAzureArmRemediationService, AzureArmRemediationService>();
+        services.AddScoped<IRemediationScriptExecutor, RemediationScriptExecutor>();
+        services.AddScoped<IAiRemediationPlanGenerator, AiRemediationPlanGenerator>();
+        
+        // Register ATO Remediation Engine - Scoped (AI-enhanced with optional GPT-4 integration)
         services.AddScoped<IAtoRemediationEngine, AtoRemediationEngine>();
 
         // Register Evidence Storage Service - Scoped (stores compliance evidence to Azure Blob Storage)

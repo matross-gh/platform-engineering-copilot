@@ -33,7 +33,7 @@ public class EnvironmentManagementContextFactory : IDesignTimeDbContextFactory<P
             case "sqlite":
                 optionsBuilder.UseSqlite(connectionString, options =>
                 {
-                    options.MigrationsAssembly("Platform.Engineering.Copilot.Data");
+                    options.MigrationsAssembly("Platform.Engineering.Copilot.Core");
                 });
                 break;
                 

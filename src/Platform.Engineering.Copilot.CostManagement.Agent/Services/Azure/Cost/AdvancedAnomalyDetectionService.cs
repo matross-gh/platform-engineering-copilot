@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Platform.Engineering.Copilot.Core.Models;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization;
+using Platform.Engineering.Copilot.Core.Models.CostOptimization.Analysis;
 
 namespace Platform.Engineering.Copilot.Core.Services.Azure.Cost;
 

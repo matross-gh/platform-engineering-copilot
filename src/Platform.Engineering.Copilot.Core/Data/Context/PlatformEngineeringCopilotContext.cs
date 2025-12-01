@@ -56,6 +56,9 @@ public class PlatformEngineeringCopilotContext : DbContext
     public DbSet<ComplianceAssessment> ComplianceAssessments { get; set; }
     public DbSet<ComplianceFinding> ComplianceFindings { get; set; }
 
+    // Audit Logging (NIST 800-53 AU-2, AU-3, AU-9)
+    public DbSet<AuditLogEntity> AuditLogs { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -69,6 +72,7 @@ public class PlatformEngineeringCopilotContext : DbContext
         ConfigureEnvironmentLifecycle(modelBuilder);
         ConfigureApprovalWorkflows(modelBuilder);
         ConfigureComplianceAssessments(modelBuilder);
+        ConfigureAuditLogs(modelBuilder);
         //ConfigureServiceCreationRequests(modelBuilder);
 
         // Configure indexes for performance
@@ -360,6 +364,58 @@ public class PlatformEngineeringCopilotContext : DbContext
         });
     } */
 
+    private static void ConfigureAuditLogs(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AuditLogEntity>(entity =>
+        {
+            // Table name already set via [Table("AuditLogs")] attribute
+            
+            // Configure timestamp with default value
+            entity.Property(e => e.Timestamp)
+                .HasDefaultValueSql("GETUTCDATE()")
+                .IsRequired();
+
+            // Configure EntryId as primary key (already set via [Key] attribute)
+            entity.Property(e => e.EntryId)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            // Severity stored as int (enum)
+            entity.Property(e => e.Severity)
+                .IsRequired();
+
+            // Required string fields
+            entity.Property(e => e.EventType)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.ActorId)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            entity.Property(e => e.Action)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.Result)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            // JSON columns for complex data (already configured via [Column(TypeName = "nvarchar(max)")] attributes)
+            // These will be serialized/deserialized in the service layer
+
+            // Configure for optimistic concurrency
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion();
+
+            // Default values for flags
+            entity.Property(e => e.IsArchived)
+                .HasDefaultValue(false);
+
+            // Index configurations are in ConfigureIndexes() method
+        });
+    }
+
     private static void ConfigureIndexes(ModelBuilder modelBuilder)
     {
         // Additional composite indexes for common query patterns
@@ -384,6 +440,19 @@ public class PlatformEngineeringCopilotContext : DbContext
         modelBuilder.Entity<ApprovalWorkflowEntity>()
             .HasIndex(e => new { e.ResourceGroupName, e.Environment, e.Status })
             .HasDatabaseName("IX_ApprovalWorkflows_ResourceGroup_Environment_Status");
+
+        // Audit Logs indexes (for performance and compliance queries)
+        modelBuilder.Entity<AuditLogEntity>()
+            .HasIndex(e => new { e.Timestamp, e.Severity })
+            .HasDatabaseName("IX_AuditLogs_Time_Severity");
+
+        modelBuilder.Entity<AuditLogEntity>()
+            .HasIndex(e => new { e.ActorId, e.Timestamp })
+            .HasDatabaseName("IX_AuditLogs_Actor_Time");
+
+        modelBuilder.Entity<AuditLogEntity>()
+            .HasIndex(e => new { e.ResourceId, e.Action, e.Timestamp })
+            .HasDatabaseName("IX_AuditLogs_Resource_Action_Time");
     }
 
     public override int SaveChanges()

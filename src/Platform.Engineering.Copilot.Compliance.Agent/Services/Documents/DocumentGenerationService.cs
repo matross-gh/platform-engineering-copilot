@@ -10,11 +10,16 @@ using iTextSharp.text;
 using iTextSharp.text.pdf;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using ClosedXML.Excel;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+using System.Text.Json;
 
 namespace Platform.Engineering.Copilot.Compliance.Agent.Services.Documents;
 
 /// <summary>
-/// Real implementation of document generation service for ATO compliance documents
+/// AI-Enhanced document generation service for ATO compliance documents (SSP, SAR, POA&M)
+/// Uses GPT-4 to generate high-quality control narratives, risk assessments, and remediation plans
 /// </summary>
 public class DocumentGenerationService : IDocumentGenerationService
 {
@@ -22,17 +27,29 @@ public class DocumentGenerationService : IDocumentGenerationService
     private readonly INistControlsService _nistService;
     private readonly EvidenceStorageService _storageService;
     private readonly ILogger<DocumentGenerationService> _logger;
+    private readonly IChatCompletionService? _chatCompletion;
 
     public DocumentGenerationService(
         IAtoComplianceEngine complianceEngine,
         INistControlsService nistService,
         EvidenceStorageService storageService,
-        ILogger<DocumentGenerationService> logger)
+        ILogger<DocumentGenerationService> logger,
+        Kernel? kernel = null)
     {
         _complianceEngine = complianceEngine ?? throw new ArgumentNullException(nameof(complianceEngine));
         _nistService = nistService ?? throw new ArgumentNullException(nameof(nistService));
         _storageService = storageService ?? throw new ArgumentNullException(nameof(storageService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _chatCompletion = kernel?.Services.GetService(typeof(IChatCompletionService)) as IChatCompletionService;
+        
+        if (_chatCompletion != null)
+        {
+            _logger.LogInformation("Document Generation Service initialized with AI-enhanced capabilities");
+        }
+        else
+        {
+            _logger.LogInformation("Document Generation Service initialized without AI (will use template-based generation)");
+        }
     }
 
     public async Task<ControlNarrative> GenerateControlNarrativeAsync(
@@ -40,7 +57,7 @@ public class DocumentGenerationService : IDocumentGenerationService
         string? subscriptionId = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Generating control narrative for {ControlId}", controlId);
+        _logger.LogInformation("Generating control narrative for {ControlId} with AI enhancement", controlId);
 
         // Get NIST control details
         var control = await _nistService.GetControlAsync(controlId, cancellationToken);
@@ -79,6 +96,32 @@ public class DocumentGenerationService : IDocumentGenerationService
             ImplementationStatus = DetermineImplementationStatus(controlId, assessment),
             ComplianceStatus = GetControlComplianceStatus(controlId, assessment)
         };
+        
+        // AI Enhancement: Generate professional control narrative
+        if (_chatCompletion != null && control != null)
+        {
+            try
+            {
+                _logger.LogInformation("Enhancing narrative with AI for {ControlId}", controlId);
+                var aiNarrative = await GenerateAiControlNarrativeAsync(control, evidencePackage, assessment, cancellationToken);
+                
+                if (aiNarrative != null)
+                {
+                    narrative.What = aiNarrative.What ?? narrative.What;
+                    narrative.How = aiNarrative.How ?? narrative.How;
+                    narrative.Evidence = aiNarrative.Evidence;
+                    narrative.Gaps = aiNarrative.Gaps;
+                    narrative.ResponsibleParty = aiNarrative.ResponsibleParty;
+                    narrative.ImplementationDetails = aiNarrative.ImplementationDetails;
+                    
+                    _logger.LogInformation("AI-enhanced narrative generated for {ControlId}", controlId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to generate AI narrative for {ControlId}, using template-based narrative", controlId);
+            }
+        }
 
         _logger.LogInformation("Control narrative generated for {ControlId}", controlId);
         return narrative;
@@ -156,16 +199,27 @@ public class DocumentGenerationService : IDocumentGenerationService
         content.AppendLine($"**Generated:** {DateTime.UtcNow:yyyy-MM-dd}");
         content.AppendLine();
 
-        // Executive Summary
+        // Executive Summary (AI-Enhanced)
         content.AppendLine("## 1. Executive Summary");
         content.AppendLine();
-        content.AppendLine($"This System Security Plan (SSP) documents the security controls implemented for {parameters.SystemName}.");
-        content.AppendLine($"The system operates on Azure Government and follows NIST 800-53 Rev 5 controls.");
-        if (assessment != null)
+        
+        if (_chatCompletion != null && assessment != null)
         {
-            content.AppendLine($"Current compliance score: {assessment.OverallComplianceScore:F1}%");
-            content.AppendLine($"Total findings: {findings.Count}");
+            _logger.LogInformation("Generating AI-enhanced executive summary");
+            var aiSummary = await GenerateAiExecutiveSummaryAsync(assessment, parameters, cancellationToken);
+            content.AppendLine(aiSummary);
         }
+        else
+        {
+            content.AppendLine($"This System Security Plan (SSP) documents the security controls implemented for {parameters.SystemName}.");
+            content.AppendLine($"The system operates on Azure Government and follows NIST 800-53 Rev 5 controls.");
+            if (assessment != null)
+            {
+                content.AppendLine($"Current compliance score: {assessment.OverallComplianceScore:F1}%");
+                content.AppendLine($"Total findings: {findings.Count}");
+            }
+        }
+        
         content.AppendLine();
         content.AppendLine($"**Evidence Collection:** {evidencePackage.Evidence.Count} evidence items collected in {evidencePackage.CollectionDuration.TotalSeconds:F2} seconds");
         content.AppendLine($"**Evidence Package ID:** {evidencePackage.PackageId}");
@@ -392,41 +446,198 @@ public class DocumentGenerationService : IDocumentGenerationService
             }
         };
 
-        var content = new StringBuilder();
-        content.AppendLine("# Plan of Action & Milestones (POA&M)");
-        content.AppendLine();
-        content.AppendLine($"**Subscription ID:** {subscriptionId}");
-        content.AppendLine($"**Generated:** {DateTime.UtcNow:yyyy-MM-dd}");
-        content.AppendLine($"**Total Items:** {findings.Count}");
-        content.AppendLine();
+        // Generate Excel workbook
+        _logger.LogInformation("Creating Excel POA&M workbook with {Count} findings", findings.Count);
+        var excelBytes = GeneratePoamExcelWorkbook(subscriptionId, findings);
 
-        // POA&M Table
-        content.AppendLine("## Action Items");
-        content.AppendLine();
-        content.AppendLine("| Finding ID | Affected Controls | Title | Severity | Remediation Action | Target Date | Status |");
-        content.AppendLine("|------------|-------------------|-------|----------|-------------------|-------------|--------|");
+        // Store Excel to blob storage
+        var blobUri = await StoreDocumentAsync(document, excelBytes, ComplianceDocumentFormat.DOCX, cancellationToken);
         
-        foreach (var finding in findings.OrderByDescending(f => f.Severity))
-        {
-            var controlsStr = string.Join(", ", finding.AffectedNistControls.Take(3));
-            var targetDate = DateTime.UtcNow.AddDays(finding.Severity == AtoFindingSeverity.High ? 30 : 90);
-            content.AppendLine($"| {finding.Id} | {controlsStr} | {finding.Title} | {finding.Severity} | {finding.Recommendation} | {targetDate:yyyy-MM-dd} | Open |");
-        }
-        
-        content.AppendLine();
-
-        // Remediation Priority
-        content.AppendLine("## Remediation Priority");
-        content.AppendLine();
-        content.AppendLine($"1. **Critical/High Findings:** {findings.Count(f => f.Severity == AtoFindingSeverity.High || f.Severity == AtoFindingSeverity.Critical)} items - Target: 30 days");
-        content.AppendLine($"2. **Medium Findings:** {findings.Count(f => f.Severity == AtoFindingSeverity.Medium)} items - Target: 90 days");
-        content.AppendLine($"3. **Low Findings:** {findings.Count(f => f.Severity == AtoFindingSeverity.Low)} items - Target: 180 days");
-        content.AppendLine();
-
-        document.Content = content.ToString();
+        document.Content = $"POA&M Excel workbook generated with {findings.Count} findings. Download: {blobUri}";
+        document.Metadata["ExcelUri"] = blobUri;
         
         _logger.LogInformation("POA&M generated for {SubscriptionId}", subscriptionId);
         return document;
+    }
+
+    /// <summary>
+    /// Generate AI-Enhanced POA&M as Excel workbook using ClosedXML
+    /// </summary>
+    private byte[] GeneratePoamExcelWorkbook(string subscriptionId, List<AtoFinding> findings)
+    {
+        using var workbook = new XLWorkbook();
+        
+        // Create POA&M Items worksheet
+        var worksheet = workbook.Worksheets.Add("POA&M Items");
+        
+        // Set up headers
+        var headers = new[]
+        {
+            "POA&M ID", "Weakness Description", "Risk Narrative", "Affected Controls", "Severity", 
+            "Remediation Plan", "Resources Required", "Responsible Party", 
+            "Scheduled Completion Date", "Milestones", "Status", "Comments"
+        };
+        
+        for (int i = 0; i < headers.Length; i++)
+        {
+            var cell = worksheet.Cell(1, i + 1);
+            cell.Value = headers[i];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.LightBlue;
+            cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thick;
+        }
+        
+        // Populate finding rows (AI-Enhanced)
+        int row = 2;
+        foreach (var finding in findings.OrderByDescending(f => f.Severity))
+        {
+            // Generate AI-powered content for this finding (synchronous wrapper)
+            string riskNarrative = "";
+            string milestones = "";
+            
+            if (_chatCompletion != null)
+            {
+                try
+                {
+                    // Get AI-enhanced risk narrative
+                    var narrativeTask = GenerateAiRiskNarrativeAsync(finding, null, CancellationToken.None);
+                    riskNarrative = narrativeTask.GetAwaiter().GetResult();
+                    
+                    // Get AI-enhanced milestones
+                    var milestonesTask = GenerateAiPoamMilestonesAsync(finding, CancellationToken.None);
+                    var milestonesList = milestonesTask.GetAwaiter().GetResult();
+                    milestones = string.Join("; ", milestonesList);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to generate AI content for finding {FindingId}, using templates", finding.Id);
+                    riskNarrative = GenerateTemplateRiskNarrative(finding);
+                    milestones = $"{GenerateMilestone1(finding)}; {GenerateMilestone2(finding)}";
+                }
+            }
+            else
+            {
+                riskNarrative = GenerateTemplateRiskNarrative(finding);
+                milestones = $"{GenerateMilestone1(finding)}; {GenerateMilestone2(finding)}";
+            }
+            
+            worksheet.Cell(row, 1).Value = $"POAM-{row - 1:D3}";
+            worksheet.Cell(row, 2).Value = finding.Title;
+            worksheet.Cell(row, 3).Value = riskNarrative;
+            worksheet.Cell(row, 4).Value = string.Join(", ", finding.AffectedNistControls.Take(3));
+            worksheet.Cell(row, 5).Value = finding.Severity.ToString();
+            worksheet.Cell(row, 6).Value = finding.RemediationGuidance ?? finding.Recommendation;
+            worksheet.Cell(row, 7).Value = DetermineResourcesRequired(finding);
+            worksheet.Cell(row, 8).Value = DetermineResponsibleParty(finding);
+            worksheet.Cell(row, 9).Value = CalculateTargetDate(finding.Severity);
+            worksheet.Cell(row, 10).Value = milestones;
+            worksheet.Cell(row, 11).Value = "Open";
+            worksheet.Cell(row, 12).Value = "";
+            
+            // Color-code by severity
+            var rowRange = worksheet.Range(row, 1, row, 12);
+            rowRange.Style.Fill.BackgroundColor = finding.Severity switch
+            {
+                AtoFindingSeverity.Critical => XLColor.Red,
+                AtoFindingSeverity.High => XLColor.LightPink,
+                AtoFindingSeverity.Medium => XLColor.LightYellow,
+                _ => XLColor.White
+            };
+            
+            row++;
+        }
+        
+        // Auto-fit columns
+        worksheet.Columns().AdjustToContents();
+        
+        // Add summary worksheet
+        var summarySheet = workbook.Worksheets.Add("Summary");
+        summarySheet.Cell("A1").Value = "POA&M Summary";
+        summarySheet.Cell("A1").Style.Font.Bold = true;
+        summarySheet.Cell("A1").Style.Font.FontSize = 16;
+        
+        summarySheet.Cell("A3").Value = "Subscription ID:";
+        summarySheet.Cell("B3").Value = subscriptionId;
+        summarySheet.Cell("A4").Value = "Generated Date:";
+        summarySheet.Cell("B4").Value = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        summarySheet.Cell("A5").Value = "Total Items:";
+        summarySheet.Cell("B5").Value = findings.Count;
+        
+        summarySheet.Cell("A7").Value = "By Severity:";
+        summarySheet.Cell("A7").Style.Font.Bold = true;
+        summarySheet.Cell("A8").Value = "Critical:";
+        summarySheet.Cell("B8").Value = findings.Count(f => f.Severity == AtoFindingSeverity.Critical);
+        summarySheet.Cell("A9").Value = "High:";
+        summarySheet.Cell("B9").Value = findings.Count(f => f.Severity == AtoFindingSeverity.High);
+        summarySheet.Cell("A10").Value = "Medium:";
+        summarySheet.Cell("B10").Value = findings.Count(f => f.Severity == AtoFindingSeverity.Medium);
+        summarySheet.Cell("A11").Value = "Low:";
+        summarySheet.Cell("B11").Value = findings.Count(f => f.Severity == AtoFindingSeverity.Low);
+        
+        summarySheet.Columns().AdjustToContents();
+        
+        // Save to byte array
+        using var memoryStream = new MemoryStream();
+        workbook.SaveAs(memoryStream);
+        return memoryStream.ToArray();
+    }
+
+    private string DetermineResourcesRequired(AtoFinding finding)
+    {
+        return finding.Severity switch
+        {
+            AtoFindingSeverity.Critical or AtoFindingSeverity.High => "Security Team, Platform Engineering",
+            AtoFindingSeverity.Medium => "Platform Engineering",
+            _ => "Development Team"
+        };
+    }
+
+    private string DetermineResponsibleParty(AtoFinding finding)
+    {
+        var family = finding.AffectedNistControls.FirstOrDefault()?.Split('-')[0] ?? "General";
+        return family switch
+        {
+            "AC" => "IAM Team",
+            "AU" => "Security Operations",
+            "SC" => "Network Security Team",
+            "SI" => "Security Operations",
+            "CM" => "Platform Engineering",
+            "IA" => "IAM Team",
+            _ => "Security Team"
+        };
+    }
+
+    private DateTime CalculateTargetDate(AtoFindingSeverity severity)
+    {
+        var daysToAdd = severity switch
+        {
+            AtoFindingSeverity.Critical => 15,
+            AtoFindingSeverity.High => 30,
+            AtoFindingSeverity.Medium => 90,
+            AtoFindingSeverity.Low => 180,
+            _ => 90
+        };
+        return DateTime.UtcNow.AddDays(daysToAdd);
+    }
+
+    private string GenerateMilestone1(AtoFinding finding)
+    {
+        return finding.Severity switch
+        {
+            AtoFindingSeverity.Critical or AtoFindingSeverity.High => "Initial assessment and remediation planning (+7 days)",
+            AtoFindingSeverity.Medium => "Remediation planning (+30 days)",
+            _ => "Remediation planning (+60 days)"
+        };
+    }
+
+    private string GenerateMilestone2(AtoFinding finding)
+    {
+        return finding.Severity switch
+        {
+            AtoFindingSeverity.Critical or AtoFindingSeverity.High => "Remediation implementation (+15 days)",
+            AtoFindingSeverity.Medium => "Remediation implementation (+60 days)",
+            _ => "Remediation implementation (+120 days)"
+        };
     }
 
     public async Task<List<ComplianceDocumentMetadata>> ListDocumentsAsync(
@@ -1104,4 +1315,415 @@ public class DocumentGenerationService : IDocumentGenerationService
             throw;
         }
     }
+    
+    #region AI-Enhanced Document Generation Methods
+    
+    /// <summary>
+    /// Generate AI-powered control narrative with evidence synthesis
+    /// </summary>
+    private async Task<ControlNarrative?> GenerateAiControlNarrativeAsync(
+        NistControl control,
+        EvidencePackage? evidencePackage,
+        AtoComplianceAssessment? assessment,
+        CancellationToken cancellationToken)
+    {
+        if (_chatCompletion == null)
+            return null;
+            
+        try
+        {
+            // Build context from evidence and assessment
+            var evidenceContext = BuildEvidenceContext(control.Id, evidencePackage);
+            var findingsContext = BuildFindingsContext(control.Id, assessment);
+            
+            var systemPrompt = @"You are an expert compliance officer specializing in NIST 800-53 security controls and ATO documentation. 
+Your task is to generate professional, detailed control implementation narratives for System Security Plans (SSP).
+
+Write in a clear, authoritative tone suitable for government security assessments. Focus on:
+1. WHAT the control requires (control objective)
+2. HOW the system implements it (implementation details)
+3. Evidence of implementation (automated evidence from Azure)
+4. Any gaps or weaknesses identified
+5. Responsible parties and implementation details
+
+Be specific about Azure services, policies, and configurations. Use technical detail appropriate for security auditors.";
+
+            var controlDescription = control.Parts?.FirstOrDefault()?.Prose ?? control.Title ?? "Security control";
+            var controlFamily = control.Props?.FirstOrDefault(p => p.Name == "family")?.Value ?? "Security";
+
+            var userPrompt = $@"Generate a comprehensive control narrative for:
+
+**Control ID:** {control.Id}
+**Control Title:** {control.Title}
+**Control Description:** {controlDescription}
+**Control Family:** {controlFamily}
+
+**Current Evidence:**
+{evidenceContext}
+
+**Compliance Findings:**
+{findingsContext}
+
+Generate a JSON response with:
+{{
+  ""what"": ""What the control requires (control objective)"",
+  ""how"": ""How the system implements this control using Azure services"",
+  ""evidence"": ""Summary of automated evidence collected"",
+  ""gaps"": ""Any identified gaps or weaknesses"",
+  ""responsibleParty"": ""Who is responsible for this control"",
+  ""implementationDetails"": ""Specific Azure configurations and policies""
+}}";
+
+            var chatHistory = new ChatHistory();
+            chatHistory.AddSystemMessage(systemPrompt);
+            chatHistory.AddUserMessage(userPrompt);
+            
+            var response = await _chatCompletion.GetChatMessageContentAsync(
+                chatHistory,
+                cancellationToken: cancellationToken);
+            
+            var responseText = response.Content ?? "";
+            
+            // Parse JSON response
+            var jsonMatch = System.Text.RegularExpressions.Regex.Match(
+                responseText, 
+                @"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}",
+                System.Text.RegularExpressions.RegexOptions.Singleline);
+            
+            if (jsonMatch.Success)
+            {
+                var json = JsonSerializer.Deserialize<AiNarrativeResponse>(jsonMatch.Value, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                
+                if (json != null)
+                {
+                    return new ControlNarrative
+                    {
+                        ControlId = control.Id,
+                        ControlTitle = control.Title,
+                        What = json.What,
+                        How = json.How,
+                        Evidence = json.Evidence,
+                        Gaps = json.Gaps,
+                        ResponsibleParty = json.ResponsibleParty,
+                        ImplementationDetails = json.ImplementationDetails,
+                        ImplementationStatus = string.IsNullOrEmpty(json.Gaps) ? "Implemented" : "Partially Implemented",
+                        ComplianceStatus = string.IsNullOrEmpty(json.Gaps) ? "Compliant" : "Non-Compliant"
+                    };
+                }
+            }
+            
+            _logger.LogWarning("Failed to parse AI response for control {ControlId}", control.Id);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating AI narrative for control {ControlId}", control.Id);
+            return null;
+        }
+    }
+    
+    /// <summary>
+    /// Generate AI-powered SSP executive summary
+    /// </summary>
+    private async Task<string> GenerateAiExecutiveSummaryAsync(
+        AtoComplianceAssessment assessment,
+        SspParameters parameters,
+        CancellationToken cancellationToken)
+    {
+        if (_chatCompletion == null)
+            return GenerateTemplateExecutiveSummary(assessment, parameters);
+            
+        try
+        {
+            var systemPrompt = @"You are an expert technical writer specializing in government security documentation and ATO packages.
+Generate professional executive summaries for System Security Plans that are clear, concise, and suitable for executive leadership review.";
+
+            var userPrompt = $@"Generate an executive summary for a System Security Plan with the following details:
+
+**System Information:**
+- System Name: {parameters.SystemName}
+- System Owner: {parameters.SystemOwner}
+- Classification: {parameters.Classification}
+- Environment: {parameters.Environment}
+
+**Compliance Assessment:**
+- Overall Compliance Score: {assessment.OverallComplianceScore:F1}%
+- Total Findings: {assessment.TotalFindings}
+- Critical Findings: {assessment.CriticalFindings}
+- High Findings: {assessment.HighFindings}
+- Control Families Assessed: {assessment.ControlFamilyResults.Count}
+
+**System Purpose:**
+{parameters.SystemDescription}
+
+Write a 3-4 paragraph executive summary that:
+1. Describes the system and its purpose
+2. Summarizes the security posture and compliance status
+3. Highlights key security controls implemented
+4. Notes any significant findings or risks
+5. Provides confidence in the system's security";
+
+            var chatHistory = new ChatHistory();
+            chatHistory.AddSystemMessage(systemPrompt);
+            chatHistory.AddUserMessage(userPrompt);
+            
+            var response = await _chatCompletion.GetChatMessageContentAsync(
+                chatHistory,
+                cancellationToken: cancellationToken);
+            
+            return response.Content ?? GenerateTemplateExecutiveSummary(assessment, parameters);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating AI executive summary");
+            return GenerateTemplateExecutiveSummary(assessment, parameters);
+        }
+    }
+    
+    /// <summary>
+    /// Generate AI-powered risk narrative for findings
+    /// </summary>
+    private async Task<string> GenerateAiRiskNarrativeAsync(
+        AtoFinding finding,
+        NistControl? control,
+        CancellationToken cancellationToken)
+    {
+        if (_chatCompletion == null)
+            return GenerateTemplateRiskNarrative(finding);
+            
+        try
+        {
+            var systemPrompt = @"You are a cybersecurity risk analyst specializing in cloud infrastructure and compliance.
+Generate clear, concise risk narratives that explain the business impact of security findings in non-technical terms.";
+
+            var userPrompt = $@"Generate a risk narrative for the following security finding:
+
+**Finding ID:** {finding.Id}
+**Control:** {control?.Id} - {control?.Title}
+**Severity:** {finding.Severity}
+**Resource:** {finding.ResourceName} ({finding.ResourceType})
+**Description:** {finding.Description}
+**Remediation:** {finding.RemediationGuidance}
+
+Write a 2-3 sentence risk narrative that explains:
+1. What the vulnerability is
+2. What could happen if exploited (business impact)
+3. Why remediation is important
+
+Use clear language suitable for management review.";
+
+            var chatHistory = new ChatHistory();
+            chatHistory.AddSystemMessage(systemPrompt);
+            chatHistory.AddUserMessage(userPrompt);
+            
+            var response = await _chatCompletion.GetChatMessageContentAsync(
+                chatHistory,
+                cancellationToken: cancellationToken);
+            
+            return response.Content ?? GenerateTemplateRiskNarrative(finding);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating AI risk narrative for finding {FindingId}", finding.Id);
+            return GenerateTemplateRiskNarrative(finding);
+        }
+    }
+    
+    /// <summary>
+    /// Generate AI-powered POA&M milestones and timelines
+    /// </summary>
+    private async Task<List<string>> GenerateAiPoamMilestonesAsync(
+        AtoFinding finding,
+        CancellationToken cancellationToken)
+    {
+        if (_chatCompletion == null)
+            return GenerateTemplatePoamMilestones(finding);
+            
+        try
+        {
+            var systemPrompt = @"You are a project manager specializing in security remediation and compliance.
+Generate realistic, actionable milestones for security remediation plans.";
+
+            var userPrompt = $@"Generate remediation milestones for the following security finding:
+
+**Finding:** {finding.Id}
+**Severity:** {finding.Severity}
+**Resource:** {finding.ResourceName}
+**Issue:** {finding.Description}
+**Remediation:** {finding.RemediationGuidance}
+
+Generate 3-5 specific, actionable milestones with estimated timeframes. 
+Return as a JSON array of strings, e.g.: [""Week 1: Review and approve remediation plan"", ""Week 2: Implement changes...""]";
+
+            var chatHistory = new ChatHistory();
+            chatHistory.AddSystemMessage(systemPrompt);
+            chatHistory.AddUserMessage(userPrompt);
+            
+            var response = await _chatCompletion.GetChatMessageContentAsync(
+                chatHistory,
+                cancellationToken: cancellationToken);
+            
+            var responseText = response.Content ?? "";
+            
+            // Try to parse JSON array
+            var jsonMatch = System.Text.RegularExpressions.Regex.Match(
+                responseText,
+                @"\[.*?\]",
+                System.Text.RegularExpressions.RegexOptions.Singleline);
+            
+            if (jsonMatch.Success)
+            {
+                var milestones = JsonSerializer.Deserialize<List<string>>(jsonMatch.Value);
+                if (milestones != null && milestones.Count > 0)
+                    return milestones;
+            }
+            
+            return GenerateTemplatePoamMilestones(finding);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating AI milestones for finding {FindingId}", finding.Id);
+            return GenerateTemplatePoamMilestones(finding);
+        }
+    }
+    
+    #endregion
+    
+    #region Helper Methods
+    
+    private string BuildEvidenceContext(string controlId, EvidencePackage? evidencePackage)
+    {
+        if (evidencePackage == null || !evidencePackage.Evidence.Any())
+            return "No automated evidence available.";
+        
+        var relevantEvidence = evidencePackage.Evidence
+            .Where(e => e.ControlId == controlId || e.ControlId.StartsWith(controlId.Split('-')[0]))
+            .Take(5)
+            .ToList();
+        
+        if (!relevantEvidence.Any())
+            return "No specific evidence for this control.";
+        
+        var sb = new StringBuilder();
+        foreach (var evidence in relevantEvidence)
+        {
+            sb.AppendLine($"- {evidence.EvidenceType}");
+            sb.AppendLine($"  Collected: {evidence.CollectedAt:yyyy-MM-dd HH:mm}");
+        }
+        
+        return sb.ToString();
+    }
+    
+    private string BuildFindingsContext(string controlId, AtoComplianceAssessment? assessment)
+    {
+        if (assessment == null)
+            return "No compliance assessment available.";
+        
+        var findings = assessment.ControlFamilyResults.Values
+            .SelectMany(cf => cf.Findings)
+            .Where(f => f.AffectedNistControls.Contains(controlId))
+            .ToList();
+        
+        if (!findings.Any())
+            return "No findings for this control - control is compliant.";
+        
+        var sb = new StringBuilder();
+        foreach (var finding in findings.Take(3))
+        {
+            sb.AppendLine($"- {finding.Severity}: {finding.Description}");
+            sb.AppendLine($"  Resource: {finding.ResourceName}");
+        }
+        
+        if (findings.Count > 3)
+            sb.AppendLine($"... and {findings.Count - 3} more findings");
+        
+        return sb.ToString();
+    }
+    
+    private string GenerateTemplateExecutiveSummary(AtoComplianceAssessment assessment, SspParameters parameters)
+    {
+        return $@"## Executive Summary
+
+The {parameters.SystemName} is a {parameters.Classification} system operating in the {parameters.Environment} environment. 
+{parameters.SystemDescription}
+
+This System Security Plan documents the security controls implemented to protect the system and its data. 
+The system has been assessed against NIST 800-53 security controls with an overall compliance score of {assessment.OverallComplianceScore:F1}%.
+
+Key security features include:
+- Azure Security Center for continuous monitoring
+- Role-Based Access Control (RBAC) for access management  
+- Azure Policy for automated compliance enforcement
+- Comprehensive logging and monitoring via Azure Monitor
+
+Total findings identified: {assessment.TotalFindings} ({assessment.CriticalFindings} Critical, {assessment.HighFindings} High, {assessment.MediumFindings} Medium, {assessment.LowFindings} Low)";
+    }
+    
+    private string GenerateTemplateRiskNarrative(AtoFinding finding)
+    {
+        return $@"This {finding.Severity.ToString().ToLower()} severity finding indicates {finding.Description.ToLower()}. 
+If not addressed, this could lead to {GetRiskImpact(finding.Severity)}. 
+Remediation is {GetRemediationUrgency(finding.Severity)} to maintain system security posture.";
+    }
+    
+    private string GetRiskImpact(AtoFindingSeverity severity)
+    {
+        return severity switch
+        {
+            AtoFindingSeverity.Critical => "immediate security breach, data loss, or system compromise",
+            AtoFindingSeverity.High => "significant security vulnerabilities and potential unauthorized access",
+            AtoFindingSeverity.Medium => "security gaps that could be exploited in combination with other vulnerabilities",
+            AtoFindingSeverity.Low => "minor security concerns that should be addressed as part of continuous improvement",
+            _ => "potential security issues"
+        };
+    }
+    
+    private string GetRemediationUrgency(AtoFindingSeverity severity)
+    {
+        return severity switch
+        {
+            AtoFindingSeverity.Critical => "required immediately",
+            AtoFindingSeverity.High => "highly recommended within 30 days",
+            AtoFindingSeverity.Medium => "recommended within 90 days",
+            AtoFindingSeverity.Low => "recommended for the next maintenance cycle",
+            _ => "recommended"
+        };
+    }
+    
+    private List<string> GenerateTemplatePoamMilestones(AtoFinding finding)
+    {
+        var milestones = new List<string>
+        {
+            "Week 1: Review and approve remediation plan",
+            "Week 2: Implement technical controls and configuration changes",
+            "Week 3: Validate remediation and run compliance scan",
+            "Week 4: Document changes and update control narratives"
+        };
+        
+        if (finding.Severity == AtoFindingSeverity.Critical)
+        {
+            milestones.Insert(0, "Day 1: Emergency response and immediate mitigation");
+        }
+        
+        return milestones;
+    }
+    
+    #endregion
+    
+    #region AI Response Models
+    
+    private class AiNarrativeResponse
+    {
+        public string? What { get; set; }
+        public string? How { get; set; }
+        public string? Evidence { get; set; }
+        public string? Gaps { get; set; }
+        public string? ResponsibleParty { get; set; }
+        public string? ImplementationDetails { get; set; }
+    }
+    
+    #endregion
 }
