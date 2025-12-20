@@ -90,30 +90,48 @@ public class DocumentAgent
 
     public async Task<string> GenerateSSPAsync(AgentTask task, SharedMemory memory, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("📋 Generating SSP document with AI enhancement");
+        _logger.LogInformation("📋 Generating SSP document with DocumentGenerationService");
 
         try
         {
+            if (_documentGenerationService == null)
+                throw new InvalidOperationException("DocumentGenerationService is not available");
+
             var context = memory.GetContext(task.ConversationId ?? "default");
             var subscriptionId = context?.WorkflowState.ContainsKey("lastSubscriptionId") == true
                 ? context.WorkflowState["lastSubscriptionId"].ToString()
                 : "default";
 
-            // Gather assessment data: Try SharedMemory first, then database
-            string assessmentData = await GetAssessmentDataAsync(
-                context, 
-                subscriptionId, 
+            // Build SSP parameters from context
+            var parameters = new SspParameters
+            {
+                SystemName = context?.WorkflowState.ContainsKey("systemName") == true 
+                    ? context.WorkflowState["systemName"].ToString() 
+                    : "System",
+                SystemDescription = task.Description,
+                SystemOwner = "System",
+                Classification = context?.WorkflowState.ContainsKey("classification") == true
+                    ? context.WorkflowState["classification"].ToString()
+                    : "Unclassified",
+                ImpactLevel = context?.WorkflowState.ContainsKey("baseline") == true
+                    ? context.WorkflowState["baseline"].ToString()
+                    : "IL2"
+            };
+
+            // Delegate to DocumentGenerationService
+            var document = await _documentGenerationService.GenerateSSPAsync(
+                subscriptionId,
+                parameters,
                 cancellationToken);
 
-            // Build AI prompt with assessment context
-            var systemPrompt = BuildSSPSystemPrompt();
-            var userMessage = BuildSSPUserMessage(task, memory, assessmentData);
+            // Store in WorkflowState for reference
+            if (context != null)
+            {
+                context.WorkflowState["lastGeneratedDocument"] = document.DocumentId;
+            }
 
-            // Generate with AI
-            var result = await InvokeWithFunctionCallingAsync(systemPrompt, userMessage);
-
-            _logger.LogInformation("✅ SSP generated successfully");
-            return result;
+            _logger.LogInformation("✅ SSP generated successfully: {DocumentId}", document.DocumentId);
+            return document.Content;
         }
         catch (Exception ex)
         {
@@ -128,28 +146,37 @@ public class DocumentAgent
     /// </summary>
     public async Task<string> GenerateSARAsync(AgentTask task, SharedMemory memory, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("📋 Generating SAR document with assessment findings");
+        _logger.LogInformation("📋 Generating SAR document with DocumentGenerationService");
 
         try
         {
+            if (_documentGenerationService == null)
+                throw new InvalidOperationException("DocumentGenerationService is not available");
+
             var context = memory.GetContext(task.ConversationId ?? "default");
             var subscriptionId = context?.WorkflowState.ContainsKey("lastSubscriptionId") == true
                 ? context.WorkflowState["lastSubscriptionId"].ToString()
                 : "default";
 
-            // Gather assessment findings: Try SharedMemory first, then database
-            string assessmentFindings = await GetAssessmentDataAsync(
-                context, 
-                subscriptionId, 
+            // Get or generate assessment ID
+            var assessmentId = context?.WorkflowState.ContainsKey("lastAssessmentId") == true
+                ? context.WorkflowState["lastAssessmentId"].ToString()
+                : Guid.NewGuid().ToString();
+
+            // Delegate to DocumentGenerationService
+            var document = await _documentGenerationService.GenerateSARAsync(
+                subscriptionId,
+                assessmentId,
                 cancellationToken);
 
-            var systemPrompt = BuildSARSystemPrompt();
-            var userMessage = BuildSARUserMessage(task, memory, assessmentFindings);
+            // Store in WorkflowState for reference
+            if (context != null)
+            {
+                context.WorkflowState["lastGeneratedDocument"] = document.DocumentId;
+            }
 
-            var result = await InvokeWithFunctionCallingAsync(systemPrompt, userMessage);
-
-            _logger.LogInformation("✅ SAR generated successfully");
-            return result;
+            _logger.LogInformation("✅ SAR generated successfully: {DocumentId}", document.DocumentId);
+            return document.Content;
         }
         catch (Exception ex)
         {
@@ -164,28 +191,32 @@ public class DocumentAgent
     /// </summary>
     public async Task<string> GeneratePOAMAsync(AgentTask task, SharedMemory memory, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("📋 Generating POA&M document from assessment findings");
+        _logger.LogInformation("📋 Generating POA&M document with DocumentGenerationService");
 
         try
         {
+            if (_documentGenerationService == null)
+                throw new InvalidOperationException("DocumentGenerationService is not available");
+
             var context = memory.GetContext(task.ConversationId ?? "default");
             var subscriptionId = context?.WorkflowState.ContainsKey("lastSubscriptionId") == true
                 ? context.WorkflowState["lastSubscriptionId"].ToString()
                 : "default";
 
-            // Get findings from SharedMemory first, then database
-            string findings = await GetAssessmentDataAsync(
-                context, 
-                subscriptionId, 
+            // Delegate to DocumentGenerationService (it retrieves findings internally)
+            var document = await _documentGenerationService.GeneratePOAMAsync(
+                subscriptionId,
+                findings: null,
                 cancellationToken);
 
-            var systemPrompt = BuildPOAMSystemPrompt();
-            var userMessage = BuildPOAMUserMessage(task, memory, findings);
+            // Store in WorkflowState for reference
+            if (context != null)
+            {
+                context.WorkflowState["lastGeneratedDocument"] = document.DocumentId;
+            }
 
-            var result = await InvokeWithFunctionCallingAsync(systemPrompt, userMessage);
-
-            _logger.LogInformation("✅ POA&M generated successfully ({FindingsCount} findings)", CountFindings(findings));
-            return result;
+            _logger.LogInformation("✅ POA&M generated successfully: {DocumentId}", document.DocumentId);
+            return document.Content;
         }
         catch (Exception ex)
         {
