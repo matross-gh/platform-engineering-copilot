@@ -1,3 +1,7 @@
+# Platform Engineering Copilot - Docker Compose
+# New Agent FX Architecture: Core, Agents, State, Channels
+# Services: MCP Server, Chat UI, SQL Server
+
 networks:
   plaform-engineering-copilot-network:
     driver: bridge
@@ -7,29 +11,29 @@ volumes:
   plaform-engineering-copilot-logs:
 
 services:
-  # SQL Server Database
+  # SQL Server Database (Azure SQL Edge for ARM64/Apple Silicon compatibility)
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    platform: linux/arm64
     container_name: plaform-engineering-copilot-sqlserver
     hostname: sqlserver
     restart: unless-stopped
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=plaform-engineering-copilotDB123!
+      - MSSQL_SA_PASSWORD=plaform-engineering-copilotDB123!
       - MSSQL_PID=Developer
     ports:
       - "1433:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
-      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     networks:
       - plaform-engineering-copilot-network
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P plaform-engineering-copilotDB123! -C -Q 'SELECT 1' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      test: ["CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/localhost/1433"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 45s
 
   # Platform MCP Server (Multi-Agent Orchestrator)
   # Dual-mode: HTTP for Chat web app, stdio for GitHub Copilot/Claude (external)
@@ -130,68 +134,20 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://0.0.0.0:5001
       - ASPNETCORE_HTTP_PORTS=5001
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=plaform-engineering-copilotPlatformChatDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
+      - DatabaseProvider=SqlServer
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=PlatformChatDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
+      - ConnectionStrings__SqlServerConnection=Server=sqlserver,1433;Database=PlatformManagementDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
       - McpServer__BaseUrl=http://platform-mcp:5100
       - Logging__LogLevel__Default=Information
       - Logging__LogLevel__Microsoft=Warning
     ports:
       - "5001:5001"
-    volumes:
-      - plaform-engineering-copilot-logs:/app/logs
-    networks:
-      - plaform-engineering-copilot-network
-
-  # Admin API Service
-  admin-api:
-    platform: linux/amd64
-    build:
-      context: .
-      dockerfile: src/Platform.Engineering.Copilot.Admin.API/Dockerfile
-      target: runtime
-    image: plaform-engineering-copilot-admin-api:latest
-    container_name: plaform-engineering-copilot-admin-api
-    hostname: admin-api
-    restart: unless-stopped
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://0.0.0.0:5002
-      - ASPNETCORE_HTTP_PORTS=5002
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=plaform-engineering-copilotAdminDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
-      - Logging__LogLevel__Default=Information
-      - Logging__LogLevel__Microsoft=Warning
-    ports:
-      - "5002:5002"
-    volumes:
-      - plaform-engineering-copilot-logs:/app/logs
-    networks:
-      - plaform-engineering-copilot-network
-
-  # Admin Client Service
-  admin-client:
-    platform: linux/amd64
-    build:
-      context: .
-      dockerfile: src/Platform.Engineering.Copilot.Admin.Client/Dockerfile
-      target: runtime
-    image: plaform-engineering-copilot-admin-client:latest
-    container_name: plaform-engineering-copilot-admin-client
-    hostname: admin-client
-    restart: unless-stopped
-    depends_on:
-      admin-api:
-        condition: service_started
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://0.0.0.0:5003
-      - ASPNETCORE_HTTP_PORTS=5003
-      - AdminApi__BaseUrl=http://admin-api:5002
-      - Logging__LogLevel__Default=Information
-      - Logging__LogLevel__Microsoft=Warning
-    ports:
-      - "5003:5003"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/localhost/5001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     volumes:
       - plaform-engineering-copilot-logs:/app/logs
     networks:

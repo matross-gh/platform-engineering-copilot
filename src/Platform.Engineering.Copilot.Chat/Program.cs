@@ -4,18 +4,10 @@ using Serilog.Events;
 using Platform.Engineering.Copilot.Chat.App.Data;
 using Platform.Engineering.Copilot.Chat.App.Hubs;
 using Platform.Engineering.Copilot.Chat.App.Services;
-using Platform.Engineering.Copilot.Compliance.Core.Extensions;
-using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
-using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
-using Platform.Engineering.Copilot.Environment.Core.Extensions;
-using Platform.Engineering.Copilot.Discovery.Core.Extensions;
-using Platform.Engineering.Copilot.Security.Agent.Extensions;
-using Platform.Engineering.Copilot.KnowledgeBase.Agent.Extensions;
+using Platform.Engineering.Copilot.Agents.Extensions;
 using Platform.Engineering.Copilot.Core.Extensions;
 using Platform.Engineering.Copilot.Core.Data.Context;
 using Platform.Engineering.Copilot.Core.Interfaces.GitHub;
-using Platform.Engineering.Copilot.Infrastructure.Core.Services;
-using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -143,31 +135,15 @@ builder.Services.AddScoped<IChatService, ChatService>();
 
 // Add required services for agents
 builder.Services.AddScoped<IGitHubServices, Platform.Engineering.Copilot.Core.Services.GitHubGatewayService>();
-builder.Services.AddScoped<IEnvironmentManagementEngine, EnvironmentManagementEngine>();
-builder.Services.AddScoped<EnvironmentStorageService>();
 
 // Register Platform.Engineering.Copilot.Core services (includes ConfigurationPlugin, OrchestratorAgent, SemanticKernelService, etc.)
 builder.Services.AddPlatformEngineeringCopilotCore(builder.Configuration);
 
 // Configure agent options from nested AgentConfiguration sections
-builder.Services.Configure<Platform.Engineering.Copilot.Infrastructure.Agent.Configuration.InfrastructureAgentOptions>(
-    builder.Configuration.GetSection("AgentConfiguration:InfrastructureAgent"));
-builder.Services.Configure<Platform.Engineering.Copilot.Compliance.Core.Configuration.ComplianceAgentOptions>(
-    builder.Configuration.GetSection("AgentConfiguration:ComplianceAgent"));
-builder.Services.Configure<Platform.Engineering.Copilot.CostManagement.Core.Configuration.CostManagementAgentOptions>(
-    builder.Configuration.GetSection("AgentConfiguration:CostManagementAgent"));
-builder.Services.Configure<Platform.Engineering.Copilot.Discovery.Core.Configuration.DiscoveryAgentOptions>(
-    builder.Configuration.GetSection("AgentConfiguration:DiscoveryAgent"));
+// Add new Agent Framework (all agents registered via consolidated Agents project)
+builder.Services.AddAgentFramework(builder.Configuration);
 
-// Add domain-specific agents and plugins
-builder.Services.AddComplianceAgent(builder.Configuration);
-builder.Services.AddInfrastructureAgent();
-builder.Services.AddCostManagementAgent();
-builder.Services.AddEnvironmentAgent();
-builder.Services.AddDiscoveryAgent();
-builder.Services.AddSecurityAgent();
-var knowledgeBaseConfig = builder.Configuration.GetSection("AgentConfiguration:KnowledgeBaseAgent");
-builder.Services.AddKnowledgeBaseAgent(knowledgeBaseConfig);
+Log.Information("🚀 Agent Framework loaded with all agents");
 
 // Add SPA services
 builder.Services.AddSpaStaticFiles(configuration =>

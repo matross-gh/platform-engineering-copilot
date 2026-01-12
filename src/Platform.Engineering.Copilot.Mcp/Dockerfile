@@ -4,20 +4,17 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS restore
 WORKDIR /src
 
 # Copy solution and project files only (for better layer caching)
+# New Agent FX architecture: Core, Agents, State, Channels
 COPY ["Platform.Engineering.Copilot.sln", "./"]
 COPY ["src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj", "src/Platform.Engineering.Copilot.Mcp/"]
 COPY ["src/Platform.Engineering.Copilot.Core/Platform.Engineering.Copilot.Core.csproj", "src/Platform.Engineering.Copilot.Core/"]
-COPY ["src/Platform.Engineering.Copilot.Compliance.Agent/Platform.Engineering.Copilot.Compliance.Agent.csproj", "src/Platform.Engineering.Copilot.Compliance.Agent/"]
-COPY ["src/Platform.Engineering.Copilot.Infrastructure.Agent/Platform.Engineering.Copilot.Infrastructure.Agent.csproj", "src/Platform.Engineering.Copilot.Infrastructure.Agent/"]
-COPY ["src/Platform.Engineering.Copilot.CostManagement.Agent/Platform.Engineering.Copilot.CostManagement.Agent.csproj", "src/Platform.Engineering.Copilot.CostManagement.Agent/"]
-COPY ["src/Platform.Engineering.Copilot.Security.Agent/Platform.Engineering.Copilot.Security.Agent.csproj", "src/Platform.Engineering.Copilot.Security.Agent/"]
-COPY ["src/Platform.Engineering.Copilot.Environment.Agent/Platform.Engineering.Copilot.Environment.Agent.csproj", "src/Platform.Engineering.Copilot.Environment.Agent/"]
-COPY ["src/Platform.Engineering.Copilot.Discovery.Agent/Platform.Engineering.Copilot.Discovery.Agent.csproj", "src/Platform.Engineering.Copilot.Discovery.Agent/"]
-COPY ["src/Platform.Engineering.Copilot.KnowledgeBase.Agent/Platform.Engineering.Copilot.KnowledgeBase.Agent.csproj", "src/Platform.Engineering.Copilot.KnowledgeBase.Agent/"]
+COPY ["src/Platform.Engineering.Copilot.Agents/Platform.Engineering.Copilot.Agents.csproj", "src/Platform.Engineering.Copilot.Agents/"]
+COPY ["src/Platform.Engineering.Copilot.State/Platform.Engineering.Copilot.State.csproj", "src/Platform.Engineering.Copilot.State/"]
+COPY ["src/Platform.Engineering.Copilot.Channels/Platform.Engineering.Copilot.Channels.csproj", "src/Platform.Engineering.Copilot.Channels/"]
+COPY ["src/Platform.Engineering.Copilot.Chat/Platform.Engineering.Copilot.Chat.csproj", "src/Platform.Engineering.Copilot.Chat/"]
 
-# Restore with BuildKit cache mount for NuGet packages
-RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet restore "src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj" \
+# Restore dependencies
+RUN dotnet restore "src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj" \
     --runtime linux-x64
 
 # Stage 2: Build
@@ -29,8 +26,7 @@ COPY . .
 
 # Build with optimizations
 WORKDIR "/src/src/Platform.Engineering.Copilot.Mcp"
-RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet build "Platform.Engineering.Copilot.Mcp.csproj" \
+RUN dotnet build "Platform.Engineering.Copilot.Mcp.csproj" \
     -c Release \
     -o /app/build \
     --no-restore \
@@ -40,8 +36,7 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
 
 # Stage 3: Publish
 FROM build AS publish
-RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet publish "Platform.Engineering.Copilot.Mcp.csproj" \
+RUN dotnet publish "Platform.Engineering.Copilot.Mcp.csproj" \
     -c Release \
     -o /app/publish \
     --no-restore \

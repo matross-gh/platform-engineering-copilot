@@ -1,32 +1,32 @@
 # Docker Compose - Essentials Only (MCP Server)
 # This configuration includes only the MCP Server and SQL Server
 # Use this for minimal deployments or when connecting AI clients via stdio mode
+# New Agent FX Architecture: Core, Agents, State, Channels
 
 services:
-  # SQL Server Database
+  # SQL Server Database (Azure SQL Edge for ARM64/Apple Silicon compatibility)
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    platform: linux/arm64
     container_name: plaform-engineering-copilot-sqlserver
     hostname: sqlserver
     restart: unless-stopped
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=${SA_PASSWORD:-SupervisorDB123!}
+      - MSSQL_SA_PASSWORD=${SA_PASSWORD:-SupervisorDB123!}
       - MSSQL_PID=Developer
-      - MSSQL_TCP_PORT=1433
     ports:
       - "1433:1433"
     volumes:
       - plaform-engineering-copilot-sqlserver-data:/var/opt/mssql
-      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     networks:
       - plaform-engineering-copilot-network
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${SA_PASSWORD}" -Q "SELECT 1" -C || exit 1
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      test: ["CMD-SHELL", "(echo > /dev/tcp/localhost/1433) >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   # MCP Server (Multi-Agent Orchestrator)
   platform-mcp:

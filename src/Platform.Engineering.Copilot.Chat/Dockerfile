@@ -19,20 +19,17 @@ RUN node --version && npm --version
 WORKDIR /src
 
 # Copy solution file and all project files for restore
+# New Agent FX architecture: Core, Agents, State, Channels
 COPY Platform.Engineering.Copilot.sln ./
 COPY src/Platform.Engineering.Copilot.Chat/*.csproj ./src/Platform.Engineering.Copilot.Chat/
 COPY src/Platform.Engineering.Copilot.Core/*.csproj ./src/Platform.Engineering.Copilot.Core/
-COPY src/Platform.Engineering.Copilot.Compliance.Agent/*.csproj ./src/Platform.Engineering.Copilot.Compliance.Agent/
-COPY src/Platform.Engineering.Copilot.Infrastructure.Agent/*.csproj ./src/Platform.Engineering.Copilot.Infrastructure.Agent/
-COPY src/Platform.Engineering.Copilot.CostManagement.Agent/*.csproj ./src/Platform.Engineering.Copilot.CostManagement.Agent/
-COPY src/Platform.Engineering.Copilot.Environment.Agent/*.csproj ./src/Platform.Engineering.Copilot.Environment.Agent/
-COPY src/Platform.Engineering.Copilot.Discovery.Agent/*.csproj ./src/Platform.Engineering.Copilot.Discovery.Agent/
-COPY src/Platform.Engineering.Copilot.Security.Agent/*.csproj ./src/Platform.Engineering.Copilot.Security.Agent/
-COPY src/Platform.Engineering.Copilot.KnowledgeBase.Agent/*.csproj ./src/Platform.Engineering.Copilot.KnowledgeBase.Agent/
+COPY src/Platform.Engineering.Copilot.Agents/*.csproj ./src/Platform.Engineering.Copilot.Agents/
+COPY src/Platform.Engineering.Copilot.State/*.csproj ./src/Platform.Engineering.Copilot.State/
+COPY src/Platform.Engineering.Copilot.Channels/*.csproj ./src/Platform.Engineering.Copilot.Channels/
+COPY src/Platform.Engineering.Copilot.Mcp/*.csproj ./src/Platform.Engineering.Copilot.Mcp/
 
-# Restore dependencies with BuildKit cache mount
-RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet restore ./src/Platform.Engineering.Copilot.Chat/Platform.Engineering.Copilot.Chat.csproj \
+# Restore dependencies
+RUN dotnet restore ./src/Platform.Engineering.Copilot.Chat/Platform.Engineering.Copilot.Chat.csproj \
     --runtime linux-x64
 
 # Stage 2: Build
@@ -42,18 +39,14 @@ WORKDIR /src
 # Copy all source code
 COPY src/Platform.Engineering.Copilot.Chat/. ./src/Platform.Engineering.Copilot.Chat/
 COPY src/Platform.Engineering.Copilot.Core/. ./src/Platform.Engineering.Copilot.Core/
-COPY src/Platform.Engineering.Copilot.Compliance.Agent/. ./src/Platform.Engineering.Copilot.Compliance.Agent/
-COPY src/Platform.Engineering.Copilot.Infrastructure.Agent/. ./src/Platform.Engineering.Copilot.Infrastructure.Agent/
-COPY src/Platform.Engineering.Copilot.CostManagement.Agent/. ./src/Platform.Engineering.Copilot.CostManagement.Agent/
-COPY src/Platform.Engineering.Copilot.Environment.Agent/. ./src/Platform.Engineering.Copilot.Environment.Agent/
-COPY src/Platform.Engineering.Copilot.Discovery.Agent/. ./src/Platform.Engineering.Copilot.Discovery.Agent/
-COPY src/Platform.Engineering.Copilot.Security.Agent/. ./src/Platform.Engineering.Copilot.Security.Agent/
-COPY src/Platform.Engineering.Copilot.KnowledgeBase.Agent/. ./src/Platform.Engineering.Copilot.KnowledgeBase.Agent/
+COPY src/Platform.Engineering.Copilot.Agents/. ./src/Platform.Engineering.Copilot.Agents/
+COPY src/Platform.Engineering.Copilot.State/. ./src/Platform.Engineering.Copilot.State/
+COPY src/Platform.Engineering.Copilot.Channels/. ./src/Platform.Engineering.Copilot.Channels/
+COPY src/Platform.Engineering.Copilot.Mcp/. ./src/Platform.Engineering.Copilot.Mcp/
 
 # Build and publish with optimizations
 WORKDIR /src/src/Platform.Engineering.Copilot.Chat
-RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet publish Platform.Engineering.Copilot.Chat.csproj \
+RUN dotnet publish Platform.Engineering.Copilot.Chat.csproj \
     -c Release \
     -o /app/publish \
     --no-restore \

@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Platform.Engineering.Copilot.Mcp.Tools;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Data.Context;
 using System.Text.Json;
@@ -36,8 +35,8 @@ public class McpHttpBridge
         // Debug test endpoint
         app.MapGet("/test", () => Results.Ok(new { message = "Test endpoint working", timestamp = DateTime.UtcNow }));
 
-        // Process chat request through multi-agent orchestrator
-        app.MapPost("/mcp/chat", async (HttpContext context, PlatformEngineeringCopilotTools chatTool) =>
+        // Process chat request through multi-agent orchestrator via McpServer
+        app.MapPost("/mcp", async (HttpContext context, McpServer mcpServer) =>
         {
             var logger = context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>();
             
@@ -78,8 +77,8 @@ public class McpHttpBridge
 
                 try
                 {
-                    logger.LogInformation("🔄 Processing message through orchestrator");
-                    var result = await chatTool.ProcessRequestAsync(
+                    logger.LogInformation("🔄 Processing message through McpServer orchestrator");
+                    var result = await mcpServer.ProcessChatRequestAsync(
                         requestBody.Message,
                         requestBody.ConversationId,
                         requestBody.Context,
@@ -147,6 +146,51 @@ public class McpHttpBridge
             }
         });
 
+        // Alias for /mcp endpoint (Chat app uses /mcp/chat)
+        app.MapPost("/mcp/chat", async (HttpContext context, McpServer mcpServer) =>
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>();
+            
+            try
+            {
+                logger.LogInformation("📨 Starting to deserialize chat request (via /mcp/chat alias)");
+                var requestBody = await JsonSerializer.DeserializeAsync<ChatRequest>(
+                    context.Request.Body,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (requestBody == null || string.IsNullOrEmpty(requestBody.Message))
+                {
+                    logger.LogWarning("⚠️ Invalid request: message is null or empty");
+                    context.Response.StatusCode = 400;
+                    await context.Response.WriteAsJsonAsync(new { error = "Message is required" });
+                    return;
+                }
+
+                logger.LogInformation("📨 Processing chat request | Message: {Message} | ConvId: {ConvId}", 
+                    requestBody.Message.Substring(0, Math.Min(50, requestBody.Message.Length)), 
+                    requestBody.ConversationId ?? "new");
+
+                var result = await mcpServer.ProcessChatRequestAsync(
+                    requestBody.Message,
+                    requestBody.ConversationId,
+                    requestBody.Context,
+                    context.RequestAborted);
+
+                logger.LogInformation("✅ Got result from orchestrator | Success: {Success}", result.Success);
+                await context.Response.WriteAsJsonAsync(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "❌ EXCEPTION in /mcp/chat handler | Type: {ExType} | Message: {Message}", ex.GetType().Name, ex.Message);
+                
+                if (!context.Response.HasStarted)
+                {
+                    context.Response.StatusCode = 500;
+                    await context.Response.WriteAsJsonAsync(new { error = ex.Message, type = ex.GetType().Name });
+                }
+            }
+        });
+
         // Health check
         app.MapGet("/health", () => Results.Ok(new 
         { 
@@ -155,6 +199,81 @@ public class McpHttpBridge
             server = "Platform Engineering Copilot MCP",
             version = "0.9.0"
         }));
+
+        // List available MCP tools
+        app.MapGet("/mcp/tools", (HttpContext context) =>
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>();
+            logger.LogInformation("📋 Listing available MCP tools");
+
+            var tools = new[]
+            {
+                // Compliance Tools
+                new { name = "run_compliance_assessment", category = "Compliance", description = "Run NIST 800-53/FedRAMP/DoD IL compliance assessment against Azure subscription" },
+                new { name = "get_control_family_details", category = "Compliance", description = "Get detailed findings and recommendations for a specific NIST control family" },
+                new { name = "generate_compliance_document", category = "Compliance", description = "Generate SSP, SAR, or POA&M compliance documents" },
+                new { name = "collect_evidence", category = "Compliance", description = "Collect evidence artifacts for compliance controls" },
+                new { name = "execute_remediation", category = "Compliance", description = "Execute remediation for a single compliance finding (requires finding_id)" },
+                new { name = "batch_remediation", category = "Compliance", description = "Execute batch remediation for multiple findings by severity (e.g., 'start remediation for high-priority issues')" },
+                new { name = "validate_remediation", category = "Compliance", description = "Validate that a remediation was successfully applied" },
+                new { name = "generate_remediation_plan", category = "Compliance", description = "Generate prioritized remediation plan for findings" },
+                new { name = "get_assessment_audit_log", category = "Compliance", description = "Get audit trail of compliance assessments" },
+                new { name = "get_compliance_history", category = "Compliance", description = "Get compliance history and trends over time" },
+                new { name = "get_compliance_status", category = "Compliance", description = "Get current compliance status summary" },
+                new { name = "get_defender_findings", category = "Compliance", description = "Get Microsoft Defender for Cloud findings, secure score, and security recommendations mapped to NIST controls" },
+                
+                // Discovery Tools
+                new { name = "discover_azure_resources", category = "Discovery", description = "Discover Azure resources across subscriptions using Resource Graph" },
+                new { name = "get_resource_details", category = "Discovery", description = "Get detailed information about a specific Azure resource" },
+                new { name = "list_subscriptions", category = "Discovery", description = "List available Azure subscriptions" },
+                new { name = "get_resource_health", category = "Discovery", description = "Get health status of Azure resources" },
+                new { name = "map_resource_dependencies", category = "Discovery", description = "Map dependencies between Azure resources" },
+                new { name = "search_resources_by_tag", category = "Discovery", description = "Search for Azure resources by tag key or key-value pairs" },
+                new { name = "list_resource_groups", category = "Discovery", description = "List all resource groups with resource counts, locations, and tags" },
+                new { name = "get_resource_group_summary", category = "Discovery", description = "Get comprehensive summary and analysis of a specific resource group with resource breakdown, tag analysis, and optimization insights" },
+                
+                // Infrastructure Tools
+                new { name = "generate_infrastructure_template", category = "Infrastructure", description = "Generate Bicep/Terraform/ARM templates for Azure resources" },
+                new { name = "get_template_files", category = "Infrastructure", description = "Retrieve generated infrastructure templates and their files. Use when reviewing or showing template details" },
+                new { name = "provision_infrastructure", category = "Infrastructure", description = "Provision Azure resources using generated templates" },
+                new { name = "analyze_scaling", category = "Infrastructure", description = "Analyze resource scaling requirements and recommendations" },
+                new { name = "delete_resource_group", category = "Infrastructure", description = "Delete Azure resource groups with safety checks" },
+                new { name = "generate_arc_onboarding_script", category = "Infrastructure", description = "Generate Azure Arc onboarding scripts for hybrid resources" },
+                
+                // Cost Management Tools
+                new { name = "analyze_azure_costs", category = "CostManagement", description = "Analyze Azure costs by resource, service, or time period" },
+                new { name = "forecast_costs", category = "CostManagement", description = "Get cost forecasts and budget recommendations" },
+                new { name = "detect_cost_anomalies", category = "CostManagement", description = "Detect unusual spending patterns and anomalies" },
+                new { name = "get_optimization_recommendations", category = "CostManagement", description = "Get cost optimization recommendations" },
+                new { name = "manage_budgets", category = "CostManagement", description = "Create and manage Azure budgets" },
+                new { name = "model_cost_scenario", category = "CostManagement", description = "Model what-if cost scenarios" },
+                
+                // Knowledge Base Tools
+                new { name = "explain_nist_control", category = "KnowledgeBase", description = "Get detailed explanation of NIST 800-53 controls" },
+                new { name = "search_nist_controls", category = "KnowledgeBase", description = "Search NIST controls by keyword or requirement" },
+                new { name = "explain_stig", category = "KnowledgeBase", description = "Get STIG implementation guidance for Azure" },
+                new { name = "search_stigs", category = "KnowledgeBase", description = "Search STIGs by keyword or platform" },
+                new { name = "explain_rmf", category = "KnowledgeBase", description = "Explain RMF process steps and requirements" },
+                new { name = "explain_impact_level", category = "KnowledgeBase", description = "Explain FedRAMP/DoD impact levels (Low/Moderate/High)" },
+                new { name = "get_fedramp_template_guidance", category = "KnowledgeBase", description = "Get FedRAMP template guidance and requirements" },
+                
+                // Configuration Tools
+                new { name = "configure_subscription", category = "Configuration", description = "Configure the active Azure subscription for operations" }
+            };
+
+            var grouped = tools.GroupBy(t => t.category).Select(g => new
+            {
+                category = g.Key,
+                count = g.Count(),
+                tools = g.Select(t => new { t.name, t.description })
+            });
+
+            return Results.Ok(new
+            {
+                totalTools = tools.Length,
+                categories = grouped
+            });
+        });
 
         // Debug endpoint to check configuration
         app.MapGet("/mcp/debug/config", (HttpContext context) =>

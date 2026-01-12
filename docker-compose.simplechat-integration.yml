@@ -6,6 +6,8 @@ version: '3.8'
 # This Docker Compose file integrates the Platform Engineering Copilot MCP
 # server with Microsoft SimpleChat application.
 #
+# New Agent FX Architecture: Core, Agents, State, Channels
+#
 # Usage:
 #   docker-compose -f docker-compose.simplechat-integration.yml up -d
 #

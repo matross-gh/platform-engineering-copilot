@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
-using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 using Platform.Engineering.Copilot.Core.Models;
 using Platform.Engineering.Copilot.Core.Models.Compliance;
@@ -25,7 +24,6 @@ public class InfrastructurePluginTemplateTests
     private readonly Mock<IDynamicTemplateGenerator> _templateGeneratorMock;
     private readonly Mock<ITemplateStorageService> _templateStorageServiceMock;
     private readonly Mock<IAzureResourceService> _azureResourceServiceMock;
-    private readonly Mock<IPolicyEnforcementService> _policyEnforcementServiceMock;
     private readonly Mock<IComplianceAwareTemplateEnhancer> _complianceEnhancerMock;
     private readonly Mock<AzureMcpClient> _azureMcpClientMock;
     private readonly IMemoryCache _memoryCache;
@@ -38,7 +36,6 @@ public class InfrastructurePluginTemplateTests
         _templateGeneratorMock = new Mock<IDynamicTemplateGenerator>();
         _templateStorageServiceMock = new Mock<ITemplateStorageService>();
         _azureResourceServiceMock = new Mock<IAzureResourceService>();
-        _policyEnforcementServiceMock = new Mock<IPolicyEnforcementService>();
         _complianceEnhancerMock = new Mock<IComplianceAwareTemplateEnhancer>();
         _azureMcpClientMock = new Mock<AzureMcpClient>(null!, null!, null!);
         _memoryCache = new MemoryCache(new MemoryCacheOptions());

@@ -1,29 +1,20 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.SemanticKernel;
-using Azure.Identity;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Audits;
-using Platform.Engineering.Copilot.Core.Interfaces.Chat;
 using Platform.Engineering.Copilot.Core.Interfaces.Notifications;
 using Platform.Engineering.Copilot.Core.Interfaces.GitHub;
 using Platform.Engineering.Copilot.Core.Interfaces.Jobs;
-using Platform.Engineering.Copilot.Core.Interfaces.Cache;
 using Platform.Engineering.Copilot.Core.Services;
-using Platform.Engineering.Copilot.Core.Services.Cache;
 using Platform.Engineering.Copilot.Core.Services.Jobs;
-using Platform.Engineering.Copilot.Core.Services.Chat;
 using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Core.Services.Azure.ResourceHealth;
 using Platform.Engineering.Copilot.Core.Services.Azure.Security;
-using Platform.Engineering.Copilot.Core.Services.Agents;
 using Platform.Engineering.Copilot.Core.Services.Audits;
 using Platform.Engineering.Copilot.Core.Services.Notifications;
 using Platform.Engineering.Copilot.Core.Services.Validation;
 using Platform.Engineering.Copilot.Core.Services.Validation.Validators;
-using Platform.Engineering.Copilot.Core.Services.ServiceCreation;
 using Platform.Engineering.Copilot.Core.Services.Generators.Adapters;
 using Platform.Engineering.Copilot.Core.Services.Generators.CrossCutting;
 using Platform.Engineering.Copilot.Core.Services.Generators.KeyVault;
@@ -60,88 +51,18 @@ public static class ServiceCollectionExtensions
         
         // Register caching services
         services.AddMemoryCache(); // Required for IMemoryCache
-        services.AddSingleton<IIntelligentChatCacheService, IntelligentChatCacheService>();
         
         // Register configuration service for persistent subscription storage
         services.AddSingleton<ConfigService>();
         
-        // Register shared configuration plugin (available to all agents)
-        services.AddTransient<Plugins.ConfigurationPlugin>();
+        // Note: ConfigurationPlugin has been moved to Infrastructure Agent
+        // services.AddTransient<Plugins.ConfigurationPlugin>();
         
-        // Register token management services (Phase 1)
-        services.AddTokenManagementServices();
-        
-        // Register Semantic Text Memory for Service Wizard state management
-#pragma warning disable SKEXP0001 // Type is for evaluation purposes only
-        services.AddSingleton<Microsoft.SemanticKernel.Memory.ISemanticTextMemory>(sp =>
-        {
-            var memoryBuilder = new Microsoft.SemanticKernel.Memory.MemoryBuilder();
-            return memoryBuilder.Build();
-        });
-#pragma warning restore SKEXP0001
-        
-        // Register Semantic Kernel with Plugins (required by IntelligentChatService)
-        // CHANGED TO TRANSIENT to avoid circular dependency deadlock
-        // Each resolution gets a fresh Kernel instance
-        // CRITICAL FIX: Register Kernel WITHOUT plugins to avoid circular dependency
-        // Plugins will be registered by IntelligentChatService using its own serviceProvider
-        services.AddTransient(serviceProvider =>
-        {
-            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-            var logger = serviceProvider.GetRequiredService<ILogger<Kernel>>();
-            var builder = Kernel.CreateBuilder();
-            
-            // Configure Azure OpenAI
-            var azureOpenAIEndpoint = configuration.GetValue<string>("Gateway:AzureOpenAI:Endpoint");
-            var azureOpenAIApiKey = configuration.GetValue<string>("Gateway:AzureOpenAI:ApiKey");
-            var azureOpenAIDeployment = configuration.GetValue<string>("Gateway:AzureOpenAI:DeploymentName") ?? "gpt-4o";
-            var useManagedIdentity = configuration.GetValue<bool>("Gateway:AzureOpenAI:UseManagedIdentity");
-
-            if (!string.IsNullOrEmpty(azureOpenAIEndpoint) && 
-                !string.IsNullOrEmpty(azureOpenAIDeployment) &&
-                (!string.IsNullOrEmpty(azureOpenAIApiKey) || useManagedIdentity))
-            {
-                // Create HttpClient with extended timeout for complex queries
-                var httpClient = new HttpClient
-                {
-                    Timeout = TimeSpan.FromMinutes(5) // Increase from default 100 seconds to 5 minutes
-                };
-                
-                if (useManagedIdentity)
-                {
-                    builder.AddAzureOpenAIChatCompletion(
-                        deploymentName: azureOpenAIDeployment,
-                        endpoint: azureOpenAIEndpoint,
-                        credentials: new DefaultAzureCredential(),
-                        httpClient: httpClient
-                    );
-                }
-                else
-                {
-                    builder.AddAzureOpenAIChatCompletion(
-                        deploymentName: azureOpenAIDeployment,
-                        endpoint: azureOpenAIEndpoint,
-                        apiKey: azureOpenAIApiKey!,
-                        httpClient: httpClient
-                    );
-                }
-            }
-            
-            logger.LogInformation("🔨 Building Kernel WITHOUT plugins (plugins added later by service)...");
-            var kernel = builder.Build();
-            logger.LogInformation("✅ Kernel built successfully (plugins will be added by IntelligentChatService)");
-            
-            return kernel;
-        });
-        
-        // NOTE: Plugins are NOT registered in Kernel factory to avoid circular dependencies.
-        // Instead, IntelligentChatService will register plugins when needed using its own serviceProvider.
-        // NOTE: IntelligentChatService now delegates to OrchestratorAgent only
-
-        // Register IntelligentChatService (pure multi-agent - delegates to OrchestratorAgent)
-        services.AddScoped<IIntelligentChatService, IntelligentChatService>();
+        // Note: AI chat capabilities are now provided via IChatClient from Microsoft.Extensions.AI,
+        // registered in AddAzureOpenAIChatClient() in the Agents project.
         
         // Register Azure resource service - Singleton (no DbContext dependency)
+        services.AddSingleton<IAzureResourceService, AzureResourceService>();
         services.AddSingleton<IAzureResourceService, AzureResourceService>();
         
         // Register Azure resource health service - Singleton (no DbContext dependency)
@@ -184,22 +105,10 @@ public static class ServiceCollectionExtensions
         // MULTI-AGENT SYSTEM REGISTRATION
         // ========================================
         
-        // Note: Agents and plugins are now registered in their respective domain projects:
-                
-        // Register SharedMemory as singleton (shared across all agents for context)
-        services.AddSingleton<SharedMemory>();
-
-        // Register execution plan validator
-        services.AddSingleton<ExecutionPlanValidator>();
-
-        // OPTIMIZATION: Register execution plan cache
-        services.AddSingleton<ExecutionPlanCache>();
-
-        // Register OrchestratorAgent (coordinates all specialized agents) - Scoped to match agents
-        services.AddScoped<OrchestratorAgent>();
-
-        // Register SemanticKernelService (creates kernels for agents) - Scoped to match agents
-        services.AddScoped<ISemanticKernelService, SemanticKernelService>();
+        // Note: Agents and orchestration are now registered in Platform.Engineering.Copilot.Agents project
+        // via PlatformAgentGroupChat, BaseAgent, and domain-specific agents.
+        // AI chat capabilities are provided via IChatClient from Microsoft.Extensions.AI,
+        // registered in AddAzureOpenAIChatClient() in the Agents project.
         
         // Register Background Job Service for long-running operations
         services.AddSingleton<IBackgroundJobService, BackgroundJobService>();
@@ -327,9 +236,6 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<AzureMcpClient>();
 
-        // Register JIT (Just-In-Time) privilege elevation services
-        services.AddJitServices(configuration);
-
         return services;
     }
 
@@ -339,14 +245,5 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddSemanticProcessing(this IServiceCollection services, IConfiguration configuration)
     {
         return services.AddPlatformEngineeringCopilotCore(configuration);
-    }
-
-    /// <summary>
-    /// Add semantic kernel services with OpenAI configuration
-    /// </summary>
-    public static IServiceCollection AddSemanticKernel(this IServiceCollection services)
-    {
-        services.AddScoped<ISemanticKernelService, SemanticKernelService>();
-        return services;
     }
 }

@@ -128,6 +128,38 @@ namespace Platform.Engineering.Copilot.Core.Models.PredictiveScaling
         public Dictionary<string, double> MetricAccuracy { get; set; } = new();
     }
 
+    public class ScalingAnalysis
+        {
+            public ScalingAction Action { get; set; }
+            public int RecommendedInstances { get; set; }
+            public double PredictedLoad { get; set; }
+            public double Confidence { get; set; }
+            public string Reasoning { get; set; } = string.Empty;
+        }
+
+        public class ResourceUtilization
+        {
+            public double OverProvisionedTime { get; set; }
+            public double UnderProvisionedTime { get; set; }
+        }
+
+        public class UsagePatternAnalysis
+        {
+            public bool HasSeasonality { get; set; }
+            public int SeasonalityPeriod { get; set; }
+            public List<int> PeakHours { get; set; } = new();
+            public List<int> LowUsageHours { get; set; } = new();
+            public UsagePattern WeekendPattern { get; set; }
+            public double GrowthTrend { get; set; }
+        }
+
+        public enum UsagePattern
+        {
+            Low,
+            Medium,
+            High
+        }
+
     public enum ScalingStrategy
     {
         Conservative,

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Platform.Engineering.Copilot.Agents</RootNamespace>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Microsoft.Extensions.AI (AI Abstractions - the core abstraction layer) -->
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="9.5.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="9.10.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="9.5.0-preview.1.25265.7" />
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
+    
+    <!-- Azure SDK -->
+    <PackageReference Include="Azure.Identity" Version="1.12.0" />
+    <PackageReference Include="Azure.ResourceManager" Version="1.13.2" />
+    <PackageReference Include="Azure.ResourceManager.Resources" Version="1.9.0" />
+    <PackageReference Include="Azure.ResourceManager.PolicyInsights" Version="1.2.0" />
+    <PackageReference Include="Azure.ResourceManager.SecurityCenter" Version="1.2.0-beta.6" />
+    <PackageReference Include="Azure.ResourceManager.Storage" Version="1.3.0" />
+    <PackageReference Include="Azure.ResourceManager.Network" Version="1.9.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.19.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference existing Core project for shared interfaces and extension packages -->
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Core\Platform.Engineering.Copilot.Core.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.State\Platform.Engineering.Copilot.State.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Channels\Platform.Engineering.Copilot.Channels.csproj" />
+  </ItemGroup>
+
+</Project>

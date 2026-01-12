@@ -62,7 +62,7 @@ public class AtoRemediationEngineTests
             _armRemediationServiceMock.Object,
             _scriptExecutorMock.Object,
             _aiRemediationGeneratorMock.Object,
-            null, // Kernel
+            null, // IChatClient
             _nistServiceMock.Object,
             _sanitizationServiceMock.Object);
     }

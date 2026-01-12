@@ -1,5 +1,6 @@
 # Production overrides for docker-compose.yml
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+# New Agent FX Architecture: Core, Agents, State, Channels
 
 services:
   # MCP Server (Multi-Agent Orchestrator)
@@ -23,40 +24,6 @@ services:
         max_attempts: 3
 
   platform-chat:
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-
-  admin-api:
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-
-  admin-client:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
     deploy:

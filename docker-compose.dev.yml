@@ -1,5 +1,6 @@
 # Development overrides for docker-compose.yml
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+# New Agent FX Architecture: Core, Agents, State, Channels
 
 services:
   # MCP Server (Multi-Agent Orchestrator)
@@ -10,18 +11,6 @@ services:
       - Logging__LogLevel__Microsoft=Information
 
   platform-chat:
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - Logging__LogLevel__Default=Debug
-      - Logging__LogLevel__Microsoft=Information
-
-  admin-api:
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - Logging__LogLevel__Default=Debug
-      - Logging__LogLevel__Microsoft=Information
-
-  admin-client:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - Logging__LogLevel__Default=Debug

@@ -13,45 +13,12 @@ using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Mcp.Server;
 using Platform.Engineering.Copilot.Mcp.Tools;
 using Platform.Engineering.Copilot.Mcp.Middleware;
-using Platform.Engineering.Copilot.Compliance.Core.Extensions;
-using Platform.Engineering.Copilot.Infrastructure.Core.Extensions;
-using Platform.Engineering.Copilot.CostManagement.Core.Extensions;
-using Platform.Engineering.Copilot.Environment.Core.Extensions;
-using Platform.Engineering.Copilot.Discovery.Core.Extensions;
+using Platform.Engineering.Copilot.Mcp.Extensions;
+// New consolidated agents project
+using Platform.Engineering.Copilot.Agents.Extensions;
 using Serilog;
-using Platform.Engineering.Copilot.Security.Agent.Extensions;
-using Platform.Engineering.Copilot.KnowledgeBase.Agent.Extensions;
 
 namespace Platform.Engineering.Copilot.Mcp;
-
-/// <summary>
-/// MCP server host service (stdio mode for GitHub Copilot/Claude)
-/// </summary>
-public class McpStdioService : BackgroundService
-{
-    private readonly McpServer _mcpServer;
-    private readonly ILogger<McpStdioService> _logger;
-
-    public McpStdioService(McpServer mcpServer, ILogger<McpStdioService> logger)
-    {
-        _mcpServer = mcpServer;
-        _logger = logger;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        try
-        {
-            _logger.LogInformation("📡 MCP stdio server starting...");
-            await _mcpServer.StartAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "MCP stdio server failed");
-            throw;
-        }
-    }
-}
 
 /// <summary>
 /// Program entry point - Dual-mode MCP server
@@ -144,13 +111,15 @@ class Program
 
         // Add Core services (Multi-Agent Orchestrator, Plugins, etc.)
         builder.Services.AddPlatformEngineeringCopilotCore(builder.Configuration);
-
-        // Register MCP Chat Tool - Scoped to match IIntelligentChatService
-        builder.Services.AddScoped<PlatformEngineeringCopilotTools>();
-
-        // Register MCP server for stdio
-        builder.Services.AddSingleton<McpServer>();
-        builder.Services.AddHostedService<McpStdioService>();
+        
+        // Add new Agent Framework (PlatformAgentGroupChat, BaseAgent/BaseTool pattern)
+        builder.Services.AddAgentFramework(builder.Configuration);
+        
+        // Add MCP Server and domain-specific tools
+        builder.Services.AddMcpServer();
+        builder.Services.AddMcpStdioService();
+        
+        Log.Information("🚀 MCP Server v2 loaded with domain-specific tools (Compliance, Discovery, Infrastructure, CostManagement, KnowledgeBase)");
 
         var host = builder.Build();
         await host.RunAsync();
@@ -380,88 +349,14 @@ class Program
         // Add Core services (Multi-Agent Orchestrator, Plugins, etc.)
         builder.Services.AddPlatformEngineeringCopilotCore(builder.Configuration);
         
-        // Configure which agents are enabled
-        builder.Services.Configure<Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration>(
-            builder.Configuration.GetSection(Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration.SectionName));
+        // Add new Agent Framework (PlatformAgentGroupChat, BaseAgent/BaseTool pattern)
+        // This replaces the old individual agent registrations with the consolidated Agents project
+        builder.Services.AddAgentFramework(builder.Configuration);
         
-        // Configure individual agent options from nested sections
-        builder.Services.Configure<Platform.Engineering.Copilot.Infrastructure.Agent.Configuration.InfrastructureAgentOptions>(
-            builder.Configuration.GetSection("AgentConfiguration:InfrastructureAgent"));
-        builder.Services.Configure<Platform.Engineering.Copilot.Compliance.Core.Configuration.ComplianceAgentOptions>(
-            builder.Configuration.GetSection("AgentConfiguration:ComplianceAgent"));
-        builder.Services.Configure<Platform.Engineering.Copilot.CostManagement.Core.Configuration.CostManagementAgentOptions>(
-            builder.Configuration.GetSection("AgentConfiguration:CostManagementAgent"));
-        builder.Services.Configure<Platform.Engineering.Copilot.Discovery.Core.Configuration.DiscoveryAgentOptions>(
-            builder.Configuration.GetSection("AgentConfiguration:DiscoveryAgent"));
+        // Add MCP Server and domain-specific tools
+        builder.Services.AddMcpServer();
         
-        // Add domain-specific agents and plugins based on configuration
-        var agentConfigSection = builder.Configuration.GetSection(Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration.SectionName);
-        var agentConfig = new Platform.Engineering.Copilot.Core.Configuration.AgentConfiguration();
-        agentConfig.SetConfiguration(agentConfigSection);
-
-        var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger("AgentLoader");
-        logger.LogInformation("🔧 Loading agents based on configuration...");
-
-        int enabledCount = 0;
-
-        if (agentConfig.IsAgentEnabled("Compliance"))
-        {
-            var complianceConfig = builder.Configuration.GetSection("AgentConfiguration:ComplianceAgent");
-            builder.Services.AddComplianceAgent(complianceConfig);
-            logger.LogInformation("✅ Compliance agent enabled");
-            enabledCount++;
-        }
-
-        if (agentConfig.IsAgentEnabled("CostManagement"))
-        {
-            builder.Services.AddCostManagementAgent();
-            logger.LogInformation("✅ CostManagement agent enabled");
-            enabledCount++;
-        }
-
-        if (agentConfig.IsAgentEnabled("Discovery"))
-        {
-            builder.Services.AddDiscoveryAgent();
-            logger.LogInformation("✅ Discovery agent enabled");
-            enabledCount++;
-        }
-
-        if (agentConfig.IsAgentEnabled("Environment"))
-        {
-            builder.Services.AddEnvironmentAgent();
-            logger.LogInformation("✅ Environment agent enabled");
-            enabledCount++;
-        }
-        
-        if (agentConfig.IsAgentEnabled("Infrastructure"))
-        {
-            builder.Services.AddInfrastructureAgent();
-            logger.LogInformation("✅ Infrastructure agent enabled");
-            enabledCount++;
-        }
-
-        if (agentConfig.IsAgentEnabled("Security"))
-        {
-            builder.Services.AddSecurityAgent();
-            logger.LogInformation("✅ Security agent enabled");
-            enabledCount++;
-        }
-
-        if (agentConfig.IsAgentEnabled("KnowledgeBase"))
-        {
-            var knowledgeBaseConfig = builder.Configuration.GetSection("AgentConfiguration:KnowledgeBaseAgent");
-            builder.Services.AddKnowledgeBaseAgent(knowledgeBaseConfig);
-            logger.LogInformation("✅ Knowledge Base agent enabled");
-            enabledCount++;
-        }
-
-        logger.LogInformation($"🚀 Loaded {enabledCount} agents");
-
-        // Register MCP Chat Tool - Scoped to match IIntelligentChatService
-        builder.Services.AddScoped<PlatformEngineeringCopilotTools>();
-
-        // Register HTTP bridge - Singleton (resolves scoped services per request)
-        builder.Services.AddSingleton<McpHttpBridge>();
+        Log.Information("🚀 MCP Server loaded with domain-specific tools (Compliance, Discovery, Infrastructure, CostManagement, KnowledgeBase)");
 
         var app = builder.Build();
 
