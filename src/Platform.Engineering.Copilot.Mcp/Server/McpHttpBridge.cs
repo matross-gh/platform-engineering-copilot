@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Platform.Engineering.Copilot.Mcp.Tools;
 using Platform.Engineering.Copilot.Core.Interfaces;
 using Platform.Engineering.Copilot.Core.Data.Context;
 using System.Text.Json;
@@ -32,24 +32,31 @@ public class McpHttpBridge
     /// </summary>
     public void MapHttpEndpoints(WebApplication app)
     {
-        // Process chat request through multi-agent orchestrator
-        app.MapPost("/mcp/chat", async (HttpContext context, PlatformEngineeringCopilotTools chatTool) =>
+        // Debug test endpoint
+        app.MapGet("/test", () => Results.Ok(new { message = "Test endpoint working", timestamp = DateTime.UtcNow }));
+
+        // Process chat request through multi-agent orchestrator via McpServer
+        app.MapPost("/mcp", async (HttpContext context, McpServer mcpServer) =>
         {
+            var logger = context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>();
+            
             try
             {
+                logger.LogInformation("📨 Starting to deserialize chat request");
                 var requestBody = await JsonSerializer.DeserializeAsync<ChatRequest>(
                     context.Request.Body,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                 if (requestBody == null || string.IsNullOrEmpty(requestBody.Message))
                 {
+                    logger.LogWarning("⚠️ Invalid request: message is null or empty");
                     context.Response.StatusCode = 400;
                     await context.Response.WriteAsJsonAsync(new { error = "Message is required" });
                     return;
                 }
 
-                var logger = context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>();
-                logger.LogInformation("HTTP: Processing chat request for conversation: {ConversationId}", 
+                logger.LogInformation("📨 Deserialized chat request | Message: {Message} | ConvId: {ConvId}", 
+                    requestBody.Message.Substring(0, Math.Min(50, requestBody.Message.Length)), 
                     requestBody.ConversationId ?? "new");
 
                 // Process file attachments if present
@@ -70,13 +77,16 @@ public class McpHttpBridge
 
                 try
                 {
-                    var result = await chatTool.ProcessRequestAsync(
+                    logger.LogInformation("🔄 Processing message through McpServer orchestrator");
+                    var result = await mcpServer.ProcessChatRequestAsync(
                         requestBody.Message,
                         requestBody.ConversationId,
                         requestBody.Context,
                         context.RequestAborted);
 
+                    logger.LogInformation("✅ Got result from orchestrator | Success: {Success}", result.Success);
                     await context.Response.WriteAsJsonAsync(result);
+                    logger.LogInformation("✅ Successfully wrote response to HTTP client");
                 }
                 finally
                 {
@@ -103,10 +113,81 @@ public class McpHttpBridge
             }
             catch (Exception ex)
             {
-                context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>()
-                    .LogError(ex, "Error processing chat request");
-                context.Response.StatusCode = 500;
-                await context.Response.WriteAsJsonAsync(new { error = ex.Message });
+                logger.LogError(ex, "❌ EXCEPTION in /mcp/chat handler | Type: {ExType} | Message: {Message}", ex.GetType().Name, ex.Message);
+                
+                if (!context.Response.HasStarted)
+                {
+                    context.Response.StatusCode = 500;
+                    context.Response.ContentType = "application/json";
+                    
+                    try
+                    {
+                        logger.LogInformation("Writing error response to client");
+                        await context.Response.WriteAsJsonAsync(new { error = ex.Message, type = ex.GetType().Name });
+                        logger.LogInformation("✅ Successfully wrote error response");
+                    }
+                    catch (Exception writeEx)
+                    {
+                        logger.LogError(writeEx, "❌ Failed to write JSON error response");
+                        try
+                        {
+                            await context.Response.WriteAsync($"{{\"error\":\"Internal Server Error\",\"details\":\"{writeEx.Message}\"}}");
+                        }
+                        catch (Exception plainEx)
+                        {
+                            logger.LogError(plainEx, "❌ Failed to write plain text error response");
+                        }
+                    }
+                }
+                else
+                {
+                    logger.LogError("⚠️ Response already started, cannot write error response");
+                }
+            }
+        });
+
+        // Alias for /mcp endpoint (Chat app uses /mcp/chat)
+        app.MapPost("/mcp/chat", async (HttpContext context, McpServer mcpServer) =>
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>();
+            
+            try
+            {
+                logger.LogInformation("📨 Starting to deserialize chat request (via /mcp/chat alias)");
+                var requestBody = await JsonSerializer.DeserializeAsync<ChatRequest>(
+                    context.Request.Body,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (requestBody == null || string.IsNullOrEmpty(requestBody.Message))
+                {
+                    logger.LogWarning("⚠️ Invalid request: message is null or empty");
+                    context.Response.StatusCode = 400;
+                    await context.Response.WriteAsJsonAsync(new { error = "Message is required" });
+                    return;
+                }
+
+                logger.LogInformation("📨 Processing chat request | Message: {Message} | ConvId: {ConvId}", 
+                    requestBody.Message.Substring(0, Math.Min(50, requestBody.Message.Length)), 
+                    requestBody.ConversationId ?? "new");
+
+                var result = await mcpServer.ProcessChatRequestAsync(
+                    requestBody.Message,
+                    requestBody.ConversationId,
+                    requestBody.Context,
+                    context.RequestAborted);
+
+                logger.LogInformation("✅ Got result from orchestrator | Success: {Success}", result.Success);
+                await context.Response.WriteAsJsonAsync(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "❌ EXCEPTION in /mcp/chat handler | Type: {ExType} | Message: {Message}", ex.GetType().Name, ex.Message);
+                
+                if (!context.Response.HasStarted)
+                {
+                    context.Response.StatusCode = 500;
+                    await context.Response.WriteAsJsonAsync(new { error = ex.Message, type = ex.GetType().Name });
+                }
             }
         });
 
@@ -116,8 +197,129 @@ public class McpHttpBridge
             status = "healthy", 
             mode = "dual (http+stdio)",
             server = "Platform Engineering Copilot MCP",
-            version = "1.0.0"
+            version = "0.9.0"
         }));
+
+        // List available MCP tools
+        app.MapGet("/mcp/tools", (HttpContext context) =>
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>();
+            logger.LogInformation("📋 Listing available MCP tools");
+
+            var tools = new[]
+            {
+                // Compliance Tools
+                new { name = "run_compliance_assessment", category = "Compliance", description = "Run NIST 800-53/FedRAMP/DoD IL compliance assessment against Azure subscription" },
+                new { name = "get_control_family_details", category = "Compliance", description = "Get detailed findings and recommendations for a specific NIST control family" },
+                new { name = "generate_compliance_document", category = "Compliance", description = "Generate SSP, SAR, or POA&M compliance documents" },
+                new { name = "collect_evidence", category = "Compliance", description = "Collect evidence artifacts for compliance controls" },
+                new { name = "execute_remediation", category = "Compliance", description = "Execute remediation for a single compliance finding (requires finding_id)" },
+                new { name = "batch_remediation", category = "Compliance", description = "Execute batch remediation for multiple findings by severity (e.g., 'start remediation for high-priority issues')" },
+                new { name = "validate_remediation", category = "Compliance", description = "Validate that a remediation was successfully applied" },
+                new { name = "generate_remediation_plan", category = "Compliance", description = "Generate prioritized remediation plan for findings" },
+                new { name = "get_assessment_audit_log", category = "Compliance", description = "Get audit trail of compliance assessments" },
+                new { name = "get_compliance_history", category = "Compliance", description = "Get compliance history and trends over time" },
+                new { name = "get_compliance_status", category = "Compliance", description = "Get current compliance status summary" },
+                new { name = "get_defender_findings", category = "Compliance", description = "Get Microsoft Defender for Cloud findings, secure score, and security recommendations mapped to NIST controls" },
+                
+                // Discovery Tools
+                new { name = "discover_azure_resources", category = "Discovery", description = "Discover Azure resources across subscriptions using Resource Graph" },
+                new { name = "get_resource_details", category = "Discovery", description = "Get detailed information about a specific Azure resource" },
+                new { name = "list_subscriptions", category = "Discovery", description = "List available Azure subscriptions" },
+                new { name = "get_resource_health", category = "Discovery", description = "Get health status of Azure resources" },
+                new { name = "map_resource_dependencies", category = "Discovery", description = "Map dependencies between Azure resources" },
+                new { name = "search_resources_by_tag", category = "Discovery", description = "Search for Azure resources by tag key or key-value pairs" },
+                new { name = "list_resource_groups", category = "Discovery", description = "List all resource groups with resource counts, locations, and tags" },
+                new { name = "get_resource_group_summary", category = "Discovery", description = "Get comprehensive summary and analysis of a specific resource group with resource breakdown, tag analysis, and optimization insights" },
+                
+                // Infrastructure Tools
+                new { name = "generate_infrastructure_template", category = "Infrastructure", description = "Generate Bicep/Terraform/ARM templates for Azure resources" },
+                new { name = "get_template_files", category = "Infrastructure", description = "Retrieve generated infrastructure templates and their files. Use when reviewing or showing template details" },
+                new { name = "provision_infrastructure", category = "Infrastructure", description = "Provision Azure resources using generated templates" },
+                new { name = "analyze_scaling", category = "Infrastructure", description = "Analyze resource scaling requirements and recommendations" },
+                new { name = "delete_resource_group", category = "Infrastructure", description = "Delete Azure resource groups with safety checks" },
+                new { name = "generate_arc_onboarding_script", category = "Infrastructure", description = "Generate Azure Arc onboarding scripts for hybrid resources" },
+                
+                // Cost Management Tools
+                new { name = "analyze_azure_costs", category = "CostManagement", description = "Analyze Azure costs by resource, service, or time period" },
+                new { name = "forecast_costs", category = "CostManagement", description = "Get cost forecasts and budget recommendations" },
+                new { name = "detect_cost_anomalies", category = "CostManagement", description = "Detect unusual spending patterns and anomalies" },
+                new { name = "get_optimization_recommendations", category = "CostManagement", description = "Get cost optimization recommendations" },
+                new { name = "manage_budgets", category = "CostManagement", description = "Create and manage Azure budgets" },
+                new { name = "model_cost_scenario", category = "CostManagement", description = "Model what-if cost scenarios" },
+                
+                // Knowledge Base Tools
+                new { name = "explain_nist_control", category = "KnowledgeBase", description = "Get detailed explanation of NIST 800-53 controls" },
+                new { name = "search_nist_controls", category = "KnowledgeBase", description = "Search NIST controls by keyword or requirement" },
+                new { name = "explain_stig", category = "KnowledgeBase", description = "Get STIG implementation guidance for Azure" },
+                new { name = "search_stigs", category = "KnowledgeBase", description = "Search STIGs by keyword or platform" },
+                new { name = "explain_rmf", category = "KnowledgeBase", description = "Explain RMF process steps and requirements" },
+                new { name = "explain_impact_level", category = "KnowledgeBase", description = "Explain FedRAMP/DoD impact levels (Low/Moderate/High)" },
+                new { name = "get_fedramp_template_guidance", category = "KnowledgeBase", description = "Get FedRAMP template guidance and requirements" },
+                
+                // Configuration Tools
+                new { name = "configure_subscription", category = "Configuration", description = "Configure the active Azure subscription for operations" }
+            };
+
+            var grouped = tools.GroupBy(t => t.category).Select(g => new
+            {
+                category = g.Key,
+                count = g.Count(),
+                tools = g.Select(t => new { t.name, t.description })
+            });
+
+            return Results.Ok(new
+            {
+                totalTools = tools.Length,
+                categories = grouped
+            });
+        });
+
+        // Debug endpoint to check configuration
+        app.MapGet("/mcp/debug/config", (HttpContext context) =>
+        {
+            try
+            {
+                var logger = context.RequestServices.GetRequiredService<ILogger<McpHttpBridge>>();
+                var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+                
+                logger.LogInformation("🔍 Checking configuration for Azure OpenAI...");
+                
+                var endpoint = configuration.GetValue<string>("Gateway:AzureOpenAI:Endpoint");
+                var deployment = configuration.GetValue<string>("Gateway:AzureOpenAI:DeploymentName");
+                var apiKey = configuration.GetValue<string>("Gateway:AzureOpenAI:ApiKey");
+                var useManagedId = configuration.GetValue<bool>("Gateway:AzureOpenAI:UseManagedIdentity");
+                var chatDeployment = configuration.GetValue<string>("Gateway:AzureOpenAI:ChatDeploymentName");
+                var embeddingDeployment = configuration.GetValue<string>("Gateway:AzureOpenAI:EmbeddingDeploymentName");
+                
+                var result = new
+                {
+                    azureOpenAI = new
+                    {
+                        endpoint = endpoint ?? "[NOT SET]",
+                        deploymentName = deployment ?? "[NOT SET]",
+                        chatDeploymentName = chatDeployment ?? "[NOT SET]",
+                        embeddingDeploymentName = embeddingDeployment ?? "[NOT SET]",
+                        apiKeyPresent = !string.IsNullOrEmpty(apiKey),
+                        apiKeyLength = apiKey?.Length ?? 0,
+                        useManagedIdentity = useManagedId
+                    },
+                    environmentVariables = new
+                    {
+                        gateway_AzureOpenAI_Endpoint = System.Environment.GetEnvironmentVariable("Gateway__AzureOpenAI__Endpoint") ?? "[NOT SET]",
+                        gateway_AzureOpenAI_DeploymentName = System.Environment.GetEnvironmentVariable("Gateway__AzureOpenAI__DeploymentName") ?? "[NOT SET]",
+                        gateway_AzureOpenAI_ApiKey_Present = !string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("Gateway__AzureOpenAI__ApiKey")),
+                        gateway_AzureOpenAI_ChatDeploymentName = System.Environment.GetEnvironmentVariable("Gateway__AzureOpenAI__ChatDeploymentName") ?? "[NOT SET]"
+                    }
+                };
+                
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
+        });
 
         // Get templates by conversation ID - for VS Code extension to retrieve generated templates
         app.MapGet("/mcp/templates/{conversationId}", async (HttpContext context, string conversationId) =>

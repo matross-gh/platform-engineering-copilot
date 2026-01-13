@@ -1,5 +1,3 @@
-using Platform.Engineering.Copilot.Core.Models.Mcp;
-
 namespace Platform.Engineering.Copilot.Core.Models.Compliance;
 
 public class GovernanceResult
@@ -69,7 +67,12 @@ public class ApprovalWorkflow
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public string ToolCallId { get; set; } = string.Empty;
-    public Platform.Engineering.Copilot.Core.Models.Mcp.McpToolCall OriginalToolCall { get; set; } = new() { Name = "", Arguments = new Dictionary<string, object>() };
+    
+    /// <summary>
+    /// Serialized JSON representation of the original tool/operation request
+    /// </summary>
+    public string OriginalRequestJson { get; set; } = "{}";
+    
     public ApprovalStatus Status { get; set; } = ApprovalStatus.Pending;
     public List<string> RequiredApprovers { get; set; } = new();
     public List<ApprovalDecision> Decisions { get; set; } = new();

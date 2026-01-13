@@ -1,3 +1,7 @@
+# Platform Engineering Copilot - All Services
+# New Agent FX Architecture: Core, Agents, State, Channels
+# Services: MCP Server, Chat UI, SQL Server, Nginx (optional), Redis (optional)
+
 networks:
   plaform-engineering-copilot-network:
     driver: bridge
@@ -137,70 +141,6 @@ services:
       - plaform-engineering-copilot-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # Admin API Service
-  admin-api:
-    build:
-      context: .
-      dockerfile: src/Platform.Engineering.Copilot.Admin.API/Dockerfile
-    image: plaform-engineering-copilot-admin-api:latest
-    container_name: plaform-engineering-copilot-admin-api
-    hostname: admin-api
-    restart: unless-stopped
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://0.0.0.0:5002
-      - ASPNETCORE_HTTP_PORTS=5002
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=plaform-engineering-copilotAdminDb;User=sa;Password=plaform-engineering-copilotDB123!;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
-      - Logging__LogLevel__Default=Information
-      - Logging__LogLevel__Microsoft=Warning
-    ports:
-      - "5002:5002"
-    volumes:
-      - plaform-engineering-copilot-logs:/app/logs
-    networks:
-      - plaform-engineering-copilot-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5002/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # Admin Client Service
-  admin-client:
-    build:
-      context: .
-      dockerfile: src/Platform.Engineering.Copilot.Admin.Client/Dockerfile
-    image: plaform-engineering-copilot-admin-client:latest
-    container_name: plaform-engineering-copilot-admin-client
-    hostname: admin-client
-    restart: unless-stopped
-    depends_on:
-      admin-api:
-        condition: service_healthy
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://0.0.0.0:5003
-      - ASPNETCORE_HTTP_PORTS=5003
-      - AdminApi__BaseUrl=http://admin-api:5002
-      - Logging__LogLevel__Default=Information
-      - Logging__LogLevel__Microsoft=Warning
-    ports:
-      - "5003:5003"
-    volumes:
-      - plaform-engineering-copilot-logs:/app/logs
-    networks:
-      - plaform-engineering-copilot-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5003/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

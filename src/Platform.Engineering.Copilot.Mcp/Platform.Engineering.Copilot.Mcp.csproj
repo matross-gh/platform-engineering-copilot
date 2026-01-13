@@ -12,15 +12,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>appsettings.json</Link>
     </Content>
-    <!-- Include NIST fallback catalog for offline compliance scanning -->
-    <Content Include="../Platform.Engineering.Copilot.Compliance.Agent/Data/nist-800-53-fallback.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>Data/nist-800-53-fallback.json</Link>
-    </Content>
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
@@ -30,21 +24,22 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
-    <PackageReference Include="System.Text.Json" Version="9.0.0" />
+    <PackageReference Include="System.Text.Json" Version="9.0.5" />
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Extensions.Hosting" Version="9.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Core shared services -->
     <ProjectReference Include="..\Platform.Engineering.Copilot.Core\Platform.Engineering.Copilot.Core.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Compliance.Agent\Platform.Engineering.Copilot.Compliance.Agent.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Infrastructure.Agent\Platform.Engineering.Copilot.Infrastructure.Agent.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.CostManagement.Agent\Platform.Engineering.Copilot.CostManagement.Agent.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Environment.Agent\Platform.Engineering.Copilot.Environment.Agent.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Discovery.Agent\Platform.Engineering.Copilot.Discovery.Agent.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.Security.Agent\Platform.Engineering.Copilot.Security.Agent.csproj" />
-    <ProjectReference Include="..\Platform.Engineering.Copilot.KnowledgeBase.Agent\Platform.Engineering.Copilot.KnowledgeBase.Agent.csproj" />
+    
+    <!-- New consolidated Agents project (replaces individual *Agent projects) -->
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Agents\Platform.Engineering.Copilot.Agents.csproj" />
+    
+    <!-- State and Channels for agent framework -->
+    <ProjectReference Include="..\Platform.Engineering.Copilot.State\Platform.Engineering.Copilot.State.csproj" />
+    <ProjectReference Include="..\Platform.Engineering.Copilot.Channels\Platform.Engineering.Copilot.Channels.csproj" />
   </ItemGroup>
 
 </Project>
