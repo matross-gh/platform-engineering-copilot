@@ -5,6 +5,7 @@ WORKDIR /src
 
 # Copy solution and project files only (for better layer caching)
 # New Agent FX architecture: Core, Agents, State, Channels
+COPY ["NuGet.Config", "./"]
 COPY ["Platform.Engineering.Copilot.sln", "./"]
 COPY ["src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj", "src/Platform.Engineering.Copilot.Mcp/"]
 COPY ["src/Platform.Engineering.Copilot.Core/Platform.Engineering.Copilot.Core.csproj", "src/Platform.Engineering.Copilot.Core/"]
@@ -65,8 +66,10 @@ RUN groupadd -r -g 1000 appuser && \
 # Copy published app with correct permissions
 COPY --from=publish --chown=appuser:appuser /app/publish .
 
-# Copy appsettings.json from repository root
-COPY --chown=appuser:appuser appsettings.json ./appsettings.json
+# Copy appsettings.json from repository root (falls back to the example
+# template since the real appsettings.json is gitignored/secret and actual
+# configuration values are injected via environment variables at runtime)
+COPY --chown=appuser:appuser appsettings.example.json ./appsettings.json
 
 # Switch to non-root user
 USER appuser

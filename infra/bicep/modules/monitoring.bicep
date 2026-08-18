@@ -38,6 +38,12 @@ param dailyDataCapInGB int = environment == 'prod' ? 100 : 1
 @description('Enable sampling')
 param samplingPercentage int = environment == 'prod' ? 20 : 100
 
+@description('Enable the classic ping-test availability monitor (uses commercial Azure region location IDs, not supported in Azure Government)')
+param enableAvailabilityTest bool = true
+
+@description('Enable smart detector alert rules (slow page load / slow server response). Their manifest service is not available in Azure Government)')
+param enableSmartDetectionRules bool = true
+
 // Log Analytics Workspace
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsWorkspaceName
@@ -85,8 +91,9 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 // Smart Detection Rules
-resource slowPageLoadTimeRule 'Microsoft.AlertsManagement/smartDetectorAlertRules@2021-04-01' = {
+resource slowPageLoadTimeRule 'Microsoft.AlertsManagement/smartDetectorAlertRules@2021-04-01' = if (enableSmartDetectionRules) {
   name: '${applicationInsightsName}-slow-page-load-time'
+  location: 'global'
   properties: {
     description: 'Slow page load time'
     state: 'Enabled'
@@ -108,8 +115,9 @@ resource slowPageLoadTimeRule 'Microsoft.AlertsManagement/smartDetectorAlertRule
   }
 }
 
-resource slowServerResponseTimeRule 'Microsoft.AlertsManagement/smartDetectorAlertRules@2021-04-01' = {
+resource slowServerResponseTimeRule 'Microsoft.AlertsManagement/smartDetectorAlertRules@2021-04-01' = if (enableSmartDetectionRules) {
   name: '${applicationInsightsName}-slow-server-response-time'
+  location: 'global'
   properties: {
     description: 'Slow server response time'
     state: 'Enabled'
@@ -132,7 +140,7 @@ resource slowServerResponseTimeRule 'Microsoft.AlertsManagement/smartDetectorAle
 }
 
 // Availability Test for API endpoint
-resource availabilityTest 'Microsoft.Insights/webtests@2022-06-15' = {
+resource availabilityTest 'Microsoft.Insights/webtests@2022-06-15' = if (enableAvailabilityTest) {
   name: '${applicationInsightsName}-availability-test'
   location: location
   kind: 'ping'
@@ -173,6 +181,7 @@ output applicationInsightsName string = applicationInsights.name
 output instrumentationKey string = applicationInsights.properties.InstrumentationKey
 output connectionString string = applicationInsights.properties.ConnectionString
 output logAnalyticsWorkspaceId string = logAnalyticsWorkspace.id
+output logAnalyticsWorkspaceCustomerId string = logAnalyticsWorkspace.properties.customerId
 @secure()
 output logAnalyticsWorkspaceKey string = logAnalyticsWorkspace.listKeys().primarySharedKey
 output logAnalyticsWorkspaceName string = logAnalyticsWorkspace.name

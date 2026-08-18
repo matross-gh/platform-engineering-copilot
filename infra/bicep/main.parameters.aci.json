@@ -3,13 +3,25 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "projectName": {
-      "value": "platform-engineering"
+      "value": "platsup"
     },
     "environment": {
       "value": "dev"
     },
     "location": {
       "value": "usgovvirginia"
+    },
+    "sqlAdminLogin": {
+      "value": "platformadmin"
+    },
+    "keyVaultAdminObjectId": {
+      "value": "42c0c4f9-a0b4-43a7-ace7-f3d38ec7b56e"
+    },
+    "azureAdAdminObjectId": {
+      "value": ""
+    },
+    "azureAdAdminLogin": {
+      "value": ""
     },
     "containerDeploymentTarget": {
       "value": "aci"
@@ -24,18 +36,18 @@
       "value": true
     },
     "deployAdminApi": {
-      "value": true
+      "value": false
     },
     "deployChat": {
-      "value": false
+      "value": true
     },
     "useExistingNetwork": {
       "value": false
     },
-    "existingVNetName": {
+    "existingVnetName": {
       "value": ""
     },
-    "existingVNetResourceGroup": {
+    "existingVnetResourceGroup": {
       "value": ""
     },
     "existingAppServiceSubnetName": {
@@ -56,6 +68,12 @@
     "useExistingKeyVault": {
       "value": false
     },
+    "enableAvailabilityTest": {
+      "value": false
+    },
+    "enableSmartDetectionRules": {
+      "value": false
+    },
     "existingKeyVaultName": {
       "value": ""
     },
@@ -63,60 +81,58 @@
       "value": ""
     },
     "acrSku": {
-      "value": "Standard"
+      "value": "Premium"
     },
-    "aciMcpCpuCores": {
+    "aciCpuCores": {
       "value": 2
     },
-    "aciMcpMemoryInGB": {
+    "aciMemoryInGB": {
       "value": 4
     },
-    "aciChatCpuCores": {
-      "value": 2
+    "sqlDatabaseSku": {
+      "value": "S0"
     },
-    "aciChatMemoryInGB": {
-      "value": 4
-    },
-    "aciAdminApiCpuCores": {
-      "value": 1
-    },
-    "aciAdminApiMemoryInGB": {
-      "value": 2
-    },
-    "aciAdminClientCpuCores": {
-      "value": 1
-    },
-    "aciAdminClientMemoryInGB": {
-      "value": 2
-    },
-    "sqlAdminUsername": {
-      "value": "sqladmin"
-    },
-    "sqlAdminPassword": {
-      "reference": {
-        "keyVault": {
-          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{kv-name}"
-        },
-        "secretName": "SqlAdminPassword"
-      }
-    },
-    "allowedIpAddresses": {
-      "value": [
-        "0.0.0.0/0"
-      ]
-    },
-    "enablePublicAccess": {
-      "value": true
-    },
-    "enablePrivateEndpoints": {
+    "deploySql": {
       "value": false
     },
-    "tags": {
-      "value": {
-        "Project": "Platform Engineering Copilot",
-        "ManagedBy": "Bicep",
-        "DeploymentType": "ACI"
-      }
+    "deployRedis": {
+      "value": true
+    },
+    "redisSkuName": {
+      "value": "Basic"
+    },
+    "redisSkuCapacity": {
+      "value": 0
+    },
+    "deployOpenAI": {
+      "value": true
+    },
+    "openAiSkuName": {
+      "value": "S0"
+    },
+    "openAiChatDeploymentName": {
+      "value": "gpt-4o"
+    },
+    "openAiChatModelName": {
+      "value": "gpt-4o"
+    },
+    "openAiChatModelVersion": {
+      "value": "2024-11-20"
+    },
+    "openAiChatCapacity": {
+      "value": 10
+    },
+    "openAiEmbeddingDeploymentName": {
+      "value": "text-embedding-ada-002"
+    },
+    "openAiEmbeddingModelName": {
+      "value": "text-embedding-ada-002"
+    },
+    "openAiEmbeddingModelVersion": {
+      "value": "2"
+    },
+    "openAiEmbeddingCapacity": {
+      "value": 10
     }
   }
 }

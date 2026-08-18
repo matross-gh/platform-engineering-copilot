@@ -32,6 +32,9 @@ param enablePurgeProtection bool = environment == 'prod'
 ])
 param skuName string = 'standard'
 
+@description('Log Analytics Workspace resource ID for diagnostic settings sink')
+param logAnalyticsWorkspaceId string = ''
+
 // Key Vault
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
@@ -107,28 +110,21 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 }
 
 // Diagnostic settings for audit logging
-resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceId)) {
   name: '${keyVaultName}-diagnostics'
   scope: keyVault
   properties: {
+    workspaceId: logAnalyticsWorkspaceId
     logs: [
       {
-        categoryGroup: 'audit'
+        categoryGroup: 'allLogs'
         enabled: true
-        retentionPolicy: {
-          enabled: environment == 'prod'
-          days: environment == 'prod' ? 365 : 30
-        }
       }
     ]
     metrics: [
       {
         category: 'AllMetrics'
         enabled: true
-        retentionPolicy: {
-          enabled: environment == 'prod'
-          days: environment == 'prod' ? 365 : 30
-        }
       }
     ]
   }

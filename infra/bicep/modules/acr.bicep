@@ -75,6 +75,9 @@ param retentionDays int = 30
 @description('Enable retention policy')
 param enableRetentionPolicy bool = true
 
+@description('Log Analytics Workspace resource ID for diagnostic settings sink')
+param logAnalyticsWorkspaceId string = ''
+
 // =============================================================================
 // Azure Container Registry
 // =============================================================================
@@ -88,7 +91,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
   identity: {
     type: 'SystemAssigned'
   }
-  properties: {
+  properties: union({
     adminUserEnabled: adminUserEnabled
     publicNetworkAccess: publicNetworkAccess
     networkRuleBypassOptions: 'AzureServices'
@@ -99,13 +102,8 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
     // Anonymous pull disabled for security
     anonymousPullEnabled: enableAnonymousPull
     
-    // Data endpoint enabled for peering scenarios
-    dataEndpointEnabled: true
-    
-    // Network rule set
-    networkRuleSet: {
-      defaultAction: 'Deny'
-    }
+    // Data endpoint enabled for peering scenarios (Premium SKU only)
+    dataEndpointEnabled: sku == 'Premium' ? true : false
     
     // Policies
     policies: {
@@ -126,9 +124,11 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
         status: enableRetentionPolicy ? 'enabled' : 'disabled'
       }
       
-      // Export policy - prevent export to non-compliant regions
+      // Export policy - prevent export to non-compliant regions.
+      // Note: ARM requires publicNetworkAccess to also be Disabled when this
+      // is disabled, so tie the two together.
       exportPolicy: {
-        status: 'disabled'
+        status: publicNetworkAccess == 'Disabled' ? 'disabled' : 'enabled'
       }
       
       // Azure AD authentication only
@@ -153,7 +153,15 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
     } : {
       status: 'disabled'
     }
-  }
+  }, sku == 'Premium' ? {
+    // Network rule set (IP/VNet ACLs) is only supported on Premium SKU.
+    // Only lock this down when public network access is actually disabled;
+    // otherwise a 'Deny' default blocks legitimate public callers (e.g. ACR
+    // Tasks build agents) even though public access is nominally enabled.
+    networkRuleSet: {
+      defaultAction: publicNetworkAccess == 'Disabled' ? 'Deny' : 'Allow'
+    }
+  } : {})
 }
 
 // =============================================================================
@@ -173,36 +181,25 @@ resource replication 'Microsoft.ContainerRegistry/registries/replications@2023-0
 // =============================================================================
 // Diagnostic Settings for Audit Logging
 // =============================================================================
-resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceId)) {
   name: '${acrName}-diagnostics'
   scope: containerRegistry
   properties: {
+    workspaceId: logAnalyticsWorkspaceId
     logs: [
       {
         category: 'ContainerRegistryRepositoryEvents'
         enabled: true
-        retentionPolicy: {
-          enabled: true
-          days: 90
-        }
       }
       {
         category: 'ContainerRegistryLoginEvents'
         enabled: true
-        retentionPolicy: {
-          enabled: true
-          days: 90
-        }
       }
     ]
     metrics: [
       {
         category: 'AllMetrics'
         enabled: true
-        retentionPolicy: {
-          enabled: true
-          days: 90
-        }
       }
     ]
   }

@@ -54,6 +54,9 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
+try
+{
+
 // Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -136,6 +139,12 @@ builder.Services.AddScoped<IChatService, ChatService>();
 // Add required services for agents
 builder.Services.AddScoped<IGitHubServices, Platform.Engineering.Copilot.Core.Services.GitHubGatewayService>();
 
+// Register the Azure client factory (required by AzureResourceService, StigValidationService,
+// AtoComplianceEngine, InfrastructureProvisioningService, and various Agent Framework tools -
+// missing this caused a DI validation failure at startup in Development environments, since
+// ASP.NET Core validates the whole container on Build() when running in Development).
+builder.Services.AddAzureClientFactory();
+
 // Register Platform.Engineering.Copilot.Core services (includes ConfigurationPlugin, OrchestratorAgent, SemanticKernelService, etc.)
 builder.Services.AddPlatformEngineeringCopilotCore(builder.Configuration);
 
@@ -206,21 +215,47 @@ app.MapWhen(context => !context.Request.Path.StartsWithSegments("/api") &&
         });
     });
 
-// Initialize databases
+// Initialize databases (non-fatal: log and continue if the DB can't be created,
+// e.g. SQLite fallback path isn't writable in a container - matches the MCP
+// server's defensive pattern so a DB issue doesn't crash the whole app)
 using (var scope = app.Services.CreateScope())
 {
-    var chatContext = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
-    await chatContext.Database.EnsureCreatedAsync();
-    Log.Information("✅ Chat database initialized successfully");
-    
-    var platformContext = scope.ServiceProvider.GetRequiredService<PlatformEngineeringCopilotContext>();
-    await platformContext.Database.EnsureCreatedAsync();
-    Log.Information("✅ Platform database initialized successfully");
+    try
+    {
+        var chatContext = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
+        await chatContext.Database.EnsureCreatedAsync();
+        Log.Information("✅ Chat database initialized successfully");
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "❌ Failed to initialize Chat database");
+    }
+
+    try
+    {
+        var platformContext = scope.ServiceProvider.GetRequiredService<PlatformEngineeringCopilotContext>();
+        await platformContext.Database.EnsureCreatedAsync();
+        Log.Information("✅ Platform database initialized successfully");
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "❌ Failed to initialize Platform database");
+    }
 }
 
 Log.Information("🚀 Enhanced Chat Application starting on {Environment}", app.Environment.EnvironmentName);
 
 app.Run();
-
-// Ensure to flush and stop internal timers/threads before application-exit
-Log.CloseAndFlush();
+}
+catch (Exception ex)
+{
+    // Catch-all so a startup failure is logged (and flushed) instead of the
+    // process aborting silently with no output - this previously showed up
+    // as an ACI CrashLoopBackOff with ExitCode 134 and zero captured logs.
+    Log.Fatal(ex, "Chat application terminated unexpectedly");
+}
+finally
+{
+    // Ensure to flush and stop internal timers/threads before application-exit
+    Log.CloseAndFlush();
+}

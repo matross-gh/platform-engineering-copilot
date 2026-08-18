@@ -20,6 +20,7 @@ WORKDIR /src
 
 # Copy solution file and all project files for restore
 # New Agent FX architecture: Core, Agents, State, Channels
+COPY NuGet.Config ./
 COPY Platform.Engineering.Copilot.sln ./
 COPY src/Platform.Engineering.Copilot.Chat/*.csproj ./src/Platform.Engineering.Copilot.Chat/
 COPY src/Platform.Engineering.Copilot.Core/*.csproj ./src/Platform.Engineering.Copilot.Core/

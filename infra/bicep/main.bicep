@@ -73,6 +73,9 @@ param appServiceSku string = 'P1v3'
 ])
 param sqlDatabaseSku string = 'S0'
 
+@description('Deploy Azure SQL Server/Database (disable if SQL provisioning is restricted in this region/subscription)')
+param deploySql bool = true
+
 @description('Container deployment target (appservice, aks, aci, or none)')
 @allowed([
   'appservice'
@@ -118,6 +121,58 @@ param aciCpuCores int = 2
 param aciMemoryInGB int = 4
 
 // ===============================
+// REDIS CACHE
+// ===============================
+
+@description('Deploy Azure Cache for Redis for session/state caching')
+param deployRedis bool = true
+
+@description('Redis Cache SKU name')
+@allowed([
+  'Basic'
+  'Standard'
+  'Premium'
+])
+param redisSkuName string = environment == 'prod' ? 'Standard' : 'Basic'
+
+@description('Redis Cache SKU capacity (0-6 for Basic/Standard, 1-5 for Premium)')
+param redisSkuCapacity int = 0
+
+// ===============================
+// AZURE OPENAI
+// ===============================
+
+@description('Deploy Azure OpenAI account and model deployments')
+param deployOpenAI bool = true
+
+@description('Azure OpenAI SKU name')
+param openAiSkuName string = 'S0'
+
+@description('Azure OpenAI chat model deployment name')
+param openAiChatDeploymentName string = 'gpt-4o'
+
+@description('Azure OpenAI chat model name')
+param openAiChatModelName string = 'gpt-4o'
+
+@description('Azure OpenAI chat model version')
+param openAiChatModelVersion string = '2024-11-20'
+
+@description('Azure OpenAI chat model deployment capacity (in units of 1,000 TPM)')
+param openAiChatCapacity int = 10
+
+@description('Azure OpenAI embedding model deployment name')
+param openAiEmbeddingDeploymentName string = 'text-embedding-ada-002'
+
+@description('Azure OpenAI embedding model name')
+param openAiEmbeddingModelName string = 'text-embedding-ada-002'
+
+@description('Azure OpenAI embedding model version')
+param openAiEmbeddingModelVersion string = '2'
+
+@description('Azure OpenAI embedding model deployment capacity (in units of 1,000 TPM)')
+param openAiEmbeddingCapacity int = 10
+
+// ===============================
 // APP SERVICE DEPLOYMENT OPTIONS
 // ===============================
 
@@ -158,6 +213,12 @@ param existingLogAnalyticsResourceGroup string = resourceGroup().name
 @description('Use existing Key Vault instead of creating new one')
 param useExistingKeyVault bool = false
 
+@description('Enable the classic ping-test availability monitor (uses commercial Azure region location IDs, not supported in Azure Government)')
+param enableAvailabilityTest bool = true
+
+@description('Enable smart detector alert rules (slow page load / slow server response). Their manifest service is not available in Azure Government)')
+param enableSmartDetectionRules bool = true
+
 @description('Existing Key Vault name (required if useExistingKeyVault is true)')
 param existingKeyVaultName string = ''
 
@@ -172,13 +233,16 @@ param existingKeyVaultResourceGroup string = resourceGroup().name
 
 var resourcePrefix = '${projectName}-${environment}'
 var uniqueSuffix = uniqueString(resourceGroup().id)
+// Short, hyphen-free identifier bounded to 6 chars for length-constrained
+// resources (Storage accounts / Key Vaults: max 24 chars total)
+var shortId = toLower(substring(replace('${projectName}${environment}', '-', ''), 0, min(length(replace('${projectName}${environment}', '-', '')), 6)))
 
 // Resource names
 var vnetName = '${resourcePrefix}-vnet'
 var sqlServerName = '${resourcePrefix}-sql-${uniqueSuffix}'
 var sqlDatabaseName = '${resourcePrefix}-db'
-var keyVaultName = '${resourcePrefix}-kv-${uniqueSuffix}'
-var storageAccountName = replace('${resourcePrefix}st${uniqueSuffix}', '-', '')
+var keyVaultName = 'kv-${shortId}${uniqueSuffix}'
+var storageAccountName = '${shortId}st${uniqueSuffix}'
 var appServicePlanName = '${resourcePrefix}-asp'
 var applicationInsightsName = '${resourcePrefix}-ai'
 var logAnalyticsWorkspaceName = '${resourcePrefix}-law'
@@ -190,6 +254,8 @@ var aciMcpGroupName = '${resourcePrefix}-mcp-aci'
 var aciChatGroupName = '${resourcePrefix}-chat-aci'
 var aciAdminApiGroupName = '${resourcePrefix}-admin-api-aci'
 var aciAdminClientGroupName = '${resourcePrefix}-admin-client-aci'
+var redisCacheName = '${resourcePrefix}-redis-${uniqueSuffix}'
+var openAiAccountName = '${resourcePrefix}-oai-${uniqueSuffix}'
 
 // ===============================
 // MODULES
@@ -231,6 +297,26 @@ resource existingLogAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-
   scope: resourceGroup(existingLogAnalyticsResourceGroup)
 }
 
+// Direct existing-resource reference to the newly-created workspace, used to read its
+// customerId/shared key without indirectly dereferencing the monitoring module's secure
+// output (Bicep disallows accessing @secure() module outputs via the `!` operator).
+resource newLogAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = if (!useExistingLogAnalytics) {
+  name: logAnalyticsWorkspaceName
+  dependsOn: [
+    monitoring
+  ]
+}
+
+// Direct existing-resource reference to the newly-created ACR, used to read its
+// admin credentials via listCredentials() for ACI image pulls (see acr module
+// comment above for why admin credentials are used instead of managed identity).
+resource acrExisting 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = if (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') {
+  name: acrName
+  dependsOn: [
+    acr
+  ]
+}
+
 // Application Insights and Log Analytics (create new only if not using existing)
 module monitoring 'modules/monitoring.bicep' = if (!useExistingLogAnalytics) {
   name: 'monitoring-deployment'
@@ -242,6 +328,8 @@ module monitoring 'modules/monitoring.bicep' = if (!useExistingLogAnalytics) {
     retentionInDays: environment == 'prod' ? 365 : 90
     dailyDataCapInGB: environment == 'prod' ? 100 : 1
     samplingPercentage: environment == 'prod' ? 20 : 100
+    enableAvailabilityTest: enableAvailabilityTest
+    enableSmartDetectionRules: enableSmartDetectionRules
   }
 }
 
@@ -262,6 +350,7 @@ module keyVault 'modules/keyvault.bicep' = if (!useExistingKeyVault) {
     enableSoftDelete: environment == 'prod'
     enablePurgeProtection: environment == 'prod'
     skuName: environment == 'prod' ? 'premium' : 'standard'
+    logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.id : monitoring!.outputs.logAnalyticsWorkspaceId
   }
 }
 
@@ -277,8 +366,48 @@ module storage 'modules/storage.bicep' = {
   }
 }
 
+// Azure Cache for Redis
+module redis 'modules/redis.bicep' = if (deployRedis) {
+  name: 'redis-deployment'
+  params: {
+    redisCacheName: redisCacheName
+    location: location
+    environment: environment
+    skuName: redisSkuName
+    skuFamily: redisSkuName == 'Premium' ? 'P' : 'C'
+    skuCapacity: redisSkuCapacity
+    tags: {
+      Service: 'Redis Cache'
+      Environment: environment
+    }
+  }
+}
+
+// Azure OpenAI
+module openAi 'modules/openai.bicep' = if (deployOpenAI) {
+  name: 'openai-deployment'
+  params: {
+    accountName: openAiAccountName
+    location: location
+    environment: environment
+    skuName: openAiSkuName
+    chatDeploymentName: openAiChatDeploymentName
+    chatModelName: openAiChatModelName
+    chatModelVersion: openAiChatModelVersion
+    chatCapacity: openAiChatCapacity
+    embeddingDeploymentName: openAiEmbeddingDeploymentName
+    embeddingModelName: openAiEmbeddingModelName
+    embeddingModelVersion: openAiEmbeddingModelVersion
+    embeddingCapacity: openAiEmbeddingCapacity
+    tags: {
+      Service: 'Azure OpenAI'
+      Environment: environment
+    }
+  }
+}
+
 // SQL Server and Database
-module database 'modules/sql.bicep' = {
+module database 'modules/sql.bicep' = if (deploySql) {
   name: 'database-deployment'
   params: {
     sqlServerName: sqlServerName
@@ -309,7 +438,7 @@ module appServices 'modules/app-services.bicep' = if (containerDeploymentTarget 
     privateEndpointSubnetId: useExistingNetwork ? existingPrivateEndpointSubnet.id : network!.outputs.privateEndpointSubnetId
     logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.id : monitoring!.outputs.logAnalyticsWorkspaceId
     appInsightsConnectionString: useExistingLogAnalytics ? '' : monitoring!.outputs.connectionString
-    sqlConnectionString: replace(database.outputs.connectionStringTemplate, '<PASSWORD>', sqlAdminPassword)
+    sqlConnectionString: deploySql ? replace(database!.outputs.connectionStringTemplate, '<PASSWORD>', sqlAdminPassword) : ''
     environment: environment
   }
 }
@@ -325,11 +454,20 @@ module acr 'modules/acr.bicep' = if (deployACR || containerDeploymentTarget == '
     acrName: acrName
     location: location
     sku: acrSku
+    // Admin user is used for ACI image pulls (see acrExisting below) because
+    // managed-identity pulls have a bootstrap chicken-and-egg problem: the
+    // AcrPull role can only be granted after the container group (and its
+    // system-assigned identity) already exists, but ACI validates image
+    // access synchronously at container-group creation time - so the very
+    // first deployment always fails with InaccessibleImage when relying on
+    // managed identity alone.
+    adminUserEnabled: containerDeploymentTarget == 'aci'
     enableGeoReplication: environment == 'prod' && acrSku == 'Premium'
     replicationLocations: environment == 'prod' ? ['usgovvirginia', 'usgovarizona'] : []
     enableContentTrust: environment == 'prod'
     enableQuarantine: environment == 'prod'
     publicNetworkAccess: environment == 'prod' ? 'Disabled' : 'Enabled'
+    logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.id : monitoring!.outputs.logAnalyticsWorkspaceId
     tags: union({
       Service: 'Container Registry'
     }, {
@@ -376,25 +514,62 @@ module aciMcp 'modules/aci.bicep' = if (deployACI || containerDeploymentTarget =
     memoryInGB: aciMemoryInGB
     port: 5100
     acrLoginServer: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acr!.outputs.acrLoginServer : ''
-    useManagedIdentity: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci')
+    useManagedIdentity: false
+    acrUsername: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acrExisting.listCredentials().username : ''
+    acrPassword: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acrExisting.listCredentials().passwords[0].value : ''
     enableVNetIntegration: environment == 'prod'
     subnetId: environment == 'prod' ? (useExistingNetwork ? existingPrivateEndpointSubnet.id : network!.outputs.privateEndpointSubnetId) : ''
     dnsNameLabel: environment != 'prod' ? '${aciMcpGroupName}-${uniqueSuffix}' : ''
-    logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.id : monitoring!.outputs.logAnalyticsWorkspaceId
+    logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.properties.customerId : newLogAnalyticsWorkspace.properties.customerId
+    logAnalyticsWorkspaceKey: useExistingLogAnalytics ? existingLogAnalytics.listKeys().primarySharedKey : newLogAnalyticsWorkspace.listKeys().primarySharedKey
     environmentVariables: [
       {
+        // Always Production in ACI - there's no local dev server/debugger in a container,
+        // and 'Development' triggers dev-only code paths (e.g. Chat's SPA dev-server proxy,
+        // ASP.NET Core's stricter DI container validation) that don't work here.
         name: 'ASPNETCORE_ENVIRONMENT'
-        value: environment == 'prod' ? 'Production' : 'Development'
+        value: 'Production'
       }
       {
         name: 'ConnectionStrings__DefaultConnection'
-        value: replace(database.outputs.connectionStringTemplate, '<PASSWORD>', sqlAdminPassword)
+        value: deploySql ? replace(database!.outputs.connectionStringTemplate, '<PASSWORD>', sqlAdminPassword) : ''
       }
       {
         name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
         value: useExistingLogAnalytics ? '' : monitoring!.outputs.connectionString
       }
+      {
+        name: 'StateManagement__Provider'
+        value: deployRedis ? 'Redis' : 'Memory'
+      }
+      {
+        name: 'Gateway__AzureOpenAI__Endpoint'
+        value: deployOpenAI ? openAi!.outputs.endpoint : ''
+      }
+      {
+        name: 'Gateway__AzureOpenAI__DeploymentName'
+        value: openAiChatDeploymentName
+      }
+      {
+        name: 'Gateway__AzureOpenAI__ChatDeploymentName'
+        value: openAiChatDeploymentName
+      }
+      {
+        name: 'Gateway__AzureOpenAI__EmbeddingDeploymentName'
+        value: openAiEmbeddingDeploymentName
+      }
     ]
+    secureEnvironmentVariables: concat(deployRedis ? [
+      {
+        name: 'StateManagement__RedisConnectionString'
+        value: redis!.outputs.connectionString
+      }
+    ] : [], deployOpenAI ? [
+      {
+        name: 'Gateway__AzureOpenAI__ApiKey'
+        value: openAi!.outputs.apiKey
+      }
+    ] : [])
     tags: {
       Service: 'MCP Server'
       DeploymentType: 'ACI'
@@ -409,21 +584,28 @@ module aciChat 'modules/aci.bicep' = if ((deployACI || containerDeploymentTarget
   params: {
     containerGroupName: aciChatGroupName
     location: location
-    containerImage: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? '${acr!.outputs.acrLoginServer}/platform-engineering-copilot-chat:latest' : 'mcr.microsoft.com/dotnet/samples:aspnetapp'
+    // Pinned to an immutable digest (not ':latest') because ACI can serve a stale
+    // node-cached image for a mutable tag even when the registry's tag has moved on -
+    // confirmed via a redeploy that still pulled the old digest after the tag was updated.
+    containerImage: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? '${acr!.outputs.acrLoginServer}/platform-engineering-copilot-chat@sha256:dcb5b8fd53e99528cdb3121bc6fcbfe61fa911f7bca8b8b258dc3f887752ef79' : 'mcr.microsoft.com/dotnet/samples:aspnetapp'
     containerName: 'chat-service'
     cpuCores: aciCpuCores
     memoryInGB: aciMemoryInGB
     port: 5001
     acrLoginServer: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acr!.outputs.acrLoginServer : ''
-    useManagedIdentity: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci')
+    useManagedIdentity: false
+    acrUsername: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acrExisting.listCredentials().username : ''
+    acrPassword: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acrExisting.listCredentials().passwords[0].value : ''
     enableVNetIntegration: environment == 'prod'
     subnetId: environment == 'prod' ? (useExistingNetwork ? existingPrivateEndpointSubnet.id : network!.outputs.privateEndpointSubnetId) : ''
     dnsNameLabel: environment != 'prod' ? '${aciChatGroupName}-${uniqueSuffix}' : ''
-    logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.id : monitoring!.outputs.logAnalyticsWorkspaceId
+    logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.properties.customerId : newLogAnalyticsWorkspace.properties.customerId
+    logAnalyticsWorkspaceKey: useExistingLogAnalytics ? existingLogAnalytics.listKeys().primarySharedKey : newLogAnalyticsWorkspace.listKeys().primarySharedKey
     environmentVariables: [
       {
+        // Always Production in ACI - see comment on the MCP module call above.
         name: 'ASPNETCORE_ENVIRONMENT'
-        value: environment == 'prod' ? 'Production' : 'Development'
+        value: 'Production'
       }
       {
         name: 'McpServer__BaseUrl'
@@ -433,7 +615,17 @@ module aciChat 'modules/aci.bicep' = if ((deployACI || containerDeploymentTarget
         name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
         value: useExistingLogAnalytics ? '' : monitoring!.outputs.connectionString
       }
+      {
+        name: 'StateManagement__Provider'
+        value: deployRedis ? 'Redis' : 'Memory'
+      }
     ]
+    secureEnvironmentVariables: deployRedis ? [
+      {
+        name: 'StateManagement__RedisConnectionString'
+        value: redis!.outputs.connectionString
+      }
+    ] : []
     tags: {
       Service: 'Chat'
       DeploymentType: 'ACI'
@@ -454,19 +646,23 @@ module aciAdminApi 'modules/aci.bicep' = if ((deployACI || containerDeploymentTa
     memoryInGB: 2
     port: 5002
     acrLoginServer: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acr!.outputs.acrLoginServer : ''
-    useManagedIdentity: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci')
+    useManagedIdentity: false
+    acrUsername: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acrExisting.listCredentials().username : ''
+    acrPassword: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acrExisting.listCredentials().passwords[0].value : ''
     enableVNetIntegration: environment == 'prod'
     subnetId: environment == 'prod' ? (useExistingNetwork ? existingPrivateEndpointSubnet.id : network!.outputs.privateEndpointSubnetId) : ''
     dnsNameLabel: environment != 'prod' ? '${aciAdminApiGroupName}-${uniqueSuffix}' : ''
-    logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.id : monitoring!.outputs.logAnalyticsWorkspaceId
+    logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.properties.customerId : newLogAnalyticsWorkspace.properties.customerId
+    logAnalyticsWorkspaceKey: useExistingLogAnalytics ? existingLogAnalytics.listKeys().primarySharedKey : newLogAnalyticsWorkspace.listKeys().primarySharedKey
     environmentVariables: [
       {
+        // Always Production in ACI - see comment on the MCP module call above.
         name: 'ASPNETCORE_ENVIRONMENT'
-        value: environment == 'prod' ? 'Production' : 'Development'
+        value: 'Production'
       }
       {
         name: 'ConnectionStrings__DefaultConnection'
-        value: replace(database.outputs.connectionStringTemplate, '<PASSWORD>', sqlAdminPassword)
+        value: deploySql ? replace(database!.outputs.connectionStringTemplate, '<PASSWORD>', sqlAdminPassword) : ''
       }
     ]
     tags: {
@@ -489,15 +685,19 @@ module aciAdminClient 'modules/aci.bicep' = if ((deployACI || containerDeploymen
     memoryInGB: 2
     port: 5003
     acrLoginServer: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acr!.outputs.acrLoginServer : ''
-    useManagedIdentity: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci')
+    useManagedIdentity: false
+    acrUsername: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acrExisting.listCredentials().username : ''
+    acrPassword: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? acrExisting.listCredentials().passwords[0].value : ''
     enableVNetIntegration: environment == 'prod'
     subnetId: environment == 'prod' ? (useExistingNetwork ? existingPrivateEndpointSubnet.id : network!.outputs.privateEndpointSubnetId) : ''
     dnsNameLabel: environment != 'prod' ? '${aciAdminClientGroupName}-${uniqueSuffix}' : ''
-    logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.id : monitoring!.outputs.logAnalyticsWorkspaceId
+    logAnalyticsWorkspaceId: useExistingLogAnalytics ? existingLogAnalytics.properties.customerId : newLogAnalyticsWorkspace.properties.customerId
+    logAnalyticsWorkspaceKey: useExistingLogAnalytics ? existingLogAnalytics.listKeys().primarySharedKey : newLogAnalyticsWorkspace.listKeys().primarySharedKey
     environmentVariables: [
       {
+        // Always Production in ACI - see comment on the MCP module call above.
         name: 'ASPNETCORE_ENVIRONMENT'
-        value: environment == 'prod' ? 'Production' : 'Development'
+        value: 'Production'
       }
     ]
     tags: {
@@ -516,10 +716,10 @@ module aciAdminClient 'modules/aci.bicep' = if ((deployACI || containerDeploymen
 var actualKeyVaultName = useExistingKeyVault ? existingKeyVaultName : keyVaultName
 
 // Store SQL connection string in Key Vault
-resource sqlConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource sqlConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (deploySql) {
   name: '${actualKeyVaultName}/SqlConnectionString'
   properties: {
-    value: replace(database.outputs.connectionStringTemplate, '<PASSWORD>', sqlAdminPassword)
+    value: replace(database!.outputs.connectionStringTemplate, '<PASSWORD>', sqlAdminPassword)
     contentType: 'SQL Connection String'
     attributes: {
       enabled: true
@@ -545,6 +745,30 @@ resource appInsightsConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-
   properties: {
     value: monitoring!.outputs.connectionString
     contentType: 'Application Insights Connection String'
+    attributes: {
+      enabled: true
+    }
+  }
+}
+
+// Store Redis connection string in Key Vault
+resource redisConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (deployRedis) {
+  name: '${actualKeyVaultName}/RedisConnectionString'
+  properties: {
+    value: redis!.outputs.connectionString
+    contentType: 'Redis Connection String'
+    attributes: {
+      enabled: true
+    }
+  }
+}
+
+// Store Azure OpenAI API key in Key Vault
+resource openAiApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (deployOpenAI) {
+  name: '${actualKeyVaultName}/AzureOpenAIApiKey'
+  properties: {
+    value: openAi!.outputs.apiKey
+    contentType: 'Azure OpenAI API Key'
     attributes: {
       enabled: true
     }
@@ -647,7 +871,7 @@ output aciAdminClientIpAddress string = (deployACI || containerDeploymentTarget 
 
 // Infrastructure Outputs
 @description('SQL Server FQDN')
-output sqlServerFqdn string = database.outputs.sqlServerFqdn
+output sqlServerFqdn string = deploySql ? database!.outputs.sqlServerFqdn : ''
 
 @description('Key Vault URI')
 output keyVaultUri string = useExistingKeyVault ? existingKeyVault!.properties.vaultUri : keyVault!.outputs.keyVaultUri
@@ -657,6 +881,15 @@ output applicationInsightsInstrumentationKey string = useExistingLogAnalytics ? 
 
 @description('Storage Account Name')
 output storageAccountName string = storage.outputs.storageAccountName
+
+@description('Redis Cache Host Name')
+output redisHostName string = deployRedis ? redis!.outputs.hostName : ''
+
+@description('Azure OpenAI Endpoint')
+output openAiEndpoint string = deployOpenAI ? openAi!.outputs.endpoint : ''
+
+@description('Azure OpenAI Account Name')
+output openAiAccountName string = deployOpenAI ? openAi!.outputs.accountName : ''
 
 @description('Resource Group Name')
 output resourceGroupName string = resourceGroup().name
@@ -674,6 +907,8 @@ output deploymentSummary object = {
   // Deployment flags
   deployAdminApi: deployAdminApi
   deployChat: deployChat
+  deployRedis: deployRedis
+  deployOpenAI: deployOpenAI
   useExistingNetwork: useExistingNetwork
   useExistingLogAnalytics: useExistingLogAnalytics
   useExistingKeyVault: useExistingKeyVault
@@ -723,8 +958,8 @@ output deploymentSummary object = {
   } : null
   
   // Core Infrastructure
-  sqlServer: database.outputs.sqlServerName
-  sqlDatabase: database.outputs.sqlDatabaseName
+  sqlServer: deploySql ? database!.outputs.sqlServerName : 'Not Deployed'
+  sqlDatabase: deploySql ? database!.outputs.sqlDatabaseName : 'Not Deployed'
   keyVault: useExistingKeyVault ? existingKeyVaultName : keyVault!.outputs.keyVaultName
   storageAccount: storage.outputs.storageAccountName
   applicationInsights: useExistingLogAnalytics ? 'Using Existing' : monitoring!.outputs.applicationInsightsName
