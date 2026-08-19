@@ -21,6 +21,7 @@ public static class McpServiceExtensions
         services.AddScoped<InfrastructureMcpTools>();
         services.AddScoped<CostManagementMcpTools>();
         services.AddScoped<KnowledgeBaseMcpTools>();
+        services.AddScoped<BicepKnowledgeMcpTools>();
 
         // Register the MCP server with domain-specific tools (scoped for per-request lifetime)
         // McpServer now uses PlatformAgentGroupChat directly from Agents project

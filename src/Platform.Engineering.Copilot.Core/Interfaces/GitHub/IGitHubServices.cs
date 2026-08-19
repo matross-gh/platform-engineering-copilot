@@ -238,6 +238,17 @@ namespace Platform.Engineering.Copilot.Core.Interfaces.GitHub
         Task<RepositoryContent?> GetFileAsync(string owner, string name, string path, string? reference = null, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// List the contents (files and subdirectories) of a directory in a repository
+        /// </summary>
+        /// <param name="owner">Repository owner</param>
+        /// <param name="name">Repository name</param>
+        /// <param name="path">Directory path (empty or "/" for repository root)</param>
+        /// <param name="reference">Branch, tag, or commit reference</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>Directory entries (files and subdirectories)</returns>
+        Task<IReadOnlyList<RepositoryContent>?> GetDirectoryContentsAsync(string owner, string name, string? path = null, string? reference = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Create or update a file in a repository
         /// </summary>
         /// <param name="owner">Repository owner</param>

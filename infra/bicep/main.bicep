@@ -508,7 +508,9 @@ module aciMcp 'modules/aci.bicep' = if (deployACI || containerDeploymentTarget =
   params: {
     containerGroupName: aciMcpGroupName
     location: location
-    containerImage: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? '${acr!.outputs.acrLoginServer}/platform-engineering-copilot-mcp:latest' : 'mcr.microsoft.com/dotnet/samples:aspnetapp'
+    // Pinned to an immutable digest (not ':latest') - see comment on the chat module below
+    // for why ACI needs digest pinning to guarantee a fresh pull after a rebuild.
+    containerImage: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? '${acr!.outputs.acrLoginServer}/platform-engineering-copilot-mcp@sha256:9c63168ba81cea06b07e57b698ece1b0694ae6d9fd0d892a7c3f4ee646b2abe0' : 'mcr.microsoft.com/dotnet/samples:aspnetapp'
     containerName: 'mcp-server'
     cpuCores: aciCpuCores
     memoryInGB: aciMemoryInGB
@@ -587,7 +589,7 @@ module aciChat 'modules/aci.bicep' = if ((deployACI || containerDeploymentTarget
     // Pinned to an immutable digest (not ':latest') because ACI can serve a stale
     // node-cached image for a mutable tag even when the registry's tag has moved on -
     // confirmed via a redeploy that still pulled the old digest after the tag was updated.
-    containerImage: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? '${acr!.outputs.acrLoginServer}/platform-engineering-copilot-chat@sha256:dcb5b8fd53e99528cdb3121bc6fcbfe61fa911f7bca8b8b258dc3f887752ef79' : 'mcr.microsoft.com/dotnet/samples:aspnetapp'
+    containerImage: (deployACR || containerDeploymentTarget == 'aks' || containerDeploymentTarget == 'aci') ? '${acr!.outputs.acrLoginServer}/platform-engineering-copilot-chat@sha256:a3c3a37272beafafca0cfbbfedade5d5a065734b3878226193d87fe3bcc08d4a' : 'mcr.microsoft.com/dotnet/samples:aspnetapp'
     containerName: 'chat-service'
     cpuCores: aciCpuCores
     memoryInGB: aciMemoryInGB

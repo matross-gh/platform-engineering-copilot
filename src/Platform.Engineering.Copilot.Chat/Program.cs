@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
+using OpenTelemetry;
+using OpenTelemetry.Resources;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Platform.Engineering.Copilot.Chat.App.Data;
 using Platform.Engineering.Copilot.Chat.App.Hubs;
 using Platform.Engineering.Copilot.Chat.App.Services;
@@ -61,6 +64,25 @@ try
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Configure Azure Monitor (Application Insights) - reads APPLICATIONINSIGHTS_CONNECTION_STRING,
+// which ACI sets as an env var (see main.bicep). Without this, that env var is inert: nothing
+// in the app was actually sending telemetry, so Live Metrics/Application Map had no data.
+var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrEmpty(appInsightsConnectionString))
+{
+    builder.Services.AddOpenTelemetry()
+        .ConfigureResource(resource => resource.AddService("platform-copilot-chat"))
+        .UseAzureMonitor(options =>
+        {
+            options.ConnectionString = appInsightsConnectionString;
+        });
+    Log.Information("✅ Azure Monitor configured for Application Insights telemetry");
+}
+else
+{
+    Log.Warning("⚠️  APPLICATIONINSIGHTS_CONNECTION_STRING not set. No telemetry will be sent to Application Insights.");
+}
 
 // Add Entity Framework - Chat DB
 // Support both SQL Server (Docker) and SQLite (local dev)

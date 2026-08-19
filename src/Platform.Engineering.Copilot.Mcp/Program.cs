@@ -17,6 +17,9 @@ using Platform.Engineering.Copilot.Mcp.Extensions;
 // New consolidated agents project
 using Platform.Engineering.Copilot.Agents.Extensions;
 using Serilog;
+using OpenTelemetry;
+using OpenTelemetry.Resources;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 
 namespace Platform.Engineering.Copilot.Mcp;
 
@@ -140,6 +143,25 @@ class Program
             logging.ClearProviders();
             logging.AddSerilog();
         });
+
+        // Configure Azure Monitor (Application Insights) - reads APPLICATIONINSIGHTS_CONNECTION_STRING,
+        // which ACI sets as an env var (see main.bicep). Without this, that env var is inert: nothing
+        // in the app was actually sending telemetry, so Live Metrics/Application Map had no data.
+        var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+        if (!string.IsNullOrEmpty(appInsightsConnectionString))
+        {
+            builder.Services.AddOpenTelemetry()
+                .ConfigureResource(resource => resource.AddService("platform-copilot-mcp"))
+                .UseAzureMonitor(options =>
+                {
+                    options.ConnectionString = appInsightsConnectionString;
+                });
+            Log.Information("✅ Azure Monitor configured for Application Insights telemetry");
+        }
+        else
+        {
+            Log.Warning("⚠️ APPLICATIONINSIGHTS_CONNECTION_STRING not set. No telemetry will be sent to Application Insights.");
+        }
 
         // Register database context - use SQL Server connection from config or env variable
         var configuration = builder.Configuration;

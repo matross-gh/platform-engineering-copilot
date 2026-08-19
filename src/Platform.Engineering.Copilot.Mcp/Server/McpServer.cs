@@ -20,6 +20,7 @@ public class McpServer
     private readonly InfrastructureMcpTools _infrastructureTools;
     private readonly CostManagementMcpTools _costManagementTools;
     private readonly KnowledgeBaseMcpTools _knowledgeBaseTools;
+    private readonly BicepKnowledgeMcpTools _bicepKnowledgeTools;
     private readonly PlatformAgentGroupChat _agentGroupChat;
     private readonly ILogger<McpServer> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
@@ -30,6 +31,7 @@ public class McpServer
         InfrastructureMcpTools infrastructureTools,
         CostManagementMcpTools costManagementTools,
         KnowledgeBaseMcpTools knowledgeBaseTools,
+        BicepKnowledgeMcpTools bicepKnowledgeTools,
         PlatformAgentGroupChat agentGroupChat,
         ILogger<McpServer> logger)
     {
@@ -38,6 +40,7 @@ public class McpServer
         _infrastructureTools = infrastructureTools;
         _costManagementTools = costManagementTools;
         _knowledgeBaseTools = knowledgeBaseTools;
+        _bicepKnowledgeTools = bicepKnowledgeTools;
         _agentGroupChat = agentGroupChat;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
@@ -539,6 +542,65 @@ public class McpServer
             required = new[] { "operation" }
         }));
 
+        // Bicep Module Registry Knowledge Tools (GitHub-backed - ACR OCI artifacts can't be introspected directly)
+        tools.Add(CreateTool("bicep_list_modules", "List folders/modules in the GitHub-hosted Bicep module registry", new
+        {
+            type = "object",
+            properties = new
+            {
+                path = new { type = "string", description = "Directory path to list. Defaults to the registry's modules root." },
+                owner = new { type = "string", description = "GitHub repository owner. Defaults to the configured registry repo." },
+                repo = new { type = "string", description = "GitHub repository name. Defaults to the configured registry repo." },
+                gitRef = new { type = "string", description = "Branch, tag, or commit SHA. Defaults to the default branch." }
+            },
+            required = Array.Empty<string>()
+        }));
+
+        tools.Add(CreateTool("bicep_get_module_source", "Fetch the raw source of a Bicep module from the GitHub-hosted registry", new
+        {
+            type = "object",
+            properties = new
+            {
+                path = new { type = "string", description = "Full repository path to the .bicep file" },
+                owner = new { type = "string", description = "GitHub repository owner. Defaults to the configured registry repo." },
+                repo = new { type = "string", description = "GitHub repository name. Defaults to the configured registry repo." },
+                gitRef = new { type = "string", description = "Branch, tag, or commit SHA. Defaults to the default branch." }
+            },
+            required = new[] { "path" }
+        }));
+
+        tools.Add(CreateTool("bicep_explain_module", "Explain a Bicep module's purpose, parameters, and outputs", new
+        {
+            type = "object",
+            properties = new
+            {
+                path = new { type = "string", description = "Full repository path to the .bicep file" },
+                owner = new { type = "string", description = "GitHub repository owner. Defaults to the configured registry repo." },
+                repo = new { type = "string", description = "GitHub repository name. Defaults to the configured registry repo." },
+                gitRef = new { type = "string", description = "Branch, tag, or commit SHA. Defaults to the default branch." }
+            },
+            required = new[] { "path" }
+        }));
+
+        tools.Add(CreateTool("bicep_deploy_module", "Deploy a Bicep module from the GitHub-backed ACR registry into an Azure subscription/resource group (any subscription in the same tenant). Defaults to a What-If preview.", new
+        {
+            type = "object",
+            properties = new
+            {
+                path = new { type = "string", description = "Full repository path to the module's .bicep file" },
+                subscriptionId = new { type = "string", description = "Target Azure subscription ID (GUID). May be any subscription in the same tenant." },
+                resourceGroupName = new { type = "string", description = "Target resource group name. Must already exist." },
+                owner = new { type = "string", description = "GitHub repository owner. Defaults to the configured registry repo." },
+                repo = new { type = "string", description = "GitHub repository name. Defaults to the configured registry repo." },
+                gitRef = new { type = "string", description = "Branch, tag, or commit SHA. Defaults to the default branch." },
+                deploymentName = new { type = "string", description = "Name for the ARM deployment. Auto-generated if not provided." },
+                parameters = new { type = "object", description = "Module parameter values to deploy with (conversationally supplied)." },
+                parametersJson = new { type = "string", description = "Pre-built ARM deployment parameters file content (JSON). Takes precedence over 'parameters' if both are given." },
+                whatIf = new { type = "boolean", description = "When true (default), only preview the change (What-If) without deploying. Set to false to actually deploy." }
+            },
+            required = new[] { "path", "subscriptionId", "resourceGroupName" }
+        }));
+
         // Legacy chat tool for backwards compatibility
         tools.Add(CreateTool("platform_engineering_chat", "Process requests through the multi-agent orchestrator (legacy)", new
         {
@@ -757,6 +819,37 @@ public class McpServer
                     GetArg<string>(args, "data_types"),
                     GetArg<string>(args, "compare_level_1"),
                     GetArg<string>(args, "compare_level_2")),
+
+                // Bicep Module Registry Knowledge Tools - signatures match BicepKnowledgeMcpTools
+                "bicep_list_modules" => await _bicepKnowledgeTools.ListBicepModulesAsync(
+                    GetArg<string>(args, "path"),
+                    GetArg<string>(args, "owner"),
+                    GetArg<string>(args, "repo"),
+                    GetArg<string>(args, "gitRef")),
+
+                "bicep_get_module_source" => await _bicepKnowledgeTools.GetBicepModuleSourceAsync(
+                    GetArg<string>(args, "path") ?? "",
+                    GetArg<string>(args, "owner"),
+                    GetArg<string>(args, "repo"),
+                    GetArg<string>(args, "gitRef")),
+
+                "bicep_explain_module" => await _bicepKnowledgeTools.ExplainBicepModuleAsync(
+                    GetArg<string>(args, "path") ?? "",
+                    GetArg<string>(args, "owner"),
+                    GetArg<string>(args, "repo"),
+                    GetArg<string>(args, "gitRef")),
+
+                "bicep_deploy_module" => await _bicepKnowledgeTools.DeployBicepModuleAsync(
+                    GetArg<string>(args, "path") ?? "",
+                    GetArg<string>(args, "subscriptionId") ?? "",
+                    GetArg<string>(args, "resourceGroupName") ?? "",
+                    GetArg<string>(args, "owner"),
+                    GetArg<string>(args, "repo"),
+                    GetArg<string>(args, "gitRef"),
+                    GetArg<string>(args, "deploymentName"),
+                    GetArg<Dictionary<string, object?>>(args, "parameters"),
+                    GetArg<string>(args, "parametersJson"),
+                    GetArg<bool?>(args, "whatIf") ?? true),
 
                 // Multi-agent chat via PlatformAgentGroupChat
                 "platform_engineering_chat" => await ExecuteChatAsync(

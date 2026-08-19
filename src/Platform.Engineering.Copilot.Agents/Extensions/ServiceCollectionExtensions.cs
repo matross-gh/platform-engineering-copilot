@@ -42,6 +42,7 @@ using Platform.Engineering.Copilot.Core.Interfaces.Azure;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance;
 using Platform.Engineering.Copilot.Core.Interfaces.Compliance.Remediation;
 using Platform.Engineering.Copilot.Core.Interfaces.Cost;
+using Platform.Engineering.Copilot.Core.Interfaces.Deployment;
 using Platform.Engineering.Copilot.Core.Interfaces.Infrastructure;
 using Platform.Engineering.Copilot.Core.Interfaces.KnowledgeBase;
 using Platform.Engineering.Copilot.Core.Services;
@@ -489,6 +490,8 @@ public static class ServiceCollectionExtensions
         // Bind configuration
         services.Configure<KnowledgeBaseAgentOptions>(
             configuration.GetSection(KnowledgeBaseAgentOptions.SectionName));
+        services.Configure<BicepRegistryOptions>(
+            configuration.GetSection(BicepRegistryOptions.SectionName));
 
         // Check if agent is enabled
         var options = configuration.GetSection(KnowledgeBaseAgentOptions.SectionName)
@@ -513,6 +516,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RmfExplainerTool>();
         services.AddScoped<ImpactLevelTool>();
         services.AddScoped<FedRampTemplateTool>();
+        services.AddScoped<BicepModuleListTool>();
+        services.AddScoped<BicepModuleSourceTool>();
+        services.AddScoped<BicepModuleExplainerTool>();
+        services.AddScoped<IBicepAcrDeploymentService, BicepAcrDeploymentService>();
+        services.AddScoped<BicepModuleDeployTool>();
 
         // Only register agent if enabled
         services.AddScoped<KnowledgeBaseAgent>();

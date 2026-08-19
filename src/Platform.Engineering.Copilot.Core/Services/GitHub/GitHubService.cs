@@ -652,6 +652,42 @@ public class GitHubGatewayService : IGitHubServices
         }
     }
 
+    public async Task<IReadOnlyList<RepositoryContent>?> GetDirectoryContentsAsync(string owner, string name, string? path = null, string? reference = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (_gitHubClient == null)
+            {
+                _logger.LogWarning("GitHub client not initialized");
+                return null;
+            }
+
+            var directoryPath = path ?? string.Empty;
+            _logger.LogDebug("Listing directory {Path} in {Owner}/{Name} at {Reference}", directoryPath, owner, name, reference ?? "default");
+
+            IReadOnlyList<RepositoryContent> contents;
+            if (!string.IsNullOrEmpty(reference))
+            {
+                contents = string.IsNullOrEmpty(directoryPath)
+                    ? await _gitHubClient.Repository.Content.GetAllContentsByRef(owner, name, reference)
+                    : await _gitHubClient.Repository.Content.GetAllContentsByRef(owner, name, directoryPath, reference);
+            }
+            else
+            {
+                contents = string.IsNullOrEmpty(directoryPath)
+                    ? await _gitHubClient.Repository.Content.GetAllContents(owner, name)
+                    : await _gitHubClient.Repository.Content.GetAllContents(owner, name, directoryPath);
+            }
+
+            return contents;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to list directory {Path} in {Owner}/{Name}", path, owner, name);
+            return null;
+        }
+    }
+
     public async Task<RepositoryContentChangeSet?> CreateOrUpdateFileAsync(string owner, string name, string path, string content, string message, string? branch = null, string? sha = null, CancellationToken cancellationToken = default)
     {
         try
