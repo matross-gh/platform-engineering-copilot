@@ -18,7 +18,6 @@ public static class McpServiceExtensions
         // Register domain-specific MCP tools (wrappers around Agent Framework tools)
         services.AddScoped<ComplianceMcpTools>();
         services.AddScoped<DiscoveryMcpTools>();
-        services.AddScoped<InfrastructureMcpTools>();
         services.AddScoped<CostManagementMcpTools>();
         services.AddScoped<KnowledgeBaseMcpTools>();
         services.AddScoped<BicepKnowledgeMcpTools>();

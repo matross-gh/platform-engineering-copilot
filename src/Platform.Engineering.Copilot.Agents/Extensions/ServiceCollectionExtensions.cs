@@ -25,11 +25,7 @@ using Platform.Engineering.Copilot.Agents.Discovery.Agents;
 using Platform.Engineering.Copilot.Agents.Discovery.Configuration;
 using Platform.Engineering.Copilot.Agents.Discovery.State;
 using Platform.Engineering.Copilot.Agents.Discovery.Tools;
-using Platform.Engineering.Copilot.Agents.Infrastructure.Agents;
-using Platform.Engineering.Copilot.Agents.Infrastructure.Configuration;
 using Platform.Engineering.Copilot.Agents.Infrastructure.Services;
-using Platform.Engineering.Copilot.Agents.Infrastructure.State;
-using Platform.Engineering.Copilot.Agents.Infrastructure.Tools;
 using Platform.Engineering.Copilot.Agents.KnowledgeBase.Agents;
 using Platform.Engineering.Copilot.Agents.KnowledgeBase.Configuration;
 using Platform.Engineering.Copilot.Agents.KnowledgeBase.Services;
@@ -91,9 +87,6 @@ public static class ServiceCollectionExtensions
 
         // Add cost management agent
         services.AddCostManagementAgent(configuration);
-
-        // Add infrastructure agent
-        services.AddInfrastructureAgent(configuration);
 
         // Add compliance agent
         services.AddComplianceAgent(configuration);
@@ -187,9 +180,6 @@ public static class ServiceCollectionExtensions
 
         // Add cost management agent
         services.AddCostManagementAgent(configuration);
-
-        // Add infrastructure agent
-        services.AddInfrastructureAgent(configuration);
 
         // Add compliance agent
         services.AddComplianceAgent(configuration);
@@ -317,73 +307,6 @@ public static class ServiceCollectionExtensions
         if (options.Enabled)
         {
             services.AddScoped<BaseAgent>(sp => sp.GetRequiredService<CostManagementAgent>());
-        }
-
-        return services;
-    }
-
-    /// <summary>
-    /// Adds the Infrastructure Agent for template generation, provisioning, scaling, and Azure Arc.
-    /// </summary>
-    public static IServiceCollection AddInfrastructureAgent(
-        this IServiceCollection services,
-        IConfiguration configuration)
-    {
-        // Bind configuration
-        services.Configure<InfrastructureAgentOptions>(
-            configuration.GetSection(InfrastructureAgentOptions.SectionName));
-
-        // Check if agent is enabled
-        var options = configuration.GetSection(InfrastructureAgentOptions.SectionName)
-            .Get<InfrastructureAgentOptions>() ?? new InfrastructureAgentOptions();
-
-        // Add state accessors (always needed for potential runtime enable)
-        services.AddScoped<InfrastructureStateAccessors>();
-
-        // Add template generation services
-        services.AddScoped<IDynamicTemplateGenerator, DynamicTemplateGeneratorService>();
-
-        // Add infrastructure services
-        services.AddScoped<IInfrastructureProvisioningService, InfrastructureProvisioningService>();
-        
-        // Add predictive scaling engine for ScalingAnalysisTool (optional - depends on Azure services)
-        // Will be null if dependencies (IAzureMetricsService, etc.) are not registered
-        services.AddScoped<IPredictiveScalingEngine>(sp =>
-        {
-            try
-            {
-                var logger = sp.GetRequiredService<ILogger<PredictiveScalingEngine>>();
-                var metricsService = sp.GetService<IAzureMetricsService>();
-                var resourceService = sp.GetService<IAzureResourceService>();
-                var costOptimizationEngine = sp.GetService<ICostOptimizationEngine>();
-                
-                if (metricsService == null || resourceService == null || costOptimizationEngine == null)
-                {
-                    logger.LogWarning("PredictiveScalingEngine dependencies not available - scaling analysis will use simulated data");
-                    return null!;
-                }
-                
-                return new PredictiveScalingEngine(logger, metricsService, resourceService, costOptimizationEngine);
-            }
-            catch
-            {
-                return null!;
-            }
-        });
-
-        // Add tools (always available even if agent is disabled)
-        services.AddScoped<TemplateGenerationTool>();
-        services.AddScoped<TemplateRetrievalTool>();
-        services.AddScoped<ResourceProvisioningTool>();
-        services.AddScoped<ScalingAnalysisTool>();
-        services.AddScoped<AzureArcTool>();
-        services.AddScoped<ResourceDeletionTool>();
-
-        // Only register agent if enabled
-        services.AddScoped<InfrastructureAgent>();
-        if (options.Enabled)
-        {
-            services.AddScoped<BaseAgent>(sp => sp.GetRequiredService<InfrastructureAgent>());
         }
 
         return services;

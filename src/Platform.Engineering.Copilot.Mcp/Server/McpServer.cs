@@ -17,7 +17,6 @@ public class McpServer
 {
     private readonly ComplianceMcpTools _complianceTools;
     private readonly DiscoveryMcpTools _discoveryTools;
-    private readonly InfrastructureMcpTools _infrastructureTools;
     private readonly CostManagementMcpTools _costManagementTools;
     private readonly KnowledgeBaseMcpTools _knowledgeBaseTools;
     private readonly BicepKnowledgeMcpTools _bicepKnowledgeTools;
@@ -28,7 +27,6 @@ public class McpServer
     public McpServer(
         ComplianceMcpTools complianceTools,
         DiscoveryMcpTools discoveryTools,
-        InfrastructureMcpTools infrastructureTools,
         CostManagementMcpTools costManagementTools,
         KnowledgeBaseMcpTools knowledgeBaseTools,
         BicepKnowledgeMcpTools bicepKnowledgeTools,
@@ -37,7 +35,6 @@ public class McpServer
     {
         _complianceTools = complianceTools;
         _discoveryTools = discoveryTools;
-        _infrastructureTools = infrastructureTools;
         _costManagementTools = costManagementTools;
         _knowledgeBaseTools = knowledgeBaseTools;
         _bicepKnowledgeTools = bicepKnowledgeTools;
@@ -322,66 +319,6 @@ public class McpServer
             type = "object",
             properties = new { },
             required = Array.Empty<string>()
-        }));
-
-        // Infrastructure Tools
-        tools.Add(CreateTool("infrastructure_generate_template", "Generate Infrastructure as Code templates (Bicep/Terraform)", new
-        {
-            type = "object",
-            properties = new
-            {
-                resource_type = new { type = "string", description = "Azure resource type (e.g., aks, vm, storage)" },
-                template_format = new { type = "string", description = "Template format: bicep or terraform" },
-                compliance_level = new { type = "string", description = "Compliance: commercial, govcloud, or il5" },
-                environment = new { type = "string", description = "Target environment: dev, staging, or prod" }
-            },
-            required = new[] { "resource_type" }
-        }));
-
-        tools.Add(CreateTool("infrastructure_provision", "Provision Azure resources from templates", new
-        {
-            type = "object",
-            properties = new
-            {
-                template = new { type = "string", description = "IaC template content" },
-                subscription_id = new { type = "string", description = "Target subscription" },
-                resource_group = new { type = "string", description = "Target resource group" },
-                dry_run = new { type = "boolean", description = "Preview without deploying" }
-            },
-            required = new[] { "template", "subscription_id", "resource_group" }
-        }));
-
-        tools.Add(CreateTool("infrastructure_delete", "Delete Azure resources", new
-        {
-            type = "object",
-            properties = new
-            {
-                resource_ids = new { type = "array", items = new { type = "string" }, description = "Resource IDs to delete" },
-                force = new { type = "boolean", description = "Force deletion" }
-            },
-            required = new[] { "resource_ids" }
-        }));
-
-        tools.Add(CreateTool("infrastructure_analyze_scaling", "Analyze resource utilization and scaling recommendations", new
-        {
-            type = "object",
-            properties = new
-            {
-                resource_id = new { type = "string", description = "Azure resource ID" },
-                time_range = new { type = "string", description = "Analysis time range (e.g., 7d, 30d)" }
-            },
-            required = new[] { "resource_id" }
-        }));
-
-        tools.Add(CreateTool("infrastructure_azure_arc", "Manage Azure Arc for hybrid resources", new
-        {
-            type = "object",
-            properties = new
-            {
-                operation = new { type = "string", description = "Operation: onboard, status, or configure" },
-                resource_type = new { type = "string", description = "Resource type: server, kubernetes, or data-services" }
-            },
-            required = new[] { "operation", "resource_type" }
         }));
 
         // Cost Management Tools
@@ -710,40 +647,6 @@ public class McpServer
 
                 "discovery_subscriptions" => await _discoveryTools.ListSubscriptionsAsync(
                     GetArg<bool?>(args, "include_disabled") ?? false),
-
-                // Infrastructure Tools - signatures match InfrastructureMcpTools
-                "infrastructure_generate_template" => await _infrastructureTools.GenerateTemplateAsync(
-                    GetArg<string>(args, "resource_type") ?? "",
-                    GetArg<string>(args, "template_format") ?? "bicep",
-                    GetArg<string>(args, "compliance_level"),
-                    GetArg<string>(args, "location"),
-                    GetArg<string>(args, "resource_name"),
-                    GetArg<string>(args, "additional_requirements")),
-
-                "infrastructure_provision" => await _infrastructureTools.ProvisionResourcesAsync(
-                    GetArg<string>(args, "template_path") ?? "",
-                    GetArg<string>(args, "subscription_id") ?? "",
-                    GetArg<string>(args, "resource_group") ?? "",
-                    GetArg<string>(args, "location"),
-                    GetArg<Dictionary<string, object>>(args, "parameters"),
-                    GetArg<bool?>(args, "validate_only") ?? false),
-
-                "infrastructure_delete" => await _infrastructureTools.DeleteResourcesAsync(
-                    GetArg<string>(args, "resource_id") ?? "",
-                    GetArg<bool?>(args, "dry_run") ?? true,
-                    GetArg<bool?>(args, "force") ?? false,
-                    GetArg<bool?>(args, "delete_associated_resources") ?? false),
-
-                "infrastructure_analyze_scaling" => await _infrastructureTools.AnalyzeScalingAsync(
-                    GetArg<string>(args, "resource_id") ?? "",
-                    GetArg<int?>(args, "analysis_window_days") ?? 30,
-                    GetArg<bool?>(args, "include_recommendations") ?? true),
-
-                "infrastructure_azure_arc" => await _infrastructureTools.ManageAzureArcAsync(
-                    GetArg<string>(args, "operation") ?? "",
-                    GetArg<string>(args, "resource_id"),
-                    GetArg<string>(args, "machine_name"),
-                    GetArg<string>(args, "subscription_id")),
 
                 // Cost Management Tools - signatures match CostManagementMcpTools
                 "cost_analyze" => await _costManagementTools.AnalyzeCostsAsync(
