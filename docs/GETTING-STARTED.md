@@ -652,24 +652,6 @@ code --install-extension platform-engineering-copilot-github-0.1.0.vsix
 
 **📖 Complete MCP integration:** [INTEGRATIONS.md](./INTEGRATIONS.md#mcp-protocol-integration)
 
-### M365 Copilot
-
-```bash
-# 1. Install extension
-cd extensions/platform-engineering-copilot-m365
-npm install
-npm run build
-
-# 2. Deploy to Teams
-# Upload to Teams App Studio
-# Configure permissions
-
-# 3. Use in Teams/M365
-@PlatformCopilot analyze costs for subscription xyz
-```
-
-**📖 Complete M365 guide:** [INTEGRATIONS.md](./INTEGRATIONS.md#m365-copilot-integration)
-
 ---
 
 ## 🧠 LLM Configuration & Model Requirements
