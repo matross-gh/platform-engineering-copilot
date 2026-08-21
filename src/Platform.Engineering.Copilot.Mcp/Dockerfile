@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 # Stage 1: Restore dependencies (cached layer)
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS restore
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
 WORKDIR /src
 
 # Copy solution and project files only (for better layer caching)
@@ -47,7 +47,7 @@ RUN dotnet publish "Platform.Engineering.Copilot.Mcp.csproj" \
     /p:PublishTrimmed=false
 
 # Stage 4: Runtime (optimized and hardened)
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
 # Install minimal dependencies for health checks and curl

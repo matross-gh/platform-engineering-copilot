@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 # Stage 1: Restore dependencies (cached layer)
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS restore
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
 
 # Install Node.js and npm using official binary distribution (cached layer)
 RUN apt-get update && \
@@ -57,7 +57,7 @@ RUN dotnet publish Platform.Engineering.Copilot.Chat.csproj \
     /p:SkipSpaPublish=true
 
 # Stage 3: Runtime (optimized and hardened)
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 # Create non-root user for security

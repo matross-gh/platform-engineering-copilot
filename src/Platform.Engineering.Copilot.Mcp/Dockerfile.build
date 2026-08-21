@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 # Simplified build - without Node.js (not needed for C# MCP server)
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS restore
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
 WORKDIR /src
 
 # Copy solution and project files only
@@ -40,7 +40,7 @@ RUN dotnet publish "Platform.Engineering.Copilot.Mcp.csproj" \
     /p:UseAppHost=false
 
 # Stage 4: Runtime
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
 # Install minimal dependencies (curl for health check)

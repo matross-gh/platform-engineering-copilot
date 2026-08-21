@@ -68,9 +68,12 @@ graph TB
     │       ├── Migrations/                            # EF Core migrations history
     │       └── Seed/                                  # Optional data seeding helpers
     ├── tests/
-    │   ├── Platform.Engineering.Copilot.Tests.Unit/   # xUnit + FluentAssertions unit tests
-    │   ├── Platform.Engineering.Copilot.Tests.Integration/
-    │   └── Platform.Engineering.Copilot.Tests.Manual/
+    │   ├── Platform.Engineering.Copilot.Core.Tests/
+    │   ├── Platform.Engineering.Copilot.State.Tests/
+    │   ├── Platform.Engineering.Copilot.Channels.Tests/
+    │   ├── Platform.Engineering.Copilot.Agents.Tests/
+    │   ├── Platform.Engineering.Copilot.Mcp.Tests/
+    │   └── Platform.Engineering.Copilot.Chat.Tests/
     ├── docker-compose.yml                             # Full platform deployment
     ├── docker-compose.dev.yml                         # Hot-reload friendly developer compose file
     ├── DOCKER.md                                      # Container orchestration documentation
@@ -101,7 +104,7 @@ graph TB
 - **Microsoft.SemanticKernel 1.26.0** for agent orchestration and function calling
 - **SignalR 1.1** for streaming responses to Platform Chat
 - **Serilog 4.2+** for structured logging (console, file, Application Insights)
-- **Swashbuckle 9.0.5** for Admin API Swagger documentation
+- **Microsoft.AspNetCore.OpenApi + Scalar.AspNetCore** for API documentation (Platform Chat)
 
 #### Frontend
 - **React 18** single-page applications (Admin Client)
@@ -255,7 +258,7 @@ dotnet publish src/Platform.Engineering.Copilot.Admin.Client/Platform.Engineerin
       "EmbeddingDeploymentName": "text-embedding-ada-002"
 ```dockerfile
 # src/Platform.Engineering.Copilot.Mcp/Dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY ["src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj", "src/Platform.Engineering.Copilot.Mcp/"]
@@ -266,7 +269,7 @@ COPY . .
 WORKDIR "/src/src/Platform.Engineering.Copilot.Mcp"
 RUN dotnet publish "Platform.Engineering.Copilot.Mcp.csproj" -c Release -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "Platform.Engineering.Copilot.Mcp.dll", "--http"]
@@ -289,7 +292,7 @@ docker build -t platform-copilot-admin-client:latest -f src/Platform.Engineering
 dotnet run --project src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj
 
 # HTTP bridge for web clients (default port 5100)
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
 ```
 
 #### Platform Chat (REST + SignalR)
@@ -985,7 +988,7 @@ dotnet publish src/Platform.Engineering.Copilot.Admin.Client/Platform.Engineerin
 
 ```dockerfile
 # src/Platform.Engineering.Copilot.Mcp/Dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY ["src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj", "src/Platform.Engineering.Copilot.Mcp/"]
@@ -996,7 +999,7 @@ COPY . .
 WORKDIR "/src/src/Platform.Engineering.Copilot.Mcp"
 RUN dotnet publish "Platform.Engineering.Copilot.Mcp.csproj" -c Release -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "Platform.Engineering.Copilot.Mcp.dll", "--http"]
@@ -1021,7 +1024,7 @@ Create reusable NuGet packages for shared components:
 <!-- Platform.Engineering.Copilot.Core.csproj -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <PackageId>Platform.Engineering.Copilot.Core</PackageId>
     <PackageVersion>1.0.0</PackageVersion>
     <Authors>Platform Engineering Team</Authors>
@@ -1090,7 +1093,7 @@ Example: `1.2.3`
       "name": "MCP HTTP",
       "type": "coreclr",
       "request": "launch",
-      "program": "${workspaceFolder}/src/Platform.Engineering.Copilot.Mcp/bin/Debug/net9.0/Platform.Engineering.Copilot.Mcp.dll",
+      "program": "${workspaceFolder}/src/Platform.Engineering.Copilot.Mcp/bin/Debug/net10.0/Platform.Engineering.Copilot.Mcp.dll",
       "args": ["--http", "--port", "5100"],
       "cwd": "${workspaceFolder}/src/Platform.Engineering.Copilot.Mcp",
       "env": {
@@ -1101,7 +1104,7 @@ Example: `1.2.3`
       "name": "Platform Chat",
       "type": "coreclr",
       "request": "launch",
-      "program": "${workspaceFolder}/src/Platform.Engineering.Copilot.Chat/bin/Debug/net9.0/Platform.Engineering.Copilot.Chat.dll",
+      "program": "${workspaceFolder}/src/Platform.Engineering.Copilot.Chat/bin/Debug/net10.0/Platform.Engineering.Copilot.Chat.dll",
       "args": ["--urls", "http://0.0.0.0:5001"],
       "cwd": "${workspaceFolder}/src/Platform.Engineering.Copilot.Chat",
       "env": {
@@ -1118,13 +1121,13 @@ Example: `1.2.3`
 
 ```dockerfile
 # Development Dockerfile with debugging support for Admin API
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY . .
 RUN dotnet publish src/Platform.Engineering.Copilot.Admin.API/Platform.Engineering.Copilot.Admin.API.csproj \
   -c Debug -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 EXPOSE 5002
 

@@ -12,6 +12,7 @@ using Platform.Engineering.Copilot.Core.Extensions;
 using Platform.Engineering.Copilot.Core.Data.Context;
 using Platform.Engineering.Copilot.Core.Interfaces.GitHub;
 using Azure.Identity;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -63,7 +64,7 @@ try
 // Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 
 // Configure Azure Monitor (Application Insights) - reads APPLICATIONINSIGHTS_CONNECTION_STRING,
 // which ACI sets as an env var (see main.bicep). Without this, that env var is inert: nothing
@@ -187,8 +188,8 @@ var app = builder.Build();
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 // Add request logging middleware to see all incoming requests
