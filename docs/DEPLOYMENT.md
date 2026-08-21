@@ -13,8 +13,8 @@ The Platform Engineering Copilot can be deployed in three modes:
 |------|----------|---------|
 | **Local** | Development | `dotnet run` |
 | **Docker** | Quick start, testing | `docker-compose up` |
-| **ACI** | Azure container deployment | Bicep templates |
-| **AKS** | Production Kubernetes | Helm charts |
+| **ACI** | Azure container deployment | `deployment/` Bicep (registry modules) |
+| **AKS** | Production Kubernetes | `deployment/` Bicep (registry modules) |
 
 ---
 
@@ -135,14 +135,26 @@ docker push ${ACR_NAME}.azurecr.io/platform-engineering-copilot-mcp:latest
 
 ### Deploy with Bicep
 
+Infrastructure and workload are deployed from the `deployment/` folder using modules
+from the enterprise Bicep registry (`br/enterprisebicepregistry`, see
+`deployment/bicepconfig.json`).
+
 ```bash
-# Deploy ACI infrastructure
-az deployment sub create \
-  --name "platform-engineering-$(date +%Y%m%d)" \
-  --location eastus \
-  --template-file infra/bicep/main.bicep \
-  --parameters infra/bicep/main.parameters.aci.json \
-  --parameters environment=dev containerDeploymentTarget=aci
+cd deployment
+
+# Deploy shared infrastructure (LAW, VNet, Key Vault, Storage, SQL, ACR, AKS, Redis, Foundry)
+az deployment group create \
+  --name "pe-infrastructure-$(date +%Y%m%d)" \
+  --resource-group rg-pec-infrastructure-dev \
+  --template-file infrastructure/cicd.deploy.pe.infrastructure.bicep \
+  --parameters infrastructure/cicd.deploy.pe.infrastructure.bicepparam
+
+# Deploy the ACI workload (mcp, chat, admin-api, admin-client)
+az deployment group create \
+  --name "pe-workload-$(date +%Y%m%d)" \
+  --resource-group rg-pec-infrastructure-dev \
+  --template-file workload/cicd.deploy.pe.workload.bicep \
+  --parameters workload/cicd.deploy.pe.workload.bicepparam
 ```
 
 ### ACI Environment Variables
@@ -162,43 +174,35 @@ AZURE_SUBSCRIPTION_ID=your-subscription-id
 
 ### Deploy AKS Infrastructure
 
+AKS is one of the modules deployed by `deployment/infrastructure/cicd.deploy.pe.infrastructure.bicep`
+(see the Bicep section above); adjust `pAksName` / `pAksNodeResourceGroupName` etc. in
+`cicd.deploy.pe.infrastructure.bicepparam` for the target environment, then:
+
 ```bash
-# Deploy AKS cluster
-az deployment sub create \
-  --template-file infra/bicep/main.bicep \
-  --parameters infra/bicep/main.parameters.aks.json \
-  --parameters environment=prod containerDeploymentTarget=aks
+cd deployment
+az deployment group create \
+  --name "pe-infrastructure-$(date +%Y%m%d)" \
+  --resource-group rg-pec-infrastructure-prod \
+  --template-file infrastructure/cicd.deploy.pe.infrastructure.bicep \
+  --parameters infrastructure/cicd.deploy.pe.infrastructure.bicepparam
 
 # Get credentials
 az aks get-credentials \
-  --resource-group rg-platform-engineering-prod \
-  --name aks-platform-engineering-prod
+  --resource-group rg-pec-infrastructure-prod \
+  --name aks-pec-prod
 ```
 
 ### Deploy Application
 
-```bash
-# Apply Kubernetes manifests
-kubectl apply -f infra/kubernetes/
-
-# Or use Helm
-helm install platform-engineering ./infra/helm/platform-engineering
-```
-
-### Kubernetes Resources
-
-```
-infra/kubernetes/
-├── namespace.yaml
-├── configmap.yaml
-├── secrets.yaml
-├── mcp-deployment.yaml
-├── mcp-service.yaml
-├── chat-deployment.yaml
-├── chat-service.yaml
-├── ingress.yaml
-└── hpa.yaml
-```
+AKS clusters for this project are created exclusively through the enterprise Bicep
+registry's `microsoft.containerservice/managedclusters` module (wired in
+`deployment/infrastructure/cicd.deploy.pe.infrastructure.bicep`), since IL5 requires
+the cluster to run in an Azure Dedicated Host / Host Group. Raw Terraform and
+hand-written Kubernetes manifests are no longer used to provision or size the
+cluster. Today the workload itself is deployed as ACI container groups via
+`deployment/workload/cicd.deploy.pe.workload.bicep` (see the ACI section above);
+Kubernetes application manifests for running the workload on this AKS cluster do
+not exist yet and are pending a future update.
 
 ---
 
