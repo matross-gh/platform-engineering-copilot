@@ -1,6 +1,6 @@
 # Platform Engineering Copilot - All Services
 # New Agent FX Architecture: Core, Agents, State, Channels
-# Services: MCP Server, Chat UI, SQL Server, Nginx (optional), Redis (optional)
+# Services: MCP Server, Chat UI, SQL Server, Nginx (optional)
 
 networks:
   plaform-engineering-copilot-network:
@@ -167,19 +167,3 @@ services:
       - plaform-engineering-copilot-network
     profiles:
       - proxy
-
-  # Optional: Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: plaform-engineering-copilot-redis
-    hostname: redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - ./redis.conf:/etc/redis/redis.conf:ro
-    networks:
-      - plaform-engineering-copilot-network
-    profiles:
-      - cache
-    command: redis-server /etc/redis/redis.conf

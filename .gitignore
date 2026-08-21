@@ -26,6 +26,9 @@ appsettings.json
 appsettings.*.json
 !appsettings.example.json
 
+# Compiled ARM JSON output from `az bicep build` (source of truth is the .bicep/.bicepparam files)
+deployment/**/*.json
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/

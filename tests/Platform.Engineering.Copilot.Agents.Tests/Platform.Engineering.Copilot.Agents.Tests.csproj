@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Platform.Engineering.Copilot.Agents\Platform.Engineering.Copilot.Agents.csproj" />
+  </ItemGroup>
+
+</Project>

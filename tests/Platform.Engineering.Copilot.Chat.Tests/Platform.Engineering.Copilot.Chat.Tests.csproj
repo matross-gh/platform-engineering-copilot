@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Platform.Engineering.Copilot.Chat\Platform.Engineering.Copilot.Chat.csproj" />
+  </ItemGroup>
+
+</Project>

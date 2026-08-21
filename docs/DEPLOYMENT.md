@@ -87,10 +87,15 @@ dotnet run --project src/Platform.Engineering.Copilot.Mcp -- --http
 
 | File | Services | Use Case |
 |------|----------|----------|
-| `docker-compose.yml` | MCP, Chat, Admin, Redis | Full platform |
+| `docker-compose.yml` | MCP, Chat, Admin | Full platform |
 | `docker-compose.essentials.yml` | MCP only | AI client development |
 | `docker-compose.dev.yml` | Dev overrides | Local development |
 | `docker-compose.prod.yml` | Production settings | Production |
+
+Redis is no longer run as a local Docker container. All environments, including
+local dev, connect to the Azure Cache for Redis instance provisioned by
+`deployment/infrastructure/cicd.deploy.pe.infrastructure.bicep` (set the
+connection string via `StateManagement__RedisConnectionString`, e.g. from Key Vault).
 
 ### Service Ports
 
@@ -99,7 +104,6 @@ dotnet run --project src/Platform.Engineering.Copilot.Mcp -- --http
 | MCP Server | 5100 | Model Context Protocol server |
 | Chat UI | 5001 | Web chat interface |
 | Admin API | 5003 | Admin console API |
-| Redis | 6379 | Session/cache (internal) |
 
 ---
 

@@ -16,7 +16,6 @@
 #
 # Options:
 #   --with-proxy    - Include Nginx reverse proxy
-#   --with-cache    - Include Redis cache
 #   --rebuild       - Force rebuild of containers
 #   --logs          - Follow logs after starting
 #   --clean         - Remove volumes and do fresh start
@@ -82,7 +81,6 @@ ${GREEN}Modes:${NC}
 
 ${GREEN}Options:${NC}
   ${YELLOW}--with-proxy${NC}    - Include Nginx reverse proxy
-  ${YELLOW}--with-cache${NC}    - Include Redis cache
   ${YELLOW}--rebuild${NC}       - Force rebuild of containers
   ${YELLOW}--logs${NC}          - Follow logs after starting
   ${YELLOW}--clean${NC}         - Remove volumes and do fresh start
@@ -170,10 +168,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --with-proxy)
             PROFILES+=("proxy")
-            shift
-            ;;
-        --with-cache)
-            PROFILES+=("cache")
             shift
             ;;
         --rebuild)
@@ -352,10 +346,6 @@ ${GREEN}Services:${NC}
   ${YELLOW}SQL Server:${NC}      localhost:1433
 EOF
 
-        if [[ " ${PROFILES[@]} " =~ " cache " ]]; then
-            echo -e "  ${YELLOW}Redis:${NC}           localhost:6379"
-        fi
-        
         if [[ " ${PROFILES[@]} " =~ " proxy " ]]; then
             echo -e "  ${YELLOW}Nginx:${NC}           http://localhost"
         fi

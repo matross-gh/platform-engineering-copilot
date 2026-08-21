@@ -119,7 +119,7 @@ graph TB
 #### Data & Messaging
 - **SQLite** (default development store for environment management + chat transcripts)
 - **SQL Server 2022** (optional shared database for team environments)
-- **Redis** (optional distributed cache for chat sessions and rate limiting)
+- **Redis** (distributed cache for chat sessions and rate limiting; dev environments point at the Azure Cache for Redis instance provisioned by `deployment/infrastructure`, no local Docker Redis)
 - **Azure Key Vault** for secrets and API keys
 
 #### Cloud Integrations
