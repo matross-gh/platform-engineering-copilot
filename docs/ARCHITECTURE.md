@@ -360,7 +360,7 @@ All configuration in `appsettings.json`:
 | AI Framework | Microsoft Semantic Kernel 1.26+ |
 | MCP | ModelContextProtocol 0.4.0-preview |
 | Azure SDK | Azure.ResourceManager.* |
-| Database | SQLite (default) / SQL Server |
+| Database | Azure Cosmos DB |
 | Cache | IMemoryCache |
 | Container | Docker, ACI, AKS |
 

@@ -76,11 +76,51 @@ public class ChatService : IChatService
 
     public async Task<Conversation?> GetConversationAsync(string conversationId)
     {
-        return await _dbContext.Conversations
-            .Include(c => c.Messages)
-                .ThenInclude(m => m.Attachments)
-            .Include(c => c.Context)
+        var conversation = await _dbContext.Conversations
             .FirstOrDefaultAsync(c => c.Id == conversationId);
+
+        if (conversation == null)
+            return null;
+
+        await PopulateConversationAsync(conversation);
+        return conversation;
+    }
+
+    /// <summary>
+    /// Populate the (NotMapped) Messages/Context navigation properties (and each message's
+    /// NotMapped Attachments) via separate queries, since Cosmos containers are independent
+    /// and the EF Cosmos provider doesn't support cross-container Include()/ThenInclude().
+    /// </summary>
+    private async Task PopulateConversationAsync(Conversation conversation)
+    {
+        var messages = await _dbContext.Messages
+            .Where(m => m.ConversationId == conversation.Id)
+            .OrderBy(m => m.Timestamp)
+            .ToListAsync();
+
+        if (messages.Count > 0)
+        {
+            var messageIds = messages.Select(m => m.Id).ToList();
+            var attachments = await _dbContext.Attachments
+                .Where(a => messageIds.Contains(a.MessageId))
+                .ToListAsync();
+            var attachmentsByMessage = attachments.GroupBy(a => a.MessageId).ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var message in messages)
+            {
+                if (attachmentsByMessage.TryGetValue(message.Id, out var messageAttachments))
+                {
+                    message.Attachments = messageAttachments;
+                }
+            }
+        }
+
+        conversation.Messages = messages;
+
+        conversation.Context = await _dbContext.Contexts
+            .Where(c => c.ConversationId == conversation.Id)
+            .OrderByDescending(c => c.LastAccessedAt)
+            .FirstOrDefaultAsync();
     }
 
     public async Task<List<Conversation>> GetConversationsAsync(string userId = "default-user", int skip = 0, int take = 50)
@@ -135,13 +175,31 @@ public class ChatService : IChatService
 
     public async Task<List<ChatMessage>> GetMessagesAsync(string conversationId, int skip = 0, int take = 50)
     {
-        return await _dbContext.Messages
-            .Include(m => m.Attachments)
+        var messages = await _dbContext.Messages
             .Where(m => m.ConversationId == conversationId)
             .OrderBy(m => m.Timestamp)
             .Skip(skip)
             .Take(take)
             .ToListAsync();
+
+        if (messages.Count > 0)
+        {
+            var messageIds = messages.Select(m => m.Id).ToList();
+            var attachments = await _dbContext.Attachments
+                .Where(a => messageIds.Contains(a.MessageId))
+                .ToListAsync();
+            var attachmentsByMessage = attachments.GroupBy(a => a.MessageId).ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var message in messages)
+            {
+                if (attachmentsByMessage.TryGetValue(message.Id, out var messageAttachments))
+                {
+                    message.Attachments = messageAttachments;
+                }
+            }
+        }
+
+        return messages;
     }
 
     public async Task<MessageAttachment> UploadAttachmentAsync(string messageId, IFormFile file)
@@ -226,19 +284,49 @@ public class ChatService : IChatService
     public async Task<bool> DeleteConversationAsync(string conversationId)
     {
         var conversation = await _dbContext.Conversations
-            .Include(c => c.Messages)
-                .ThenInclude(m => m.Attachments)
             .FirstOrDefaultAsync(c => c.Id == conversationId);
 
         if (conversation == null) return false;
 
+        var messages = await _dbContext.Messages
+            .Where(m => m.ConversationId == conversationId)
+            .ToListAsync();
+
+        List<MessageAttachment> attachments = new();
+        if (messages.Count > 0)
+        {
+            var messageIds = messages.Select(m => m.Id).ToList();
+            attachments = await _dbContext.Attachments
+                .Where(a => messageIds.Contains(a.MessageId))
+                .ToListAsync();
+        }
+
         // Delete associated files
-        foreach (var attachment in conversation.Messages.SelectMany(m => m.Attachments))
+        foreach (var attachment in attachments)
         {
             if (File.Exists(attachment.StoragePath))
             {
                 File.Delete(attachment.StoragePath);
             }
+        }
+
+        // Cosmos has no cross-container cascade delete - clean up child documents manually.
+        if (attachments.Count > 0)
+        {
+            _dbContext.Attachments.RemoveRange(attachments);
+        }
+
+        if (messages.Count > 0)
+        {
+            _dbContext.Messages.RemoveRange(messages);
+        }
+
+        var contexts = await _dbContext.Contexts
+            .Where(c => c.ConversationId == conversationId)
+            .ToListAsync();
+        if (contexts.Count > 0)
+        {
+            _dbContext.Contexts.RemoveRange(contexts);
         }
 
         _dbContext.Conversations.Remove(conversation);
@@ -250,9 +338,18 @@ public class ChatService : IChatService
 
     public async Task<List<Conversation>> SearchConversationsAsync(string query, string userId = "default-user")
     {
+        // c.Messages (NotMapped) cannot be translated by the Cosmos EF provider - resolve
+        // conversation IDs with a matching message content separately, then combine with a
+        // title match.
+        var matchingConversationIds = await _dbContext.Messages
+            .Where(m => m.Content.Contains(query))
+            .Select(m => m.ConversationId)
+            .Distinct()
+            .ToListAsync();
+
         return await _dbContext.Conversations
             .Where(c => c.UserId == userId && !c.IsArchived &&
-                       (c.Title.Contains(query) || c.Messages.Any(m => m.Content.Contains(query))))
+                       (c.Title.Contains(query) || matchingConversationIds.Contains(c.Id)))
             .OrderByDescending(c => c.UpdatedAt)
             .Take(20)
             .ToListAsync();

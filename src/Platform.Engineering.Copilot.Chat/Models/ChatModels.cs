@@ -1,5 +1,7 @@
 namespace Platform.Engineering.Copilot.Chat.App.Models;
 
+using System.ComponentModel.DataAnnotations.Schema;
+
 /// <summary>
 /// Represents a chat conversation with metadata
 /// </summary>
@@ -12,7 +14,13 @@ public class Conversation
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public bool IsArchived { get; set; } = false;
     public Dictionary<string, object> Metadata { get; set; } = new();
+
+    // Cosmos containers are independent - these are NOT mapped by EF; ChatService
+    // populates them manually via separate queries, replacing relational Include()/HasMany().
+    [NotMapped]
     public List<ChatMessage> Messages { get; set; } = new();
+
+    [NotMapped]
     public ConversationContext? Context { get; set; }
 }
 
@@ -28,6 +36,10 @@ public class ChatMessage
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     public MessageStatus Status { get; set; } = MessageStatus.Sent;
     public Dictionary<string, object> Metadata { get; set; } = new();
+
+    // Cosmos containers are independent - NOT mapped by EF; ChatService populates this
+    // manually via a separate query, replacing relational Include()/HasMany().
+    [NotMapped]
     public List<MessageAttachment> Attachments { get; set; } = new();
     public string? ParentMessageId { get; set; }
     public List<string> Tools { get; set; } = new();

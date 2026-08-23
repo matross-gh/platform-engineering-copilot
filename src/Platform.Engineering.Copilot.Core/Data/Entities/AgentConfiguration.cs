@@ -10,9 +10,10 @@ namespace Platform.Engineering.Copilot.Core.Data.Entities;
 [Table("AgentConfigurations")]
 public class AgentConfiguration
 {
+    // Cosmos DB does not support server-generated sequential integer identities;
+    // the key is a client-generated GUID instead (was `int` with SQL IDENTITY).
     [Key]
-    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int AgentConfigurationId { get; set; }
+    public Guid AgentConfigurationId { get; set; } = Guid.NewGuid();
 
     /// <summary>
     /// Internal name of the agent (e.g., "InfrastructureAgent", "ComplianceAgent")

@@ -32,9 +32,46 @@ public class ComplianceAssessmentRepository : IComplianceAssessmentRepository
 
     public async Task<ComplianceAssessment?> GetByIdWithFindingsAsync(string id, CancellationToken cancellationToken = default)
     {
-        return await _context.ComplianceAssessments
-            .Include(a => a.Findings)
+        var assessment = await _context.ComplianceAssessments
             .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+
+        if (assessment != null)
+        {
+            await PopulateFindingsAsync(assessment, cancellationToken);
+        }
+
+        return assessment;
+    }
+
+    /// <summary>
+    /// Populate the (NotMapped) Findings navigation collection via a separate query,
+    /// since Cosmos doesn't support cross-container Include().
+    /// </summary>
+    private async Task PopulateFindingsAsync(ComplianceAssessment assessment, CancellationToken cancellationToken)
+    {
+        assessment.Findings = await _context.ComplianceFindings
+            .Where(f => f.AssessmentId == assessment.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    private async Task PopulateFindingsAsync(IReadOnlyList<ComplianceAssessment> assessments, CancellationToken cancellationToken)
+    {
+        var ids = assessments.Select(a => a.Id).ToList();
+        if (ids.Count == 0)
+            return;
+
+        var findings = await _context.ComplianceFindings
+            .Where(f => ids.Contains(f.AssessmentId))
+            .ToListAsync(cancellationToken);
+        var byAssessment = findings.GroupBy(f => f.AssessmentId).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var assessment in assessments)
+        {
+            if (byAssessment.TryGetValue(assessment.Id, out var assessmentFindings))
+            {
+                assessment.Findings = assessmentFindings;
+            }
+        }
     }
 
     public async Task<IReadOnlyList<ComplianceAssessment>> GetBySubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
@@ -47,29 +84,43 @@ public class ComplianceAssessmentRepository : IComplianceAssessmentRepository
 
     public async Task<IReadOnlyList<ComplianceAssessment>> GetBySubscriptionWithFindingsAsync(string subscriptionId, CancellationToken cancellationToken = default)
     {
-        return await _context.ComplianceAssessments
-            .Include(a => a.Findings)
+        var assessments = await _context.ComplianceAssessments
             .Where(a => a.SubscriptionId == subscriptionId)
             .OrderByDescending(a => a.StartedAt)
             .ToListAsync(cancellationToken);
+
+        await PopulateFindingsAsync(assessments, cancellationToken);
+        return assessments;
     }
 
     public async Task<ComplianceAssessment?> GetLatestBySubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
     {
-        return await _context.ComplianceAssessments
-            .Include(a => a.Findings)
+        var assessment = await _context.ComplianceAssessments
             .Where(a => a.SubscriptionId == subscriptionId)
             .OrderByDescending(a => a.StartedAt)
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (assessment != null)
+        {
+            await PopulateFindingsAsync(assessment, cancellationToken);
+        }
+
+        return assessment;
     }
 
     public async Task<ComplianceAssessment?> GetLatestCompletedWithFindingsAsync(string subscriptionId, CancellationToken cancellationToken = default)
     {
-        return await _context.ComplianceAssessments
-            .Include(a => a.Findings)
+        var assessment = await _context.ComplianceAssessments
             .Where(a => a.SubscriptionId == subscriptionId && a.Status == "Completed")
             .OrderByDescending(a => a.CompletedAt)
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (assessment != null)
+        {
+            await PopulateFindingsAsync(assessment, cancellationToken);
+        }
+
+        return assessment;
     }
 
     public async Task<ComplianceAssessment?> GetBySubscriptionAndDateAsync(string subscriptionId, DateTime date, CancellationToken cancellationToken = default)
@@ -85,14 +136,20 @@ public class ComplianceAssessmentRepository : IComplianceAssessmentRepository
 
     public async Task<ComplianceAssessment?> GetBySubscriptionAndDateWithFindingsAsync(string subscriptionId, DateTime date, CancellationToken cancellationToken = default)
     {
-        return await _context.ComplianceAssessments
-            .Include(a => a.Findings)
+        var assessment = await _context.ComplianceAssessments
             .Where(a => a.SubscriptionId == subscriptionId && 
                        a.Status == "Completed" &&
                        a.CompletedAt != null &&
                        a.CompletedAt.Value.Date == date.Date)
             .OrderByDescending(a => a.CompletedAt)
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (assessment != null)
+        {
+            await PopulateFindingsAsync(assessment, cancellationToken);
+        }
+
+        return assessment;
     }
 
     public async Task<ComplianceAssessment?> GetPreviousAssessmentAsync(string subscriptionId, DateTime beforeDate, CancellationToken cancellationToken = default)
@@ -238,17 +295,25 @@ public class ComplianceAssessmentRepository : IComplianceAssessmentRepository
     public async Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
         var assessment = await _context.ComplianceAssessments
-            .Include(a => a.Findings)
             .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
 
         if (assessment == null)
             return false;
 
+        // Cosmos has no cross-container cascade delete - clean up child findings manually.
+        var findings = await _context.ComplianceFindings
+            .Where(f => f.AssessmentId == id)
+            .ToListAsync(cancellationToken);
+        if (findings.Count > 0)
+        {
+            _context.ComplianceFindings.RemoveRange(findings);
+        }
+
         _context.ComplianceAssessments.Remove(assessment);
         await _context.SaveChangesAsync(cancellationToken);
 
         _logger.LogDebug("Deleted ComplianceAssessment {AssessmentId} with {FindingCount} findings", 
-            id, assessment.Findings.Count);
+            id, findings.Count);
         return true;
     }
 
@@ -314,8 +379,18 @@ public class ComplianceAssessmentRepository : IComplianceAssessmentRepository
         int limit = 10, 
         CancellationToken cancellationToken = default)
     {
+        // f.Assessment (NotMapped) cannot be translated by the Cosmos EF provider - resolve
+        // the subscription's assessment IDs first, then filter findings by AssessmentId.
+        var assessmentIds = await _context.ComplianceAssessments
+            .Where(a => a.SubscriptionId == subscriptionId)
+            .Select(a => a.Id)
+            .ToListAsync(cancellationToken);
+
+        if (assessmentIds.Count == 0)
+            return Array.Empty<ComplianceFinding>();
+
         return await _context.ComplianceFindings
-            .Where(f => f.Assessment.SubscriptionId == subscriptionId &&
+            .Where(f => assessmentIds.Contains(f.AssessmentId) &&
                        f.ResolvedAt == null &&
                        (f.ControlId == controlId || (f.AffectedNistControls != null && f.AffectedNistControls.Contains(controlId))) &&
                        (f.Severity == "Critical" || f.Severity == "High"))
@@ -327,8 +402,16 @@ public class ComplianceAssessmentRepository : IComplianceAssessmentRepository
 
     public async Task<int> CountAutoRemediatedFindingsAsync(string subscriptionId, CancellationToken cancellationToken = default)
     {
+        var assessmentIds = await _context.ComplianceAssessments
+            .Where(a => a.SubscriptionId == subscriptionId)
+            .Select(a => a.Id)
+            .ToListAsync(cancellationToken);
+
+        if (assessmentIds.Count == 0)
+            return 0;
+
         return await _context.ComplianceFindings
-            .Where(f => f.Assessment.SubscriptionId == subscriptionId &&
+            .Where(f => assessmentIds.Contains(f.AssessmentId) &&
                        f.IsAutomaticallyFixable &&
                        f.ResolvedAt != null)
             .CountAsync(cancellationToken);
@@ -336,11 +419,15 @@ public class ComplianceAssessmentRepository : IComplianceAssessmentRepository
 
     public async Task<Dictionary<string, int>> CountFindingsBySeverityAsync(string assessmentId, CancellationToken cancellationToken = default)
     {
-        return await _context.ComplianceFindings
+        // Cosmos EF provider has limited support for GroupBy + aggregate projections in a
+        // single query - materialize the (already assessment-scoped) findings and group client-side.
+        var findings = await _context.ComplianceFindings
             .Where(f => f.AssessmentId == assessmentId)
+            .ToListAsync(cancellationToken);
+
+        return findings
             .GroupBy(f => f.Severity)
-            .Select(g => new { Severity = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.Severity, x => x.Count, cancellationToken);
+            .ToDictionary(g => g.Key, g => g.Count());
     }
 
     public async Task<ComplianceFinding> AddFindingAsync(ComplianceFinding finding, CancellationToken cancellationToken = default)

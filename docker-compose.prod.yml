@@ -40,20 +40,9 @@ services:
         delay: 5s
         max_attempts: 3
 
-  sqlserver:
-    environment:
-      - MSSQL_PID=Standard
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 4G
-        reservations:
-          cpus: '1.0'
-          memory: 2G
-    volumes:
-      - sqlserver-data:/var/opt/mssql
-      - ./backups:/var/backups
+  # Production targets a managed Azure Cosmos DB account, not the local emulator.
+  # Set CosmosDb__Endpoint / CosmosDb__Key via secrets/env vars on platform-mcp
+  # and platform-chat instead of running a local cosmosdb-emulator container.
 
   # Production load balancer
   nginx:

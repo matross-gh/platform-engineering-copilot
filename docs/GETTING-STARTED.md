@@ -62,11 +62,8 @@ git clone https://github.com/azurenoops/platform-engineering-copilot.git
 cd platform-engineering-copilot
 dotnet restore
 
-# 3. Setup database (SQLite - no Docker required)
-dotnet tool update --global dotnet-ef
-cd src/Platform.Engineering.Copilot.Data
-dotnet ef database update
-cd ../..
+# 3. Setup database (Cosmos DB Emulator via Docker)
+docker compose up cosmosdb-emulator -d
 
 # 4. Configure Azure authentication
 az login  # See AUTHENTICATION.md for details
@@ -116,34 +113,22 @@ npm install --prefix src/Platform.Engineering.Copilot.Admin.Client/ClientApp
 
 ### Step 2: Database Setup
 
-**SQLite (Default - Zero Configuration)**
+**Azure Cosmos DB Emulator (Default - Local Dev)**
 
 ```bash
-# Install EF Core tools
-dotnet tool update --global dotnet-ef
-
-# Run migrations
-cd src/Platform.Engineering.Copilot.Data
-dotnet ef database update
-cd ../..
+# Start the Cosmos DB Emulator via docker-compose
+docker compose up cosmosdb-emulator -d
 ```
 
-This creates `platform_engineering_copilot_management.db` in the repository root.
+Databases/containers are created automatically on first run via `EnsureCreatedAsync()` — no migration step needed.
 
-**SQL Server (Optional - Team Environments)**
+This uses `https://localhost:8081/` as the endpoint, matching `CosmosDb:Endpoint` in `appsettings.Development.json`.
 
-```bash
-# Start SQL Server via Docker
-docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=YourStrong@Passw0rd" \
-   -p 1433:1433 --name platform-sql -d mcr.microsoft.com/mssql/server:2022-latest
+**Azure Cosmos DB (Production/Shared Environments)**
 
-# Update connection string in appsettings.Development.json
-# Then run migrations
-cd src/Platform.Engineering.Copilot.Data
-dotnet ef database update \
-  --connection "Server=localhost,1433;Database=PlatformCopilot;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true"
-cd ../..
-```
+Set `CosmosDb:Endpoint`, `CosmosDb:Key`, and `CosmosDb:DatabaseName` in `appsettings.Development.json` (or environment variables) to point at a real Azure Cosmos DB account instead of the emulator.
+
+This creates the `PlatformEngineeringCopilot` and `PlatformEngineeringCopilotChat` databases in the Cosmos DB Emulator (or configured Cosmos account).
 
 ### Step 3: Azure Authentication
 
@@ -340,19 +325,6 @@ Terminal 4 - Admin Client:
 ```bash
 cd src/Platform.Engineering.Copilot.Admin.Client
 dotnet run  # Port 5003
-```
-
-**Or use the convenience scripts:**
-
-```bash
-# Start MCP only
-./scripts/start-mcp.sh
-
-# Start Chat + MCP
-./scripts/start-chat.sh
-
-# Start everything
-./scripts/start-all.sh
 ```
 
 ---

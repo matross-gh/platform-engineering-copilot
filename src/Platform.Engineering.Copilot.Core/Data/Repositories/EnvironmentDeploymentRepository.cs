@@ -32,12 +32,73 @@ public class EnvironmentDeploymentRepository : IEnvironmentDeploymentRepository
 
     public async Task<EnvironmentDeployment?> GetByIdWithRelatedAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentDeployments
-            .Include(d => d.Template)
-            .Include(d => d.History)
-            .Include(d => d.Metrics)
-            .Include(d => d.ScalingPolicies)
+        // Cosmos containers are independent - the EF Cosmos provider doesn't support
+        // cross-container Include(). Fetch the root document, then fetch each related
+        // container filtered by DeploymentId and assemble in memory instead.
+        var deployment = await _context.EnvironmentDeployments
             .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
+
+        if (deployment == null)
+            return null;
+
+        await PopulateTemplateAsync(deployment, cancellationToken);
+
+        deployment.History = await _context.DeploymentHistory
+            .Where(h => h.DeploymentId == id)
+            .ToListAsync(cancellationToken);
+
+        deployment.Metrics = await _context.EnvironmentMetrics
+            .Where(m => m.DeploymentId == id)
+            .ToListAsync(cancellationToken);
+
+        deployment.ScalingPolicies = await _context.ScalingPolicies
+            .Where(s => s.DeploymentId == id)
+            .ToListAsync(cancellationToken);
+
+        return deployment;
+    }
+
+    /// <summary>
+    /// Populate the (NotMapped) Template navigation property for a single deployment via a
+    /// separate query, since Cosmos doesn't support cross-container Include().
+    /// </summary>
+    private async Task PopulateTemplateAsync(EnvironmentDeployment deployment, CancellationToken cancellationToken)
+    {
+        if (deployment.TemplateId is not Guid templateId)
+            return;
+
+        deployment.Template = await _context.EnvironmentTemplates
+            .FirstOrDefaultAsync(t => t.Id == templateId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Batch-populate the (NotMapped) Template navigation property for a list of deployments
+    /// via a single query, since Cosmos doesn't support cross-container Include().
+    /// </summary>
+    private async Task PopulateTemplatesAsync(IReadOnlyList<EnvironmentDeployment> deployments, CancellationToken cancellationToken)
+    {
+        var templateIds = deployments
+            .Where(d => d.TemplateId.HasValue)
+            .Select(d => d.TemplateId!.Value)
+            .Distinct()
+            .ToList();
+
+        if (templateIds.Count == 0)
+            return;
+
+        var templates = await _context.EnvironmentTemplates
+            .Where(t => templateIds.Contains(t.Id))
+            .ToListAsync(cancellationToken);
+
+        var templatesById = templates.ToDictionary(t => t.Id);
+
+        foreach (var deployment in deployments)
+        {
+            if (deployment.TemplateId is Guid templateId && templatesById.TryGetValue(templateId, out var template))
+            {
+                deployment.Template = template;
+            }
+        }
     }
 
     public async Task<EnvironmentDeployment?> GetByNameAndResourceGroupAsync(string name, string resourceGroup, CancellationToken cancellationToken = default)
@@ -48,47 +109,52 @@ public class EnvironmentDeploymentRepository : IEnvironmentDeploymentRepository
 
     public async Task<IReadOnlyList<EnvironmentDeployment>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentDeployments
-            .Include(d => d.Template)
+        var deployments = await _context.EnvironmentDeployments
             .Where(d => !d.IsDeleted)
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync(cancellationToken);
+        await PopulateTemplatesAsync(deployments, cancellationToken);
+        return deployments;
     }
 
     public async Task<IReadOnlyList<EnvironmentDeployment>> GetByTypeAsync(string environmentType, CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentDeployments
-            .Include(d => d.Template)
+        var deployments = await _context.EnvironmentDeployments
             .Where(d => d.EnvironmentType == environmentType && !d.IsDeleted)
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync(cancellationToken);
+        await PopulateTemplatesAsync(deployments, cancellationToken);
+        return deployments;
     }
 
     public async Task<IReadOnlyList<EnvironmentDeployment>> GetByResourceGroupAsync(string resourceGroup, CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentDeployments
-            .Include(d => d.Template)
+        var deployments = await _context.EnvironmentDeployments
             .Where(d => d.ResourceGroupName == resourceGroup && !d.IsDeleted)
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync(cancellationToken);
+        await PopulateTemplatesAsync(deployments, cancellationToken);
+        return deployments;
     }
 
     public async Task<IReadOnlyList<EnvironmentDeployment>> GetByStatusAsync(DeploymentStatus status, CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentDeployments
-            .Include(d => d.Template)
+        var deployments = await _context.EnvironmentDeployments
             .Where(d => d.Status == status && !d.IsDeleted)
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync(cancellationToken);
+        await PopulateTemplatesAsync(deployments, cancellationToken);
+        return deployments;
     }
 
     public async Task<IReadOnlyList<EnvironmentDeployment>> GetBySubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentDeployments
-            .Include(d => d.Template)
+        var deployments = await _context.EnvironmentDeployments
             .Where(d => d.SubscriptionId == subscriptionId && !d.IsDeleted)
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync(cancellationToken);
+        await PopulateTemplatesAsync(deployments, cancellationToken);
+        return deployments;
     }
 
     public async Task<IReadOnlyList<EnvironmentDeployment>> GetWithActivePollingAsync(CancellationToken cancellationToken = default)
@@ -107,7 +173,6 @@ public class EnvironmentDeploymentRepository : IEnvironmentDeploymentRepository
         CancellationToken cancellationToken = default)
     {
         var query = _context.EnvironmentDeployments
-            .Include(d => d.Template)
             .Where(d => !d.IsDeleted);
 
         if (!string.IsNullOrEmpty(environmentType))
@@ -130,9 +195,11 @@ public class EnvironmentDeploymentRepository : IEnvironmentDeploymentRepository
             query = query.Where(d => d.SubscriptionId == subscriptionId);
         }
 
-        return await query
+        var deployments = await query
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync(cancellationToken);
+        await PopulateTemplatesAsync(deployments, cancellationToken);
+        return deployments;
     }
 
     public async Task<bool> ExistsAsync(string name, string resourceGroup, CancellationToken cancellationToken = default)
@@ -255,28 +322,29 @@ public class EnvironmentDeploymentRepository : IEnvironmentDeploymentRepository
     public async Task<bool> HardDeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var deployment = await _context.EnvironmentDeployments
-            .Include(d => d.History)
-            .Include(d => d.Metrics)
-            .Include(d => d.ScalingPolicies)
             .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
 
         if (deployment == null)
             return false;
 
-        // Delete related entities first
-        if (deployment.History.Any())
+        // Cosmos has no cross-container cascade delete - each related container must be
+        // cleaned up manually (was previously done via .Include() + RemoveRange()).
+        var history = await _context.DeploymentHistory.Where(h => h.DeploymentId == id).ToListAsync(cancellationToken);
+        if (history.Count > 0)
         {
-            _context.DeploymentHistory.RemoveRange(deployment.History);
+            _context.DeploymentHistory.RemoveRange(history);
         }
 
-        if (deployment.Metrics.Any())
+        var metrics = await _context.EnvironmentMetrics.Where(m => m.DeploymentId == id).ToListAsync(cancellationToken);
+        if (metrics.Count > 0)
         {
-            _context.EnvironmentMetrics.RemoveRange(deployment.Metrics);
+            _context.EnvironmentMetrics.RemoveRange(metrics);
         }
 
-        if (deployment.ScalingPolicies.Any())
+        var scalingPolicies = await _context.ScalingPolicies.Where(s => s.DeploymentId == id).ToListAsync(cancellationToken);
+        if (scalingPolicies.Count > 0)
         {
-            _context.ScalingPolicies.RemoveRange(deployment.ScalingPolicies);
+            _context.ScalingPolicies.RemoveRange(scalingPolicies);
         }
 
         _context.EnvironmentDeployments.Remove(deployment);
@@ -378,30 +446,23 @@ public class EnvironmentDeploymentRepository : IEnvironmentDeploymentRepository
 
     public async Task<Dictionary<string, MetricsSummary>> GetMetricsSummaryAsync(Guid deploymentId, CancellationToken cancellationToken = default)
     {
+        // The Cosmos EF provider has limited/unreliable translation support for GroupBy
+        // combined with multiple aggregate projections (Average/Min/Max) in a single query.
+        // Materialize the (already deployment-scoped) metrics and aggregate client-side instead.
         var metrics = await _context.EnvironmentMetrics
             .Where(m => m.DeploymentId == deploymentId)
-            .GroupBy(m => m.MetricType)
-            .Select(g => new
-            {
-                MetricType = g.Key,
-                Count = g.Count(),
-                AvgValue = g.Average(m => m.Value),
-                MinValue = g.Min(m => m.Value),
-                MaxValue = g.Max(m => m.Value),
-                LastTimestamp = g.Max(m => m.Timestamp)
-            })
             .ToListAsync(cancellationToken);
 
         var summary = new Dictionary<string, MetricsSummary>();
-        foreach (var metric in metrics)
+        foreach (var group in metrics.GroupBy(m => m.MetricType))
         {
-            summary[metric.MetricType] = new MetricsSummary
+            summary[group.Key] = new MetricsSummary
             {
-                Count = metric.Count,
-                AvgValue = metric.AvgValue,
-                MinValue = metric.MinValue,
-                MaxValue = metric.MaxValue,
-                LastTimestamp = metric.LastTimestamp
+                Count = group.Count(),
+                AvgValue = group.Average(m => m.Value),
+                MinValue = group.Min(m => m.Value),
+                MaxValue = group.Max(m => m.Value),
+                LastTimestamp = group.Max(m => m.Timestamp)
             };
         }
 

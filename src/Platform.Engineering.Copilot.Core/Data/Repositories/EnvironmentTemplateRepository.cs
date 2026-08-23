@@ -25,25 +25,74 @@ public class EnvironmentTemplateRepository : IEnvironmentTemplateRepository
 
     public async Task<EnvironmentTemplate?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentTemplates
-            .Include(t => t.Files)
-            .Include(t => t.Versions)
+        var template = await _context.EnvironmentTemplates
             .FirstOrDefaultAsync(t => t.Id == id && t.IsActive, cancellationToken);
+
+        if (template != null)
+        {
+            await PopulateFilesAndVersionsAsync(template, cancellationToken);
+        }
+
+        return template;
+    }
+
+    /// <summary>
+    /// Populate the (NotMapped) Files/Versions navigation collections via separate queries,
+    /// since Cosmos doesn't support cross-container Include().
+    /// </summary>
+    private async Task PopulateFilesAndVersionsAsync(EnvironmentTemplate template, CancellationToken cancellationToken)
+    {
+        template.Files = await _context.TemplateFiles.Where(f => f.TemplateId == template.Id).ToListAsync(cancellationToken);
+        template.Versions = await _context.TemplateVersions.Where(v => v.TemplateId == template.Id).ToListAsync(cancellationToken);
+    }
+
+    private async Task PopulateFilesAsync(EnvironmentTemplate template, CancellationToken cancellationToken)
+    {
+        template.Files = await _context.TemplateFiles.Where(f => f.TemplateId == template.Id).ToListAsync(cancellationToken);
+    }
+
+    private async Task PopulateFilesAsync(IReadOnlyList<EnvironmentTemplate> templates, CancellationToken cancellationToken)
+    {
+        var ids = templates.Select(t => t.Id).ToList();
+        if (ids.Count == 0)
+            return;
+
+        var files = await _context.TemplateFiles.Where(f => ids.Contains(f.TemplateId)).ToListAsync(cancellationToken);
+        var byTemplate = files.GroupBy(f => f.TemplateId).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var template in templates)
+        {
+            if (byTemplate.TryGetValue(template.Id, out var templateFiles))
+            {
+                template.Files = templateFiles;
+            }
+        }
     }
 
     public async Task<EnvironmentTemplate?> GetByIdWithFilesAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentTemplates
-            .Include(t => t.Files)
+        var template = await _context.EnvironmentTemplates
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+
+        if (template != null)
+        {
+            await PopulateFilesAsync(template, cancellationToken);
+        }
+
+        return template;
     }
 
     public async Task<EnvironmentTemplate?> GetActiveByNameAsync(string name, CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentTemplates
-            .Include(t => t.Files)
-            .Include(t => t.Versions)
+        var template = await _context.EnvironmentTemplates
             .FirstOrDefaultAsync(t => t.Name == name && t.IsActive, cancellationToken);
+
+        if (template != null)
+        {
+            await PopulateFilesAndVersionsAsync(template, cancellationToken);
+        }
+
+        return template;
     }
 
     public Task<EnvironmentTemplate?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
@@ -54,20 +103,28 @@ public class EnvironmentTemplateRepository : IEnvironmentTemplateRepository
 
     public async Task<EnvironmentTemplate?> GetLatestAsync(CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentTemplates
-            .Include(t => t.Files)
+        var template = await _context.EnvironmentTemplates
             .Where(t => t.IsActive)
             .OrderByDescending(t => t.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (template != null)
+        {
+            await PopulateFilesAsync(template, cancellationToken);
+        }
+
+        return template;
     }
 
     public async Task<IReadOnlyList<EnvironmentTemplate>> GetByConversationIdAsync(string conversationId, CancellationToken cancellationToken = default)
     {
-        return await _context.EnvironmentTemplates
-            .Include(t => t.Files)
+        var templates = await _context.EnvironmentTemplates
             .Where(t => t.IsActive && t.Tags != null && t.Tags.Contains(conversationId))
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync(cancellationToken);
+
+        await PopulateFilesAsync(templates, cancellationToken);
+        return templates;
     }
 
     public async Task<IReadOnlyList<EnvironmentTemplate>> GetAllActiveAsync(CancellationToken cancellationToken = default)
@@ -210,37 +267,37 @@ public class EnvironmentTemplateRepository : IEnvironmentTemplateRepository
     public async Task<bool> HardDeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var template = await _context.EnvironmentTemplates
-            .Include(t => t.Files)
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
-            
+
         if (template == null)
             return false;
 
-        // Delete associated files first
-        if (template.Files.Any())
+        var files = await _context.TemplateFiles.Where(f => f.TemplateId == id).ToListAsync(cancellationToken);
+        if (files.Count > 0)
         {
-            _context.TemplateFiles.RemoveRange(template.Files);
+            _context.TemplateFiles.RemoveRange(files);
         }
 
         _context.EnvironmentTemplates.Remove(template);
         await _context.SaveChangesAsync(cancellationToken);
 
-        _logger.LogDebug("Hard deleted EnvironmentTemplate {TemplateId} with {FileCount} files", id, template.Files.Count);
+        _logger.LogDebug("Hard deleted EnvironmentTemplate {TemplateId} with {FileCount} files", id, files.Count);
         return true;
     }
 
     public async Task<int> HardDeleteRangeAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
     {
+        var idList = ids.ToList();
         var templates = await _context.EnvironmentTemplates
-            .Include(t => t.Files)
-            .Where(t => ids.Contains(t.Id))
+            .Where(t => idList.Contains(t.Id))
             .ToListAsync(cancellationToken);
 
         if (!templates.Any())
             return 0;
 
-        // Delete all associated files
-        var allFiles = templates.SelectMany(t => t.Files).ToList();
+        var allFiles = await _context.TemplateFiles
+            .Where(f => idList.Contains(f.TemplateId))
+            .ToListAsync(cancellationToken);
         if (allFiles.Any())
         {
             _context.TemplateFiles.RemoveRange(allFiles);
@@ -367,17 +424,18 @@ public class EnvironmentTemplateRepository : IEnvironmentTemplateRepository
     public async Task<IReadOnlyList<EnvironmentTemplate>> GetExpiredTemplatesAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
-        return await _context.EnvironmentTemplates
-            .Include(t => t.Files)
+        var templates = await _context.EnvironmentTemplates
             .Where(t => t.ExpiresAt != null && t.ExpiresAt < now)
             .ToListAsync(cancellationToken);
+
+        await PopulateFilesAsync(templates, cancellationToken);
+        return templates;
     }
 
     public async Task<int> DeleteExpiredTemplatesAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         var expiredTemplates = await _context.EnvironmentTemplates
-            .Include(t => t.Files)
             .Where(t => t.ExpiresAt != null && t.ExpiresAt < now)
             .ToListAsync(cancellationToken);
 
@@ -395,7 +453,9 @@ public class EnvironmentTemplateRepository : IEnvironmentTemplateRepository
         }
 
         // Delete all associated files
-        var allFiles = expiredTemplates.SelectMany(t => t.Files).ToList();
+        var allFiles = await _context.TemplateFiles
+            .Where(f => templateIds.Contains(f.TemplateId))
+            .ToListAsync(cancellationToken);
         if (allFiles.Any())
         {
             _context.TemplateFiles.RemoveRange(allFiles);

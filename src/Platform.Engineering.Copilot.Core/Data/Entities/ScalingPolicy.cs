@@ -53,10 +53,11 @@ public class ScalingPolicy
     
     public bool IsActive { get; set; } = true;
     
-    // Navigation properties
-    [ForeignKey("DeploymentId")]
+    // Navigation properties - NOT mapped by EF (see note in EnvironmentDeployment.cs).
+    [NotMapped]
     public virtual EnvironmentDeployment Deployment { get; set; } = null!;
-    
+
+    [NotMapped]
     public virtual ICollection<ScalingEvent> ScalingEvents { get; set; } = new List<ScalingEvent>();
 }
 
@@ -96,7 +97,7 @@ public class ScalingEvent
     
     public TimeSpan? Duration { get; set; }
     
-    // Navigation properties
-    [ForeignKey("PolicyId")]
+    // Navigation property - NOT mapped by EF (see note in EnvironmentDeployment.cs).
+    [NotMapped]
     public virtual ScalingPolicy Policy { get; set; } = null!;
 }

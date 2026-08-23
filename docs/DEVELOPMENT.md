@@ -86,8 +86,8 @@ graph TB
 - **Technology**: Entity Framework Core 9.0
 - **Responsibilities**:
   - Hosts the consolidated `PlatformEngineeringCopilotContext` for templates, deployments, approvals, and analytics
-  - Provides migrations, seed scripts, and data access services consumed by MCP, Chat, and Admin workloads
-  - Ships with SQLite by default and can switch to SQL Server for shared environments
+  - Provides seed data and data access services consumed by MCP, Chat, and Admin workloads
+  - Uses Azure Cosmos DB (EF Core Cosmos provider) as the persistence store; local dev uses the Cosmos DB Emulator via docker-compose
 
 #### Test Projects (`Platform.Engineering.Copilot.Tests.*`)
 - **Technology**: xUnit, FluentAssertions, AutoFixture
@@ -120,8 +120,7 @@ graph TB
 - **Context Memory Providers** for session persistence across HTTP and stdio modes
 
 #### Data & Messaging
-- **SQLite** (default development store for environment management + chat transcripts)
-- **SQL Server 2022** (optional shared database for team environments)
+- **Azure Cosmos DB** (persistence store for environment management + chat transcripts; local dev via the Cosmos DB Emulator)
 - **Redis** (distributed cache for chat sessions and rate limiting; dev environments point at the Azure Cache for Redis instance provisioned by `deployment/infrastructure`, no local Docker Redis)
 - **Azure Key Vault** for secrets and API keys
 
@@ -142,7 +141,7 @@ graph TB
 - **.NET 9.0 SDK**
 - **VS Code (C# Dev Kit)** or **Visual Studio 2022 17.11+**
 - **Node.js 18 LTS**
-- **SQL Server 2022** or Docker Desktop *(optional; SQLite is default)*
+- **Docker Desktop** *(required to run the Cosmos DB Emulator locally)*
 - **Azure CLI** *(optional but recommended)*
 - **Docker Desktop**
 - **Git**
@@ -164,39 +163,30 @@ npm install --prefix src/Platform.Engineering.Copilot.Admin.Client/ClientApp
 
 ### 2. Database Setup
 
-#### Environment Management Database (default: SQLite)
+#### Database Setup (Azure Cosmos DB)
+
+Run the Cosmos DB Emulator locally via docker-compose:
 
 ```bash
-dotnet tool update --global dotnet-ef
-dotnet ef database update \
-  --project src/Platform.Engineering.Copilot.Data/Platform.Engineering.Copilot.Data.csproj
+docker compose up cosmosdb-emulator -d
 ```
 
-This creates `platform_engineering_copilot_management.db` at the repository root. Use `ConnectionStrings:DefaultConnection` in `appsettings.json` to change the location.
+Set the following in `appsettings.Development.json` (or environment variables) to point at the emulator:
 
-#### Switch to SQL Server
-
-```bash
-dotnet ef database update \
-  --project src/Platform.Engineering.Copilot.Data/Platform.Engineering.Copilot.Data.csproj \
-  --connection "Server=localhost,1433;Database=PlatformCopilot;User Id=sa;Password=YourStrongPassword!;TrustServerCertificate=true"
+```json
+{
+  "CosmosDb": {
+    "Endpoint": "https://localhost:8081/",
+    "Key": "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
+    "DatabaseName": "PlatformEngineeringCopilot",
+    "ChatDatabaseName": "PlatformEngineeringCopilotChat"
+  }
+}
 ```
 
-Set `DatabaseProvider` to `SqlServer` in the relevant configuration file to make SQL Server the default provider.
+Databases and containers are created automatically on first run via `EnsureCreatedAsync()` — no separate migration step is needed (the EF Core Cosmos provider does not support `dotnet ef database update`).
 
-#### Chat Transcript Store
-
-`Platform.Engineering.Copilot.Chat` uses SQLite (`chat.db`) and calls `EnsureCreated()` on startup. Override `ConnectionStrings:DefaultConnection` in `src/Platform.Engineering.Copilot.Chat/appsettings.Development.json` if you want SQL Server instead.
-
-#### SQL Server via Docker
-
-```bash
-docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=YourStrong@Passw0rd" \
-   -p 1433:1433 --name platform-engineering-sql \
-   -d mcr.microsoft.com/mssql/server:2022-latest
-```
-
-Update `ConnectionStrings:SqlServerConnection` to `Server=localhost,1433` and rerun migrations.
+For production, point `CosmosDb:Endpoint` / `CosmosDb:Key` at a real Azure Cosmos DB account instead of the emulator.
 
 ### 3. Azure Setup (Optional)
 
@@ -220,9 +210,9 @@ dotnet build src/Platform.Engineering.Copilot.Admin.API/Platform.Engineering.Cop
 dotnet build src/Platform.Engineering.Copilot.Admin.Client/Platform.Engineering.Copilot.Admin.Client.csproj --configuration Release
 ```json
 {
-  "ConnectionStrings": {
-    "DefaultConnection": "Data Source=/path/to/platform_engineering_copilot_management.db",
-    "SqlServerConnection": "Server=localhost,1433;Database=PlatformCopilot;User Id=sa;Password=YourStrongPassword!;TrustServerCertificate=true"
+  "CosmosDb": {
+    "Endpoint": "https://localhost:8081/",
+    "Key": "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
 dotnet build Platform.Engineering.Copilot.sln --configuration Release --no-restore
 
 dotnet publish src/Platform.Engineering.Copilot.Mcp/Platform.Engineering.Copilot.Mcp.csproj \

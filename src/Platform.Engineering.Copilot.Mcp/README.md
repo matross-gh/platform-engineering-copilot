@@ -206,7 +206,7 @@ services:
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
     depends_on:
-      - sqlserver
+      - cosmosdb-emulator
 ```
 
 ## Troubleshooting

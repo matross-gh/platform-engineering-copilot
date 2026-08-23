@@ -52,7 +52,9 @@ public class ComplianceAssessment
     public DateTime? CompletedAt { get; set; }
     public long? Duration { get; set; } // Duration in ticks (maps to BIGINT)
     
-    // Navigation properties
+    // Navigation property - NOT mapped by EF (Cosmos containers are independent;
+    // repositories populate this manually via a separate query, replacing .Include()).
+    [NotMapped]
     public virtual ICollection<ComplianceFinding> Findings { get; set; } = new List<ComplianceFinding>();
 }
 
@@ -120,7 +122,7 @@ public class ComplianceFinding
     public DateTime DetectedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ResolvedAt { get; set; }
     
-    // Navigation properties
-    [ForeignKey("AssessmentId")]
+    // Navigation property - NOT mapped by EF (see note above).
+    [NotMapped]
     public virtual ComplianceAssessment Assessment { get; set; } = null!;
 }

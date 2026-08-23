@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="25cb6c87-0592-4a02-891d-8c5471d6ee86" name="matross@DESKTOP-0281S4D 2026-08-21 09:21:48" runUser="NORTHAMERICA\matross" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-21T09:21:48.2133950-05:00" queuing="2026-08-21T09:21:48.2133956-05:00" start="2026-08-21T09:21:46.9668317-05:00" finish="2026-08-21T09:21:48.2207481-05:00" />
+  <TestSettings name="default" id="4ee81b14-ae4e-470c-9035-c4364c6629f7">
+    <Deployment runDeploymentRoot="matross_DESKTOP-0281S4D_2026-08-21_09_21_48" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="83a80c92-1eb3-47e6-8e8a-1c32f1d6db00" testId="64ff2f2e-4804-5e14-2ebc-79b5710e1300" testName="Platform.Engineering.Copilot.Mcp.Tests.Models.McpChatResponseTests.Defaults_AreEmptyAndUnsuccessful" computerName="DESKTOP-0281S4D" duration="00:00:00.0150125" startTime="2026-08-21T09:21:48.0786531-05:00" endTime="2026-08-21T09:21:48.0787142-05:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="83a80c92-1eb3-47e6-8e8a-1c32f1d6db00" />
+    <UnitTestResult executionId="3729ef99-7ca8-48e0-98ed-abb81156d190" testId="338e6ce3-5166-10c5-11e2-d9003e622d54" testName="Platform.Engineering.Copilot.Mcp.Tests.Models.McpChatResponseTests.CanRepresentASuccessfulResponse" computerName="DESKTOP-0281S4D" duration="00:00:00.0032203" startTime="2026-08-21T09:21:48.0840591-05:00" endTime="2026-08-21T09:21:48.0840591-05:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3729ef99-7ca8-48e0-98ed-abb81156d190" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Platform.Engineering.Copilot.Mcp.Tests.Models.McpChatResponseTests.CanRepresentASuccessfulResponse" storage="c:\projects\platform-engineering-copilot\tests\platform.engineering.copilot.mcp.tests\bin\debug\net10.0\platform.engineering.copilot.mcp.tests.dll" id="338e6ce3-5166-10c5-11e2-d9003e622d54">
+      <Execution id="3729ef99-7ca8-48e0-98ed-abb81156d190" />
+      <TestMethod codeBase="C:\projects\platform-engineering-copilot\tests\Platform.Engineering.Copilot.Mcp.Tests\bin\Debug\net10.0\Platform.Engineering.Copilot.Mcp.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="Platform.Engineering.Copilot.Mcp.Tests.Models.McpChatResponseTests" name="CanRepresentASuccessfulResponse" />
+    </UnitTest>
+    <UnitTest name="Platform.Engineering.Copilot.Mcp.Tests.Models.McpChatResponseTests.Defaults_AreEmptyAndUnsuccessful" storage="c:\projects\platform-engineering-copilot\tests\platform.engineering.copilot.mcp.tests\bin\debug\net10.0\platform.engineering.copilot.mcp.tests.dll" id="64ff2f2e-4804-5e14-2ebc-79b5710e1300">
+      <Execution id="83a80c92-1eb3-47e6-8e8a-1c32f1d6db00" />
+      <TestMethod codeBase="C:\projects\platform-engineering-copilot\tests\Platform.Engineering.Copilot.Mcp.Tests\bin\Debug\net10.0\Platform.Engineering.Copilot.Mcp.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="Platform.Engineering.Copilot.Mcp.Tests.Models.McpChatResponseTests" name="Defaults_AreEmptyAndUnsuccessful" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="64ff2f2e-4804-5e14-2ebc-79b5710e1300" executionId="83a80c92-1eb3-47e6-8e8a-1c32f1d6db00" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="338e6ce3-5166-10c5-11e2-d9003e622d54" executionId="3729ef99-7ca8-48e0-98ed-abb81156d190" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="2" executed="2" passed="2" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 10.0.11)&#xD;
+[xUnit.net 00:00:00.09]   Discovering: Platform.Engineering.Copilot.Mcp.Tests&#xD;
+[xUnit.net 00:00:00.13]   Discovered:  Platform.Engineering.Copilot.Mcp.Tests&#xD;
+[xUnit.net 00:00:00.13]   Starting:    Platform.Engineering.Copilot.Mcp.Tests&#xD;
+[xUnit.net 00:00:00.21]   Finished:    Platform.Engineering.Copilot.Mcp.Tests&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

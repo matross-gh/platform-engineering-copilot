@@ -57,11 +57,15 @@ public class EnvironmentLifecycle
     [StringLength(100)]
     public string CreatedBy { get; set; } = string.Empty;
 
-    // Navigation properties
-    [ForeignKey("EnvironmentId")]
+    // Navigation properties - NOT mapped by EF (Cosmos containers are independent;
+    // repositories populate these manually via separate queries, replacing .Include()).
+    [NotMapped]
     public virtual EnvironmentDeployment Environment { get; set; } = null!;
 
+    [NotMapped]
     public virtual ICollection<EnvironmentActivity> Activities { get; set; } = new List<EnvironmentActivity>();
+
+    [NotMapped]
     public virtual ICollection<EnvironmentCostTracking> CostTrackings { get; set; } = new List<EnvironmentCostTracking>();
 }
 
@@ -100,8 +104,8 @@ public class EnvironmentActivity
 
     public string? ErrorMessage { get; set; }
 
-    // Navigation properties
-    [ForeignKey("EnvironmentLifecycleId")]
+    // Navigation property - NOT mapped by EF (see note above).
+    [NotMapped]
     public virtual EnvironmentLifecycle EnvironmentLifecycle { get; set; } = null!;
 }
 
@@ -141,8 +145,8 @@ public class EnvironmentCostTracking
 
     public DateTime CreatedAt { get; set; }
 
-    // Navigation properties
-    [ForeignKey("EnvironmentLifecycleId")]
+    // Navigation property - NOT mapped by EF (see note above).
+    [NotMapped]
     public virtual EnvironmentLifecycle EnvironmentLifecycle { get; set; } = null!;
 }
 
@@ -187,11 +191,11 @@ public class EnvironmentClone
 
     public int Progress { get; set; } = 0; // 0-100 percentage
 
-    // Navigation properties
-    [ForeignKey("SourceEnvironmentId")]
+    // Navigation properties - NOT mapped by EF (see note above).
+    [NotMapped]
     public virtual EnvironmentDeployment SourceEnvironment { get; set; } = null!;
 
-    [ForeignKey("TargetEnvironmentId")]
+    [NotMapped]
     public virtual EnvironmentDeployment TargetEnvironment { get; set; } = null!;
 }
 
@@ -238,10 +242,11 @@ public class EnvironmentSynchronization
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
-    // Navigation properties
-    [ForeignKey("SourceEnvironmentId")]
+    // Navigation properties - NOT mapped by EF (Cosmos containers are independent;
+    // repositories populate these manually via separate queries, replacing .Include()).
+    [NotMapped]
     public virtual EnvironmentDeployment SourceEnvironment { get; set; } = null!;
 
-    [ForeignKey("TargetEnvironmentId")]
+    [NotMapped]
     public virtual EnvironmentDeployment TargetEnvironment { get; set; } = null!;
 }

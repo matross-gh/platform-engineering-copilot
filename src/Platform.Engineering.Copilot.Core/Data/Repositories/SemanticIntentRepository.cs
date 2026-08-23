@@ -39,9 +39,19 @@ public class SemanticIntentRepository : ISemanticIntentRepository
 
     public async Task<SemanticIntent?> GetIntentByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await _context.SemanticIntents
-            .Include(i => i.Feedback)
+        var intent = await _context.SemanticIntents
             .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+
+        if (intent != null)
+        {
+            // Cosmos containers are independent - populate the (NotMapped) Feedback
+            // collection via a separate query instead of Include().
+            intent.Feedback = await _context.IntentFeedback
+                .Where(f => f.IntentId == id)
+                .ToListAsync(cancellationToken);
+        }
+
+        return intent;
     }
 
     public async Task<IReadOnlyList<SemanticIntent>> GetIntentsByUserAsync(string userId, int? limit = null, CancellationToken cancellationToken = default)
@@ -271,10 +281,13 @@ public class SemanticIntentRepository : ISemanticIntentRepository
         if (toDate.HasValue)
             query = query.Where(i => i.CreatedAt <= toDate.Value);
 
-        return await query
+        // Cosmos EF provider has limited support for GroupBy + aggregate projections in a
+        // single query - materialize the (already date-filtered) intents and group client-side.
+        var intents = await query.ToListAsync(cancellationToken);
+
+        return intents
             .GroupBy(i => i.IntentCategory)
-            .Select(g => new { Category = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.Category, x => x.Count, cancellationToken);
+            .ToDictionary(g => g.Key, g => g.Count());
     }
 
     public async Task<Dictionary<string, decimal>> GetSuccessRatesByCategoryAsync(DateTime? fromDate = null, DateTime? toDate = null, CancellationToken cancellationToken = default)
@@ -287,15 +300,17 @@ public class SemanticIntentRepository : ISemanticIntentRepository
         if (toDate.HasValue)
             query = query.Where(i => i.CreatedAt <= toDate.Value);
 
-        var grouped = await query
+        var intents = await query.ToListAsync(cancellationToken);
+
+        var grouped = intents
             .GroupBy(i => i.IntentCategory)
-            .Select(g => new 
-            { 
-                Category = g.Key, 
+            .Select(g => new
+            {
+                Category = g.Key,
                 Total = g.Count(),
                 Successful = g.Count(i => i.WasSuccessful)
             })
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         return grouped.ToDictionary(
             x => x.Category, 

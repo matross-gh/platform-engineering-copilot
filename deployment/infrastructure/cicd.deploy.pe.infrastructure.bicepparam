@@ -83,21 +83,19 @@ param pStorageAccountBlobPrivateIpAddress = 'TODO-ppsm-static-ip-storage-blob'
 
 param pStorageAccountDfsPrivateIpAddress = 'TODO-ppsm-static-ip-storage-dfs'
 
-param pSqlServerName = 'sql-pec-dev'
+param pCosmosAccountName = 'cosmos-pec-dev'
 
-param pSqlAdminLogin = 'TODO-sql-admin-login'
+param pCosmosPrivateIpAddress = 'TODO-ppsm-static-ip-cosmos'
 
-param pSqlAdminLoginPassword = 'TODO-sql-admin-password-use-keyvault-reference'
+param pCosmosPlatformDatabaseName = 'PlatformEngineeringCopilot'
 
-param pSqlAzureADOnlyAuthentication = true
+param pCosmosChatDatabaseName = 'PlatformEngineeringCopilotChat'
 
-param pSqlAzureADAdminObjectId = 'TODO-object-id-of-sql-aad-admin'
+param pCosmosDatabaseThroughputMode = 'Autoscale'
 
-param pSqlAzureADAdminLogin = 'TODO-login-name-of-sql-aad-admin'
+param pCosmosDatabaseAutoscaleMaxThroughput = 1000
 
-param pSqlAzureADAdminPrincipalType = 'User'
-
-param pSqlPrivateIpAddress = 'TODO-ppsm-static-ip-sql'
+param pCosmosDataAccessIdentityPrincipalId = 'TODO-principal-id-of-workload-identity-for-cosmos-data-access'
 
 param pAcrName = 'acrpecdev'
 

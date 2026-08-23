@@ -85,44 +85,25 @@ else
     Log.Warning("⚠️  APPLICATIONINSIGHTS_CONNECTION_STRING not set. No telemetry will be sent to Application Insights.");
 }
 
-// Add Entity Framework - Chat DB
-// Support both SQL Server (Docker) and SQLite (local dev)
-var chatConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (!string.IsNullOrEmpty(chatConnectionString) && chatConnectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase))
-{
-    // SQL Server (Docker environment)
-    Console.WriteLine("[Chat] Using SQL Server for Chat database");
-    builder.Services.AddDbContext<ChatDbContext>(options =>
-        options.UseSqlServer(chatConnectionString));
-}
-else
-{
-    // SQLite (local development)
-    var sqliteConnection = chatConnectionString ?? "Data Source=chat.db";
-    Console.WriteLine($"[Chat] Using SQLite for Chat database: {sqliteConnection}");
-    builder.Services.AddDbContext<ChatDbContext>(options =>
-        options.UseSqlite(sqliteConnection));
-}
+// Add Entity Framework - Chat DB (Cosmos DB)
+var chatCosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"]
+    ?? builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Cosmos DB endpoint not found. Set 'CosmosDb:Endpoint' or connection string 'DefaultConnection'.");
+var chatCosmosKey = builder.Configuration["CosmosDb:Key"] ?? string.Empty;
+var chatCosmosDatabaseName = builder.Configuration["CosmosDb:ChatDatabaseName"] ?? builder.Configuration["CosmosDb:DatabaseName"] ?? "PlatformEngineeringCopilotChat";
+Console.WriteLine($"[Chat] Using Cosmos DB for Chat database: {chatCosmosEndpoint}");
+builder.Services.AddDbContext<ChatDbContext>(options =>
+    options.UseCosmos(chatCosmosEndpoint, chatCosmosKey, chatCosmosDatabaseName));
 
-// Add Entity Framework - Platform Management DB (required by agents)
-// Use SQL Server in Docker, SQLite locally
-var platformConnectionString = builder.Configuration.GetConnectionString("SqlServerConnection");
-if (!string.IsNullOrEmpty(platformConnectionString) && platformConnectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase))
-{
-    // SQL Server (Docker environment)
-    Console.WriteLine("[Chat] Using SQL Server for Platform database");
-    builder.Services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
-        options.UseSqlServer(platformConnectionString));
-}
-else
-{
-    // SQLite (local development)
-    var sharedDbPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../..", "platform_engineering_copilot_management.db"));
-    var sqliteConnectionString = $"Data Source={sharedDbPath}";
-    Console.WriteLine($"[Chat] Using SQLite for Platform database: {sharedDbPath}");
-    builder.Services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
-        options.UseSqlite(sqliteConnectionString));
-}
+// Add Entity Framework - Platform Management DB (required by agents) (Cosmos DB)
+var platformCosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"]
+    ?? builder.Configuration.GetConnectionString("SqlServerConnection")
+    ?? throw new InvalidOperationException("Cosmos DB endpoint not found. Set 'CosmosDb:Endpoint' or connection string 'SqlServerConnection'.");
+var platformCosmosKey = builder.Configuration["CosmosDb:Key"] ?? string.Empty;
+var platformCosmosDatabaseName = builder.Configuration["CosmosDb:DatabaseName"] ?? "PlatformEngineeringCopilot";
+Console.WriteLine($"[Chat] Using Cosmos DB for Platform database: {platformCosmosEndpoint}");
+builder.Services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
+    options.UseCosmos(platformCosmosEndpoint, platformCosmosKey, platformCosmosDatabaseName));
 
 // Add HttpClient for API integration
 builder.Services.AddHttpClient();

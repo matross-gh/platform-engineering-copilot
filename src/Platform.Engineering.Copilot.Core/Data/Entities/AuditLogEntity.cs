@@ -9,12 +9,6 @@ namespace Platform.Engineering.Copilot.Core.Data.Entities;
 /// Supports compliance requirements for NIST 800-53 (AU-2, AU-3, AU-9)
 /// </summary>
 [Table("AuditLogs")]
-[Index(nameof(Timestamp), Name = "IX_AuditLogs_Timestamp")]
-[Index(nameof(EventType), Name = "IX_AuditLogs_EventType")]
-[Index(nameof(ActorId), Name = "IX_AuditLogs_ActorId")]
-[Index(nameof(ResourceId), Name = "IX_AuditLogs_ResourceId")]
-[Index(nameof(Severity), Name = "IX_AuditLogs_Severity")]
-[Index(nameof(CorrelationId), Name = "IX_AuditLogs_CorrelationId")]
 public class AuditLogEntity
 {
     /// <summary>

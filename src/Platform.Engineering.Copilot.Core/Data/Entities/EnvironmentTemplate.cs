@@ -99,9 +99,15 @@ public class EnvironmentTemplate
     [NotMapped]
     public TemplateFile? EntryPointFile => Files?.FirstOrDefault(f => f.IsEntryPoint);
     
-    // Navigation properties
+    // Navigation properties - NOT mapped by EF (Cosmos containers are independent;
+    // repositories populate these manually via separate queries, replacing .Include()).
+    [NotMapped]
     public virtual ICollection<EnvironmentDeployment> Deployments { get; set; } = new List<EnvironmentDeployment>();
+
+    [NotMapped]
     public virtual ICollection<TemplateVersion> Versions { get; set; } = new List<TemplateVersion>();
+
+    [NotMapped]
     public virtual ICollection<TemplateFile> Files { get; set; } = new List<TemplateFile>();
 }
 
@@ -134,8 +140,8 @@ public class TemplateVersion
     
     public bool IsDeprecated { get; set; } = false;
     
-    // Navigation properties
-    [ForeignKey("TemplateId")]
+    // Navigation property - NOT mapped by EF (see note above).
+    [NotMapped]
     public virtual EnvironmentTemplate Template { get; set; } = null!;
 }
 
@@ -173,7 +179,7 @@ public class TemplateFile
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     
-    // Navigation properties
-    [ForeignKey("TemplateId")]
+    // Navigation property - NOT mapped by EF (see note above).
+    [NotMapped]
     public virtual EnvironmentTemplate Template { get; set; } = null!;
 }

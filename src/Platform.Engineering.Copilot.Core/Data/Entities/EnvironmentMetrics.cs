@@ -36,7 +36,7 @@ public class EnvironmentMetrics
     
     public string? Labels { get; set; } // JSON key-value pairs for metric labels
     
-    // Navigation properties
-    [ForeignKey("DeploymentId")]
+    // Navigation property - NOT mapped by EF (see note in EnvironmentDeployment.cs).
+    [NotMapped]
     public virtual EnvironmentDeployment Deployment { get; set; } = null!;
 }

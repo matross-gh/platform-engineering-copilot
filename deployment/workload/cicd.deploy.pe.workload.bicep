@@ -45,6 +45,9 @@ param pAcrLoginServer string
 @description('Resource id of a user-assigned managed identity with AcrPull on the registry, used by every container group to pull images.')
 param pAcrPullIdentityResourceId string
 
+@description('Resource id of a user-assigned managed identity granted Cosmos DB Data Contributor on the Cosmos account, attached to every container group for Entra ID/RBAC-based Cosmos data access.')
+param pCosmosDataAccessIdentityResourceId string
+
 @description('Name of the pre-existing Log Analytics workspace (from infrastructure deployment) used for ACI diagnostics.')
 param pLogAnalyticsWorkspaceName string
 
@@ -103,6 +106,9 @@ module containerGroups 'br/enterprisebicepregistry:microsoft.containerinstance/c
     pContainerGroupsTags: pTags
     pContainerGroupsEnableSystemIdentity: false
     pContainerGroupsImageRegistryIdentityResourceId: pAcrPullIdentityResourceId
+    pContainerGroupsUserAssignedIdentities: {
+      '${pCosmosDataAccessIdentityResourceId}': {}
+    }
     pContainerGroupsImageRegistryServer: pAcrLoginServer
     pContainerGroupsSubnetResourceId: pAciSubnetId
     pContainerGroupsIpAddressPorts: [

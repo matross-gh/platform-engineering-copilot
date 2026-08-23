@@ -15,7 +15,7 @@ version: '3.8'
 #   - SimpleChat Frontend (React) - Port 3000
 #   - SimpleChat Backend (Python/Flask) - Port 8080
 #   - Platform MCP Server (C#/.NET) - Port 5100
-#   - SQL Server (MCP Database) - Port 1433
+#   - Cosmos DB Emulator (Platform MCP) - Port 8082
 #   - Cosmos DB Emulator (SimpleChat) - Port 8081
 # =============================================================================
 
@@ -25,8 +25,8 @@ networks:
     name: simplechat-network
 
 volumes:
-  platform-mcp-sqlserver-data:
-    name: platform-mcp-sqlserver-data
+  platform-mcp-cosmosdb-data:
+    name: platform-mcp-cosmosdb-data
   platform-mcp-logs:
     name: platform-mcp-logs
   simplechat-cosmos-data:
@@ -39,29 +39,28 @@ services:
   # Platform Engineering Copilot MCP Server
   # ===========================================================================
   
-  # SQL Server Database for MCP
-  platform-mcp-sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: platform-mcp-sqlserver
-    hostname: platform-mcp-sqlserver
+  # Cosmos DB Emulator for MCP (separate from the SimpleChat Cosmos instance below)
+  platform-mcp-cosmosdb:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    container_name: platform-mcp-cosmosdb
+    hostname: platform-mcp-cosmosdb
     restart: unless-stopped
     environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=${PLATFORM_MCP_SA_PASSWORD:-PlatformMcpDB123!}
-      - MSSQL_PID=Developer
+      - AZURE_COSMOS_EMULATOR_PARTITION_COUNT=10
+      - AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=true
+      - AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE=0.0.0.0
     ports:
-      - "1433:1433"
+      - "8082:8081"
     volumes:
-      - platform-mcp-sqlserver-data:/var/opt/mssql
-      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+      - platform-mcp-cosmosdb-data:/tmp/cosmos/appdata
     networks:
       - simplechat-network
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ${PLATFORM_MCP_SA_PASSWORD:-PlatformMcpDB123!} -C -Q 'SELECT 1' || exit 1"]
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:8081/_explorer/emulator.pem"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 90s
 
   # Platform MCP Server (HTTP Mode for SimpleChat Integration)
   platform-mcp:
@@ -74,7 +73,7 @@ services:
     hostname: platform-mcp
     restart: unless-stopped
     depends_on:
-      platform-mcp-sqlserver:
+      platform-mcp-cosmosdb:
         condition: service_healthy
     environment:
       # ASP.NET Core Configuration
@@ -82,10 +81,10 @@ services:
       - ASPNETCORE_URLS=http://0.0.0.0:5100
       - ASPNETCORE_HTTP_PORTS=5100
       
-      # Database Configuration
-      - ConnectionStrings__DefaultConnection=Server=platform-mcp-sqlserver,1433;Database=PlatformEngineeringCopilotDb;User=sa;Password=${PLATFORM_MCP_SA_PASSWORD:-PlatformMcpDB123!};TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
-      - ConnectionStrings__SqlServerConnection=Server=platform-mcp-sqlserver,1433;Database=PlatformEngineeringCopilotDb;User=sa;Password=${PLATFORM_MCP_SA_PASSWORD:-PlatformMcpDB123!};TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
-      - DatabaseProvider=SqlServer
+      # Database Configuration (Cosmos DB Emulator)
+      - CosmosDb__Endpoint=https://platform-mcp-cosmosdb:8081/
+      - CosmosDb__Key=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
+      - CosmosDb__DatabaseName=PlatformEngineeringCopilot
       
       # Azure SDK Environment Variables (required for DefaultAzureCredential)
       - AZURE_TENANT_ID=${AZURE_TENANT_ID}

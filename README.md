@@ -186,7 +186,7 @@ Detailed agent patterns in `.github/prompts/`:
 | AI Framework | Microsoft Semantic Kernel 1.26+ |
 | MCP | ModelContextProtocol 0.4.0-preview |
 | Azure SDK | Azure.ResourceManager.* |
-| Database | SQLite (default) |
+| Database | Azure Cosmos DB |
 
 ---
 

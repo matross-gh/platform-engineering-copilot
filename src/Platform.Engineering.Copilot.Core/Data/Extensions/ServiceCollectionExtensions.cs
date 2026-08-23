@@ -20,40 +20,16 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration,
         string connectionStringName = "DefaultConnection")
     {
-        // Add Entity Framework DbContext
+        // Add Entity Framework DbContext (Cosmos DB)
         services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
         {
-            var connectionString = configuration.GetConnectionString(connectionStringName);
-            if (string.IsNullOrEmpty(connectionString))
-            {
-                throw new InvalidOperationException($"Connection string '{connectionStringName}' not found.");
-            }
+            var endpoint = configuration["CosmosDb:Endpoint"]
+                ?? configuration.GetConnectionString(connectionStringName)
+                ?? throw new InvalidOperationException("Cosmos DB endpoint not found. Set 'CosmosDb:Endpoint' or connection string '" + connectionStringName + "'.");
+            var key = configuration["CosmosDb:Key"] ?? string.Empty;
+            var databaseName = configuration["CosmosDb:DatabaseName"] ?? "PlatformEngineeringCopilot";
 
-            var databaseProvider = configuration.GetValue<string>("DatabaseProvider") ?? "SqlServer";
-            
-            switch (databaseProvider.ToLower())
-            {
-                case "sqlite":
-                    options.UseSqlite(connectionString, sqliteOptions =>
-                    {
-                        sqliteOptions.MigrationsAssembly("Platform.Engineering.Copilot.Core");
-                    });
-                    break;
-                    
-                case "sqlserver":
-                default:
-                    options.UseSqlServer(connectionString, sqlOptions =>
-                    {
-                        sqlOptions.EnableRetryOnFailure(
-                            maxRetryCount: 3,
-                            maxRetryDelay: TimeSpan.FromSeconds(30),
-                            errorNumbersToAdd: null);
-                        
-                        sqlOptions.CommandTimeout(60);
-                        sqlOptions.MigrationsAssembly("Platform.Engineering.Copilot.Data");
-                    });
-                    break;
-            }
+            options.UseCosmos(endpoint, key, databaseName);
 
             // Enable sensitive data logging in development
             var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");

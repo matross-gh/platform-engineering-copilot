@@ -1,32 +1,31 @@
 # Docker Compose - Essentials Only (MCP Server)
-# This configuration includes only the MCP Server and SQL Server
+# This configuration includes only the MCP Server and Cosmos DB Emulator
 # Use this for minimal deployments or when connecting AI clients via stdio mode
 # New Agent FX Architecture: Core, Agents, State, Channels
 
 services:
-  # SQL Server Database (Azure SQL Edge for ARM64/Apple Silicon compatibility)
-  sqlserver:
-    image: mcr.microsoft.com/azure-sql-edge:latest
-    platform: linux/arm64
-    container_name: plaform-engineering-copilot-sqlserver
-    hostname: sqlserver
+  # Azure Cosmos DB Emulator (local dev; use a real Cosmos account for prod via CosmosDb__Endpoint/Key)
+  cosmosdb-emulator:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    container_name: plaform-engineering-copilot-cosmosdb-emulator
+    hostname: cosmosdb-emulator
     restart: unless-stopped
     environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${SA_PASSWORD:-SupervisorDB123!}
-      - MSSQL_PID=Developer
+      - AZURE_COSMOS_EMULATOR_PARTITION_COUNT=10
+      - AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=true
+      - AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE=0.0.0.0
     ports:
-      - "1433:1433"
+      - "8081:8081"
     volumes:
-      - plaform-engineering-copilot-sqlserver-data:/var/opt/mssql
+      - plaform-engineering-copilot-cosmosdb-data:/tmp/cosmos/appdata
     networks:
       - plaform-engineering-copilot-network
     healthcheck:
-      test: ["CMD-SHELL", "(echo > /dev/tcp/localhost/1433) >/dev/null 2>&1 || exit 1"]
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:8081/_explorer/emulator.pem"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 90s
 
   # MCP Server (Multi-Agent Orchestrator)
   platform-mcp:
@@ -38,12 +37,14 @@ services:
     hostname: platform-mcp
     restart: unless-stopped
     depends_on:
-      sqlserver:
+      cosmosdb-emulator:
         condition: service_healthy
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://0.0.0.0:5100
-      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=McpDb;User=sa;Password=${SA_PASSWORD:-SupervisorDB123!};TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=false
+      - CosmosDb__Endpoint=https://cosmosdb-emulator:8081/
+      - CosmosDb__Key=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
+      - CosmosDb__DatabaseName=Mcp
       
       # Azure AD Authentication (CAC/PIV)
       - AzureAd__Instance=${AZURE_AD_INSTANCE:-https://login.microsoftonline.us/}
@@ -121,7 +122,7 @@ services:
     command: ["dotnet", "Platform.Engineering.Copilot.Mcp.dll", "--http"]
 
 volumes:
-  plaform-engineering-copilot-sqlserver-data:
+  plaform-engineering-copilot-cosmosdb-data:
     driver: local
   plaform-engineering-copilot-logs:
     driver: local

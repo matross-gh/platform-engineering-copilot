@@ -13,6 +13,8 @@ param pAcrLoginServer = 'TODO-paste-acrLoginServer-output-from-infrastructure-de
 
 param pAcrPullIdentityResourceId = 'TODO-resource-id-of-user-assigned-identity-with-acrpull-role'
 
+param pCosmosDataAccessIdentityResourceId = 'TODO-resource-id-of-user-assigned-identity-with-cosmos-data-contributor-role'
+
 param pLogAnalyticsWorkspaceName = 'law-pec-dev'
 
 param pLogAnalyticsResourceGroupName = 'rg-pec-infrastructure-dev'

@@ -66,12 +66,18 @@ public class EnvironmentDeployment
     [Column(TypeName = "decimal(10,2)")]
     public decimal? ActualMonthlyCost { get; set; }
     
-    // Navigation properties
-    [ForeignKey("TemplateId")]
+    // Navigation properties - NOT mapped by EF (Cosmos containers are independent;
+    // repositories populate these manually via separate queries, replacing .Include()).
+    [NotMapped]
     public virtual EnvironmentTemplate? Template { get; set; }
-    
+
+    [NotMapped]
     public virtual ICollection<DeploymentHistory> History { get; set; } = new List<DeploymentHistory>();
+
+    [NotMapped]
     public virtual ICollection<EnvironmentMetrics> Metrics { get; set; } = new List<EnvironmentMetrics>();
+
+    [NotMapped]
     public virtual ICollection<ScalingPolicy> ScalingPolicies { get; set; } = new List<ScalingPolicy>();
 }
 
@@ -107,7 +113,7 @@ public class DeploymentHistory
     
     public TimeSpan? Duration { get; set; }
     
-    // Navigation properties
-    [ForeignKey("DeploymentId")]
+    // Navigation property - NOT mapped by EF (see note above).
+    [NotMapped]
     public virtual EnvironmentDeployment Deployment { get; set; } = null!;
 }

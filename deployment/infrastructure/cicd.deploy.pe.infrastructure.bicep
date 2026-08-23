@@ -9,14 +9,14 @@
  * the virtualnetworks module itself (matches the registry's own convention).
  *
  * Includes: Log Analytics, Application Insights, Virtual Network (+ subnets/NSGs),
- * Key Vault, Storage Account, SQL Server, Container Registry, AKS, Azure Cache for
+ * Key Vault, Storage Account, Azure Cosmos DB, Container Registry, AKS, Azure Cache for
  * Redis, and Microsoft Foundry (AIServices account + project + GPT-5.1 deployment).
  *
  * ASSUMPTIONS (adjust in parameters file as needed):
  * - ACR customer-managed-key encryption is DISABLED (avoids KV-key/ACR identity
  *   bootstrap ordering problem). Flip pAcrEnableEncryption + supply KV key info
  *   if CMK is required.
- * - One shared "private endpoints" subnet is used for KeyVault/Storage/SQL/ACR/
+ * - One shared "private endpoints" subnet is used for KeyVault/Storage/Cosmos/ACR/
  *   Redis/Foundry. AKS gets its own system-pool subnet. A third subnet is
  *   reserved for the workload's ACI container groups (delegated to
  *   Microsoft.ContainerInstance/containerGroups) and exposed as an output so
@@ -126,30 +126,38 @@ param pStorageAccountBlobPrivateIpAddress string
 @description('Static/PPSM private IP address for the storage account DFS private endpoint.')
 param pStorageAccountDfsPrivateIpAddress string
 
-/* --- SQL --- */
-@description('Name of the SQL logical server.')
-param pSqlServerName string
+/* --- Azure Cosmos DB (br/enterprisebicepregistry:microsoft.documentdb/databaseaccounts:1.0.2) --- */
+@description('Name of the Azure Cosmos DB account.')
+param pCosmosAccountName string
 
-@secure()
-param pSqlAdminLogin string
+@description('Static/PPSM private IP address for the Cosmos DB private endpoint.')
+param pCosmosPrivateIpAddress string
 
-@secure()
-param pSqlAdminLoginPassword string
+@description('Name of the Cosmos SQL database used for environment/template/compliance management data.')
+param pCosmosPlatformDatabaseName string = 'PlatformEngineeringCopilot'
 
-@description('Enable Microsoft Entra-only authentication for the SQL server.')
-param pSqlAzureADOnlyAuthentication bool = true
+@description('Name of the Cosmos SQL database used for chat conversation/message data.')
+param pCosmosChatDatabaseName string = 'PlatformEngineeringCopilotChat'
 
-@description('Object id (sid) of the Microsoft Entra admin for SQL.')
-param pSqlAzureADAdminObjectId string
+@allowed([ 'None', 'Manual', 'Autoscale' ])
+@description('''
+Shared throughput mode for both Cosmos databases. Defaults to Autoscale since the
+app creates containers at runtime via EF Core EnsureCreatedAsync() without
+specifying their own per-container throughput, so they need to inherit shared
+database-level throughput.
+''')
+param pCosmosDatabaseThroughputMode string = 'Autoscale'
 
-@description('Login name (display) of the Microsoft Entra admin for SQL.')
-param pSqlAzureADAdminLogin string
+@minValue(1000)
+@description('Maximum shared autoscale throughput (RU/s) per Cosmos database. Used only when pCosmosDatabaseThroughputMode is Autoscale.')
+param pCosmosDatabaseAutoscaleMaxThroughput int = 1000
 
-@allowed([ 'Device', 'ForeignGroup', 'Group', 'ServicePrincipal', 'User' ])
-param pSqlAzureADAdminPrincipalType string = 'User'
+@minValue(400)
+@description('Shared manual throughput (RU/s) per Cosmos database. Used only when pCosmosDatabaseThroughputMode is Manual.')
+param pCosmosDatabaseThroughput int = 400
 
-@description('Static/PPSM private IP address for the SQL private endpoint.')
-param pSqlPrivateIpAddress string
+@description('Principal (object) id of the workload user-assigned managed identity granted Cosmos DB Built-in Data Contributor on the account.')
+param pCosmosDataAccessIdentityPrincipalId string
 
 /* --- ACR --- */
 @description('Name of the Azure Container Registry.')
@@ -354,30 +362,84 @@ module storageAccount 'br/enterprisebicepregistry:microsoft.storage/storageaccou
 }
 
 /* ********************************************************************************
- * SQL SERVER
+ * AZURE COSMOS DB
  * ********************************************************************************/
-module sqlServer 'br/enterprisebicepregistry:microsoft.sql/servers:1.0.2' = {
-  name: 'deploy-${pSqlServerName}'
+// NOTE: pDatabaseAccountsAzureRegionName's @allowed list (usdodcentral/usdodeast/usgovarizona/
+// usgovtexas/usgovvirginia) is narrower than pAzureRegionName's, so an `any()` cast is used
+// to bypass the compile-time literal-union mismatch. Deploying to a region outside that
+// narrower set (usgoviowa, usnateast/west, usseceast/west) will fail at deployment time.
+module cosmosAccount 'br/enterprisebicepregistry:microsoft.documentdb/databaseaccounts:1.0.2' = {
+  name: 'deploy-${pCosmosAccountName}'
   params: {
-    pServersName: pSqlServerName
-    pServersAzureRegionName: pAzureRegionName
-    pServersTags: pTags
-    pServersAdminLogin: pSqlAdminLogin
-    pServersAdminLoginPassword: pSqlAdminLoginPassword
-    pServersLogAnalyticsResourceId: law.outputs.law_id
-    pServersPrivateIpAddress: pSqlPrivateIpAddress
-    pServersSubnetResourceId: vPrivateEndpointsSubnetId
-    pServersHubSubscriptionId: pHubSubscriptionId
-    pServersHubResourceGroupName: pHubResourceGroupName
-    pServersAzureADOnlyAuthentication: pSqlAzureADOnlyAuthentication
-    pServersPrincipalType: pSqlAzureADAdminPrincipalType
-    pServersSid: pSqlAzureADAdminObjectId
-    pServersLogin: pSqlAzureADAdminLogin
-    pServersPrivateEndPointName: 'pep-${pGlobalParameters.standardLandingZoneName}-sql'
+    pDatabaseAccountsName: pCosmosAccountName
+    pDatabaseAccountsAzureRegionName: any(pAzureRegionName)
+    pDatabaseAccountsTags: pTags
+    pDatabaseAccountsPrivateIpAddress: pCosmosPrivateIpAddress
+    pDatabaseAccountsPrivateEndpointsSubnetResourceId: vPrivateEndpointsSubnetId
+    pDatabaseAccountsHubSubscriptionId: pHubSubscriptionId
+    pDatabaseAccountsHubResourceGroupName: pHubResourceGroupName
+    pDatabaseAccountsPrivateEndPointName: 'pep-${pGlobalParameters.standardLandingZoneName}-cosmos'
+    pDatabaseAccountsLogAnalyticsWorkspaceId: law.outputs.law_id
+    pDatabaseAccountsDiagnosticsName: 'diag-${pCosmosAccountName}'
   }
   dependsOn: [
     vnet
   ]
+}
+
+// NOTE: pSqlDatabasesAzureRegionName's @allowed list (usdodcentral/usdodeast/usgovarizona/
+// usgovtexas/usgovvirginia) is narrower than pAzureRegionName's, so an `any()` cast is used
+// to bypass the compile-time literal-union mismatch. Deploying to a region outside that
+// narrower set (usgoviowa, usnateast/west, usseceast/west) will fail at deployment time.
+module cosmosPlatformDatabase 'br/enterprisebicepregistry:microsoft.documentdb/databaseaccounts/sqldatabases:1.0.0' = {
+  name: 'deploy-${pCosmosPlatformDatabaseName}'
+  params: {
+    pSqlDatabasesName: pCosmosPlatformDatabaseName
+    pSqlDatabasesDatabaseAccountName: pCosmosAccountName
+    pSqlDatabasesAzureRegionName: any(pAzureRegionName)
+    pSqlDatabasesTags: pTags
+    pSqlDatabasesThroughputMode: pCosmosDatabaseThroughputMode
+    pSqlDatabasesThroughput: pCosmosDatabaseThroughput
+    pSqlDatabasesAutoscaleMaxThroughput: pCosmosDatabaseAutoscaleMaxThroughput
+  }
+  dependsOn: [
+    cosmosAccount
+  ]
+}
+
+module cosmosChatDatabase 'br/enterprisebicepregistry:microsoft.documentdb/databaseaccounts/sqldatabases:1.0.0' = {
+  name: 'deploy-${pCosmosChatDatabaseName}'
+  params: {
+    pSqlDatabasesName: pCosmosChatDatabaseName
+    pSqlDatabasesDatabaseAccountName: pCosmosAccountName
+    pSqlDatabasesAzureRegionName: any(pAzureRegionName)
+    pSqlDatabasesTags: pTags
+    pSqlDatabasesThroughputMode: pCosmosDatabaseThroughputMode
+    pSqlDatabasesThroughput: pCosmosDatabaseThroughput
+    pSqlDatabasesAutoscaleMaxThroughput: pCosmosDatabaseAutoscaleMaxThroughput
+  }
+  dependsOn: [
+    cosmosAccount
+  ]
+}
+
+// Local (key-based) auth defaults to disabled on the account; grant the workload
+// identity Cosmos DB Built-in Data Contributor for SQL API data-plane access instead.
+resource cosmosAccountRef 'Microsoft.DocumentDB/databaseAccounts@2025-04-15' existing = {
+  name: pCosmosAccountName
+  dependsOn: [
+    cosmosAccount
+  ]
+}
+
+resource cosmosDataContributorRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2025-04-15' = {
+  name: guid(cosmosAccountRef.id, pCosmosDataAccessIdentityPrincipalId, 'CosmosDataContributor')
+  parent: cosmosAccountRef
+  properties: {
+    roleDefinitionId: '${cosmosAccountRef.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
+    principalId: pCosmosDataAccessIdentityPrincipalId
+    scope: cosmosAccountRef.id
+  }
 }
 
 /* ********************************************************************************
@@ -503,8 +565,11 @@ output keyVaultId string = keyVault.outputs.kv_id
 output keyVaultName string = keyVault.outputs.kv_name
 output storageAccountId string = storageAccount.outputs.sa_id
 output storageAccountName string = storageAccount.outputs.sa_name
-output sqlServerId string = sqlServer.outputs.sql_id
-output sqlServerName string = sqlServer.outputs.sql_name
+output cosmosAccountId string = cosmosAccount.outputs.cosmos_id
+output cosmosAccountName string = cosmosAccount.outputs.cosmos_name
+output cosmosDocumentEndpoint string = cosmosAccount.outputs.cosmos_documentendpoint
+output cosmosPlatformDatabaseName string = cosmosPlatformDatabase.outputs.database_name
+output cosmosChatDatabaseName string = cosmosChatDatabase.outputs.database_name
 output acrId string = acr.outputs.registry_id
 output acrName string = acr.outputs.registry_name
 output acrLoginServer string = acr.outputs.registry_loginserver

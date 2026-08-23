@@ -42,7 +42,8 @@ public class SemanticIntent
     public bool WasSuccessful { get; set; } = false;
     public string? ErrorMessage { get; set; }
     
-    // Navigation properties
+    // Navigation property - NOT mapped by EF (see note in EnvironmentDeployment.cs).
+    [NotMapped]
     public virtual ICollection<IntentFeedback> Feedback { get; set; } = new List<IntentFeedback>();
 }
 
@@ -76,8 +77,8 @@ public class IntentFeedback
     
     public DateTime CreatedAt { get; set; }
     
-    // Navigation properties
-    [ForeignKey("IntentId")]
+    // Navigation property - NOT mapped by EF (see note in EnvironmentDeployment.cs).
+    [NotMapped]
     public virtual SemanticIntent Intent { get; set; } = null!;
 }
 
