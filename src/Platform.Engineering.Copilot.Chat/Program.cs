@@ -10,6 +10,7 @@ using Platform.Engineering.Copilot.Chat.App.Services;
 using Platform.Engineering.Copilot.Agents.Extensions;
 using Platform.Engineering.Copilot.Core.Extensions;
 using Platform.Engineering.Copilot.Core.Data.Context;
+using Platform.Engineering.Copilot.Core.Data.Extensions;
 using Platform.Engineering.Copilot.Core.Interfaces.GitHub;
 using Azure.Identity;
 using Scalar.AspNetCore;
@@ -93,7 +94,7 @@ var chatCosmosKey = builder.Configuration["CosmosDb:Key"] ?? string.Empty;
 var chatCosmosDatabaseName = builder.Configuration["CosmosDb:ChatDatabaseName"] ?? builder.Configuration["CosmosDb:DatabaseName"] ?? "PlatformEngineeringCopilotChat";
 Console.WriteLine($"[Chat] Using Cosmos DB for Chat database: {chatCosmosEndpoint}");
 builder.Services.AddDbContext<ChatDbContext>(options =>
-    options.UseCosmos(chatCosmosEndpoint, chatCosmosKey, chatCosmosDatabaseName));
+    options.UseCosmosWithKeyOrEntraId(chatCosmosEndpoint, chatCosmosKey, chatCosmosDatabaseName));
 
 // Add Entity Framework - Platform Management DB (required by agents) (Cosmos DB)
 var platformCosmosEndpoint = builder.Configuration["CosmosDb:Endpoint"]
@@ -103,7 +104,7 @@ var platformCosmosKey = builder.Configuration["CosmosDb:Key"] ?? string.Empty;
 var platformCosmosDatabaseName = builder.Configuration["CosmosDb:DatabaseName"] ?? "PlatformEngineeringCopilot";
 Console.WriteLine($"[Chat] Using Cosmos DB for Platform database: {platformCosmosEndpoint}");
 builder.Services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
-    options.UseCosmos(platformCosmosEndpoint, platformCosmosKey, platformCosmosDatabaseName));
+    options.UseCosmosWithKeyOrEntraId(platformCosmosEndpoint, platformCosmosKey, platformCosmosDatabaseName));
 
 // Add HttpClient for API integration
 builder.Services.AddHttpClient();

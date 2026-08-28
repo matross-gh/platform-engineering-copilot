@@ -140,7 +140,8 @@ public class PlatformEngineeringCopilotContext : DbContext
             // RowVersion property is kept on the entity as an informational field
             // only and is no longer configured as a concurrency token here.
 
-            entity.Property(e => e.IsArchived).HasDefaultValue(false);
+            // Note: HasDefaultValue is a relational-only API not supported by the Cosmos
+            // provider. IsArchived already defaults to false via the CLR bool default.
         });
     }
 

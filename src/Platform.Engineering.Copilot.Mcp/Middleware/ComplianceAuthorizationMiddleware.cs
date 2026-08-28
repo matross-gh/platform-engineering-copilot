@@ -57,7 +57,7 @@ public class ComplianceAuthorizationMiddleware
                     Description = $"Access to compliance endpoint: {context.Request.Method} {context.Request.Path}",
                     Result = "Pending", // Will be updated after request completes
                     Severity = AuditSeverity.Informational,
-                    IpAddress = ipAddress,
+                    IpAddress = ipAddress ?? string.Empty,
                     UserAgent = userAgent,
                     Metadata = new Dictionary<string, object>
                     {

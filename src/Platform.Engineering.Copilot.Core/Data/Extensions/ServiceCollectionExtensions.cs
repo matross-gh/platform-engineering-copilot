@@ -29,7 +29,7 @@ public static class ServiceCollectionExtensions
             var key = configuration["CosmosDb:Key"] ?? string.Empty;
             var databaseName = configuration["CosmosDb:DatabaseName"] ?? "PlatformEngineeringCopilot";
 
-            options.UseCosmos(endpoint, key, databaseName);
+            options.UseCosmosWithKeyOrEntraId(endpoint, key, databaseName);
 
             // Enable sensitive data logging in development
             var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");

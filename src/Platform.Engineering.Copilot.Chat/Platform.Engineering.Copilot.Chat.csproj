@@ -17,16 +17,18 @@
     <PackageReference Include="Microsoft.AspNetCore.SpaProxy" Version="10.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="10.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Cosmos" Version="10.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.1.0" />
+    <!-- Microsoft.AspNetCore.SignalR/.Http.Features/System.Text.Json removed: already provided by
+         the ASP.NET Core / .NET shared framework (Microsoft.NET.Sdk.Web) and flagged by NU1510
+         package-pruning; the old SignalR package also pulled in a vulnerable Newtonsoft.Json. -->
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <!-- Pinned to override the vulnerable Microsoft.OpenApi 2.0.0 pulled in transitively by Microsoft.AspNetCore.OpenApi (GHSA-v5pm-xwqc-g5wc) -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.6" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.16.20" />
-    <PackageReference Include="System.Text.Json" Version="10.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Features" Version="5.0.17" />
     <PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.3.2" />
-    <PackageReference Include="Azure.Identity" Version="1.14.2" />
-    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.2.0" />
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.6.0" />
   </ItemGroup>
 
   <ItemGroup>

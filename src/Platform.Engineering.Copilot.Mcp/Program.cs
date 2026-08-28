@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Platform.Engineering.Copilot.Core.Extensions;
 using Platform.Engineering.Copilot.Core.Data.Context;
+using Platform.Engineering.Copilot.Core.Data.Extensions;
 using Platform.Engineering.Copilot.Core.Configuration;
 using Platform.Engineering.Copilot.Core.Services.Azure;
 using Platform.Engineering.Copilot.Mcp.Server;
@@ -89,7 +90,7 @@ class Program
         Log.Information("✅ Using Cosmos DB database: {Endpoint}", cosmosEndpoint);
 
         builder.Services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
-            options.UseCosmos(cosmosEndpoint, cosmosKey, cosmosDatabaseName));
+            options.UseCosmosWithKeyOrEntraId(cosmosEndpoint, cosmosKey, cosmosDatabaseName));
 
         // Register HttpClient for services that need it (like NistControlsService)
         builder.Services.AddHttpClient();
@@ -157,7 +158,7 @@ class Program
         Log.Information("✅ Using Cosmos DB database: {Endpoint}", cosmosEndpoint);
 
         builder.Services.AddDbContext<PlatformEngineeringCopilotContext>(options =>
-            options.UseCosmos(cosmosEndpoint, cosmosKey, cosmosDatabaseName));
+            options.UseCosmosWithKeyOrEntraId(cosmosEndpoint, cosmosKey, cosmosDatabaseName));
 
         // Register HttpClient for services that need it (like NistControlsService)
         builder.Services.AddHttpClient();

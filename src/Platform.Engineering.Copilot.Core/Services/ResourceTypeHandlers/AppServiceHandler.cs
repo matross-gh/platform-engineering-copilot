@@ -47,16 +47,16 @@ public class AppServiceHandler : IResourceTypeHandler
             result["alwaysOn"] = GetPropertyValue<bool>(resource.Properties, "siteConfig.alwaysOn", false);
 
             // TLS Version
-            result["minTlsVersion"] = GetPropertyValue<string>(resource.Properties, "siteConfig.minTlsVersion", "1.2");
+            result["minTlsVersion"] = GetPropertyValue<string>(resource.Properties, "siteConfig.minTlsVersion", "1.2")!;
 
             // Client Certificate
             result["clientCertEnabled"] = GetPropertyValue<bool>(resource.Properties, "clientCertEnabled", false);
 
             // Default Host Name
-            result["defaultHostName"] = GetPropertyValue<string>(resource.Properties, "defaultHostName", "Unknown");
+            result["defaultHostName"] = GetPropertyValue<string>(resource.Properties, "defaultHostName", "Unknown")!;
 
             // State
-            result["state"] = GetPropertyValue<string>(resource.Properties, "state", "Unknown");
+            result["state"] = GetPropertyValue<string>(resource.Properties, "state", "Unknown")!;
 
             // Enabled
             result["enabled"] = GetPropertyValue<bool>(resource.Properties, "enabled", true);

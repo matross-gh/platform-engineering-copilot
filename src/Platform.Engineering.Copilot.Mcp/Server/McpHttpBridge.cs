@@ -361,8 +361,7 @@ public class McpHttpBridge
                     provider = dbContext.Database.ProviderName,
                     templateCount,
                     fileCount,
-                    error = errorMsg,
-                    connectionString = MaskConnectionString(dbContext.Database.GetConnectionString())
+                    error = errorMsg
                 };
                 
                 return Results.Ok(result);
@@ -429,19 +428,6 @@ public class McpHttpBridge
         return uploadedPaths;
     }
 
-    private static string MaskConnectionString(string? connectionString)
-    {
-        if (string.IsNullOrEmpty(connectionString))
-            return "(not configured)";
-        
-        // Mask password in connection string for security
-        var masked = System.Text.RegularExpressions.Regex.Replace(
-            connectionString, 
-            @"Password=[^;]+", 
-            "Password=****",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        return masked;
-    }
 }
 
 // Generic request model

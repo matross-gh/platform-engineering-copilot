@@ -185,7 +185,7 @@ public class AzureResourceDiscoveryService : IAzureResourceDiscoveryService
                     ProvisioningState = apiResource.ProvisioningState,
                     Properties = apiResource.Properties?.ToDictionary(
                         kvp => kvp.Key, 
-                        kvp => (object)(kvp.Value?.ToString() ?? string.Empty))
+                        kvp => (object)(kvp.Value?.ToString() ?? string.Empty)) ?? new()
                 };
                 dataSource = "API";
             }

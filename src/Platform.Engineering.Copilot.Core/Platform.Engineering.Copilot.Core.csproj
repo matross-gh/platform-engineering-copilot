@@ -7,14 +7,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Identity" Version="1.14.2" />
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
     <PackageReference Include="Azure.ResourceManager" Version="1.13.2" />
     <PackageReference Include="Azure.ResourceManager.Authorization" Version="1.1.6" />
     <PackageReference Include="Azure.ResourceManager.Resources" Version="1.9.0" />
     <PackageReference Include="Azure.ResourceManager.PolicyInsights" Version="1.2.0" />
     <PackageReference Include="Azure.ResourceManager.ResourceHealth" Version="1.1.0-beta.5" />
     <PackageReference Include="Microsoft.Azure.Management.ResourceGraph" Version="2.1.0" />
-    <PackageReference Include="Microsoft.Graph" Version="5.62.0" />
+    <!-- Pinned to override the vulnerable Microsoft.Rest.ClientRuntime 2.3.20 pulled in transitively (GHSA-whph-446h-6m9v, patched at 2.3.24+).
+         NU1608 is expected/benign here: Microsoft.Azure.Management.ResourceGraph and Microsoft.Rest.ClientRuntime.Azure declare an upper
+         bound of <3.0.0, but 3.0.3 is verified compatible (build + no breaking API usage in AzureResourceGraphService.cs). -->
+    <PackageReference Include="Microsoft.Rest.ClientRuntime" Version="3.0.3" NoWarn="NU1608" />
+    <PackageReference Include="Microsoft.Graph" Version="6.5.0" />
     <PackageReference Include="Azure.ResourceManager.Network" Version="1.9.0" />
     <PackageReference Include="Azure.ResourceManager.ContainerService" Version="1.2.2" />
     <PackageReference Include="Azure.ResourceManager.AppService" Version="1.2.0" />
@@ -22,41 +26,39 @@
     <PackageReference Include="Azure.Monitor.Query" Version="1.5.0" />
     <PackageReference Include="Azure.Communication.Email" Version="1.1.0" />
     <PackageReference Include="Azure.AI.FormRecognizer" Version="4.1.0" />
-    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0-beta.1" />
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.7.0-beta.2" />
     <PackageReference Include="Azure.Search.Documents" Version="11.6.0" />
-    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageReference Include="iTextSharp.LGPLv2.Core" Version="3.4.22" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Cosmos" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.3" />
     <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3" />
     <PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.3" />
     <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.2.2" />
-    <PackageReference Include="System.Text.Json" Version="10.0.0" />
-    <PackageReference Include="StreamJsonRpc" Version="2.19.27" />
-    <PackageReference Include="Microsoft.SemanticKernel" Version="1.26.0" />
-    <PackageReference Include="Microsoft.SemanticKernel.Plugins.Core" Version="1.26.0-alpha" />
+    <PackageReference Include="StreamJsonRpc" Version="2.25.29" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.71.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Plugins.Core" Version="1.71.0-preview" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.19.2" />
-    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
     <PackageReference Include="KubernetesClient" Version="17.0.14" />
     <PackageReference Include="Octokit" Version="13.0.1" />
     <PackageReference Include="Aspose.Words" Version="24.9.0" />
     <PackageReference Include="SharpToken" Version="2.0.3" />
-    <!-- Data layer dependencies (moved from Platform.Engineering.Copilot.Data) -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.0" />
+    <!-- Note: Microsoft.EntityFrameworkCore.Design/.Tools removed: the Cosmos EF Core provider
+         does not support `dotnet ef` migrations (EnsureCreatedAsync is used instead), and these
+         design-time-only packages pulled in a vulnerable transitive System.Security.Cryptography.Xml. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
     <PackageReference Include="PuppeteerSharp" Version="19.0.0" />
   </ItemGroup>
 

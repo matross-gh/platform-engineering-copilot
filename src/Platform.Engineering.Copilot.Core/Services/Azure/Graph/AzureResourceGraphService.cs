@@ -253,8 +253,8 @@ Resources
             Sku = GetStringValue(result, "sku"),
             Kind = GetStringValue(result, "kind"),
             ProvisioningState = GetStringValue(result, "provisioningState"),
-            Tags = GetDictionaryValue(result, "tags"),
-            Properties = GetObjectDictionaryValue(result, "extendedProperties")
+            Tags = GetDictionaryValue(result, "tags") ?? new(),
+            Properties = GetObjectDictionaryValue(result, "extendedProperties") ?? new()
         };
 
         return resource;

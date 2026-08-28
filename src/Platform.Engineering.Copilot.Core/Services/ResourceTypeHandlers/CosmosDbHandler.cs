@@ -36,10 +36,10 @@ public class CosmosDbHandler : IResourceTypeHandler
         try
         {
             // Database Offer Type
-            result["offerType"] = GetPropertyValue<string>(resource.Properties, "databaseAccountOfferType", "Standard");
+            result["offerType"] = GetPropertyValue<string>(resource.Properties, "databaseAccountOfferType", "Standard")!;
 
             // Consistency Level
-            result["consistencyLevel"] = GetPropertyValue<string>(resource.Properties, "consistencyPolicy.defaultConsistencyLevel", "Session");
+            result["consistencyLevel"] = GetPropertyValue<string>(resource.Properties, "consistencyPolicy.defaultConsistencyLevel", "Session")!;
 
             // Locations/Regions
             var locations = GetLocations(resource.Properties);
@@ -55,7 +55,7 @@ public class CosmosDbHandler : IResourceTypeHandler
 
             // Network Security
             result["vnetFilterEnabled"] = GetPropertyValue<bool>(resource.Properties, "isVirtualNetworkFilterEnabled", false);
-            result["publicNetworkAccess"] = GetPropertyValue<string>(resource.Properties, "publicNetworkAccess", "Enabled");
+            result["publicNetworkAccess"] = GetPropertyValue<string>(resource.Properties, "publicNetworkAccess", "Enabled")!;
 
             // IP Rules
             var ipRules = GetIpRules(resource.Properties);

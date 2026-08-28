@@ -1449,7 +1449,7 @@ REFERENCES:
                         {
                             Id = Guid.NewGuid().ToString(),
                             SubscriptionId = subscriptionId,
-                            ResourceId = ((GenericResource)logWorkspaces[0]).Data.Id,
+                            ResourceId = ((GenericResource)logWorkspaces[0]).Data?.Id?.ToString() ?? string.Empty,
                             ResourceType = "Microsoft.OperationalInsights/workspaces",
                             ResourceName = ((GenericResource)logWorkspaces[0]).Data.Name,
                             FindingType = AtoFindingType.Security,

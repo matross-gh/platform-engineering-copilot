@@ -11,13 +11,13 @@
   <ItemGroup>
     <!-- Microsoft.Extensions.AI (AI Abstractions - the core abstraction layer) -->
     <PackageReference Include="ClosedXML" Version="0.104.2" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="9.5.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="9.10.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="9.5.0-preview.1.25265.7" />
-    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.2.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.2.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.0.1-preview.1.25571.5" />
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.7.0-beta.2" />
     
     <!-- Azure SDK -->
-    <PackageReference Include="Azure.Identity" Version="1.14.2" />
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
     <PackageReference Include="Azure.ResourceManager" Version="1.13.2" />
     <PackageReference Include="Azure.ResourceManager.Resources" Version="1.9.0" />
     <PackageReference Include="Azure.ResourceManager.PolicyInsights" Version="1.2.0" />

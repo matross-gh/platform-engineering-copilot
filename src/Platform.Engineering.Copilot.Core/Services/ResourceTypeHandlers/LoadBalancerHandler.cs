@@ -32,7 +32,7 @@ public class LoadBalancerHandler : IResourceTypeHandler
         {
             // SKU
             result["sku"] = resource.Sku ?? "Basic";
-            result["tier"] = GetPropertyValue<string>(resource.Properties, "sku.tier", "Regional");
+            result["tier"] = GetPropertyValue<string>(resource.Properties, "sku.tier", "Regional")!;
 
             // Frontend IP Configurations
             var frontends = GetFrontendConfigurations(resource.Properties);

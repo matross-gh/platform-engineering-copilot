@@ -32,22 +32,22 @@ public class AksHandler : IResourceTypeHandler
         try
         {
             // Kubernetes Version
-            result["kubernetesVersion"] = GetPropertyValue<string>(resource.Properties, "kubernetesVersion", "Unknown");
+            result["kubernetesVersion"] = GetPropertyValue<string>(resource.Properties, "kubernetesVersion", "Unknown")!;
 
             // Node Resource Group
-            result["nodeResourceGroup"] = GetPropertyValue<string>(resource.Properties, "nodeResourceGroup", "Unknown");
+            result["nodeResourceGroup"] = GetPropertyValue<string>(resource.Properties, "nodeResourceGroup", "Unknown")!;
 
             // RBAC
             result["rbacEnabled"] = GetPropertyValue<bool>(resource.Properties, "enableRBAC", false);
 
             // Network Plugin
-            result["networkPlugin"] = GetPropertyValue<string>(resource.Properties, "networkProfile.networkPlugin", "kubenet");
+            result["networkPlugin"] = GetPropertyValue<string>(resource.Properties, "networkProfile.networkPlugin", "kubenet")!;
 
             // Service CIDR
-            result["serviceCidr"] = GetPropertyValue<string>(resource.Properties, "networkProfile.serviceCidr", "Not configured");
+            result["serviceCidr"] = GetPropertyValue<string>(resource.Properties, "networkProfile.serviceCidr", "Not configured")!;
 
             // DNS Service IP
-            result["dnsServiceIP"] = GetPropertyValue<string>(resource.Properties, "networkProfile.dnsServiceIP", "Not configured");
+            result["dnsServiceIP"] = GetPropertyValue<string>(resource.Properties, "networkProfile.dnsServiceIP", "Not configured")!;
 
             // Azure Policy Addon
             result["azurePolicyEnabled"] = GetPropertyValue<bool>(resource.Properties, "addonProfiles.azurepolicy.enabled", false);
@@ -57,7 +57,7 @@ public class AksHandler : IResourceTypeHandler
 
             // Private Cluster
             result["privateCluster"] = GetPropertyValue<bool>(resource.Properties, "apiServerAccessProfile.enablePrivateCluster", false);
-            result["privateFQDN"] = GetPropertyValue<string>(resource.Properties, "privateFQDN", null);
+            result["privateFQDN"] = GetPropertyValue<string>(resource.Properties, "privateFQDN", null)!;
         }
         catch (Exception ex)
         {

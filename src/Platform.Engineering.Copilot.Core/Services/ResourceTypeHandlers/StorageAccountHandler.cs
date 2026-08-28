@@ -34,16 +34,16 @@ public class StorageAccountHandler : IResourceTypeHandler
         {
             // SKU
             result["sku"] = resource.Sku ?? "Not configured";
-            result["tier"] = GetPropertyValue<string>(resource.Properties, "sku.tier", "Standard");
+            result["tier"] = GetPropertyValue<string>(resource.Properties, "sku.tier", "Standard")!;
 
             // Access Tier (Hot/Cool/Archive)
-            result["accessTier"] = GetPropertyValue<string>(resource.Properties, "accessTier", "Not configured");
+            result["accessTier"] = GetPropertyValue<string>(resource.Properties, "accessTier", "Not configured")!;
 
             // HTTPS Only
             result["httpsOnly"] = GetPropertyValue<bool>(resource.Properties, "supportsHttpsTrafficOnly", false);
 
             // TLS Version
-            result["minTlsVersion"] = GetPropertyValue<string>(resource.Properties, "minimumTlsVersion", "TLS1_0");
+            result["minTlsVersion"] = GetPropertyValue<string>(resource.Properties, "minimumTlsVersion", "TLS1_0")!;
 
             // Public Blob Access
             result["allowBlobPublicAccess"] = GetPropertyValue<bool>(resource.Properties, "allowBlobPublicAccess", true);
@@ -56,10 +56,10 @@ public class StorageAccountHandler : IResourceTypeHandler
             result["fileEncryption"] = GetPropertyValue<bool>(resource.Properties, "encryption.services.file.enabled", true);
 
             // Network ACLs
-            result["networkDefaultAction"] = GetPropertyValue<string>(resource.Properties, "networkAcls.defaultAction", "Allow");
+            result["networkDefaultAction"] = GetPropertyValue<string>(resource.Properties, "networkAcls.defaultAction", "Allow")!;
 
             // Primary Blob Endpoint
-            result["blobEndpoint"] = GetPropertyValue<string>(resource.Properties, "primaryEndpoints.blob", "Not available");
+            result["blobEndpoint"] = GetPropertyValue<string>(resource.Properties, "primaryEndpoints.blob", "Not available")!;
         }
         catch (Exception ex)
         {

@@ -1431,9 +1431,9 @@ Generate a JSON response with:
                     return new ControlNarrative
                     {
                         ControlId = control.Id,
-                        ControlTitle = control.Title,
-                        What = json.What,
-                        How = json.How,
+                        ControlTitle = control.Title ?? string.Empty,
+                        What = json.What ?? string.Empty,
+                        How = json.How ?? string.Empty,
                         Evidence = json.Evidence,
                         Gaps = json.Gaps,
                         ResponsibleParty = json.ResponsibleParty,

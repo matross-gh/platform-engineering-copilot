@@ -38,17 +38,17 @@ public class VirtualMachineHandler : IResourceTypeHandler
         try
         {
             // VM Size
-            result["vmSize"] = GetPropertyValue<string>(resource.Properties, "hardwareProfile.vmSize", "Unknown");
+            result["vmSize"] = GetPropertyValue<string>(resource.Properties, "hardwareProfile.vmSize", "Unknown")!;
 
             // OS Type
-            result["osType"] = GetPropertyValue<string>(resource.Properties, "storageProfile.osDisk.osType", "Unknown");
+            result["osType"] = GetPropertyValue<string>(resource.Properties, "storageProfile.osDisk.osType", "Unknown")!;
 
             // OS Disk Size
             var diskSize = GetPropertyValue<int?>(resource.Properties, "storageProfile.osDisk.diskSizeGB", null);
             result["osDiskSizeGB"] = diskSize?.ToString() ?? "Auto";
 
             // Disk Type
-            result["diskType"] = GetPropertyValue<string>(resource.Properties, "storageProfile.osDisk.managedDisk.storageAccountType", "Standard_LRS");
+            result["diskType"] = GetPropertyValue<string>(resource.Properties, "storageProfile.osDisk.managedDisk.storageAccountType", "Standard_LRS")!;
 
             // Image Reference
             var publisher = GetPropertyValue<string>(resource.Properties, "storageProfile.imageReference.publisher", "");
@@ -57,10 +57,10 @@ public class VirtualMachineHandler : IResourceTypeHandler
             result["image"] = !string.IsNullOrEmpty(publisher) ? $"{publisher}:{offer}:{imageSku}" : "Custom Image";
 
             // Computer Name
-            result["computerName"] = GetPropertyValue<string>(resource.Properties, "osProfile.computerName", "Not configured");
+            result["computerName"] = GetPropertyValue<string>(resource.Properties, "osProfile.computerName", "Not configured")!;
 
             // Admin Username
-            result["adminUsername"] = GetPropertyValue<string>(resource.Properties, "osProfile.adminUsername", "Not configured");
+            result["adminUsername"] = GetPropertyValue<string>(resource.Properties, "osProfile.adminUsername", "Not configured")!;
 
             // Provisioning State
             result["provisioningState"] = resource.ProvisioningState ?? "Unknown";
@@ -69,7 +69,7 @@ public class VirtualMachineHandler : IResourceTypeHandler
             result["bootDiagnostics"] = GetPropertyValue<bool>(resource.Properties, "diagnosticsProfile.bootDiagnostics.enabled", false);
 
             // Security Profile
-            result["securityType"] = GetPropertyValue<string>(resource.Properties, "securityProfile.securityType", "Standard");
+            result["securityType"] = GetPropertyValue<string>(resource.Properties, "securityProfile.securityType", "Standard")!;
             result["secureBootEnabled"] = GetPropertyValue<bool>(resource.Properties, "securityProfile.uefiSettings.secureBootEnabled", false);
             result["vTpmEnabled"] = GetPropertyValue<bool>(resource.Properties, "securityProfile.uefiSettings.vTpmEnabled", false);
 
